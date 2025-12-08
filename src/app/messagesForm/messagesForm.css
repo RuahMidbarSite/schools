@@ -1,0 +1,47 @@
+.mb-3 {
+    justify-content: flex-end;
+  }
+  .formGrid, .container-fluid.formGrid {
+    padding-left: 5vw;
+    padding-right: 5vw;
+    margin-left: 0vh;
+    margin-right: 0vh;
+    padding-top: 0.5vh;
+    padding-bottom: 0.5vh;
+}
+
+.formGrid .col {
+    text-align: right;
+}
+
+.formGrid .col > * {
+    margin-left: 1vw;
+}
+
+.formGrid p.errorMessage {
+    color: red;
+}
+
+.borderedColumns > .col {
+    padding: 1.5%
+}
+
+.addMessagePatternSearchBar {
+    width: 100%;
+}
+
+.file-input-button {
+    width: 70%;               /* Full width */
+    padding: 10px;            /* Padding for better aesthetics */
+    border-radius: 5px;       /* Rounded corners */
+    background-color: #007bff; /* Bootstrap primary color */
+    color: white;              /* Text color */
+    text-align: right;         /* Right-aligned text */
+    border: none;              /* Remove border */
+    cursor: pointer;           /* Pointer cursor on hover */
+    transition: background-color 0.3s; /* Smooth background transition */
+  }
+  
+  .file-input-button:hover {
+    background-color: #0056b3; /* Darker shade on hover */
+  }

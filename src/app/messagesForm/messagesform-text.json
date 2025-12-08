@@ -1,0 +1,56 @@
+{
+    "pattern": "תבנית",
+    "outOf": "מתוך",
+    "addMessagePattern": "הוסף תבנית הודעות",
+    "deleteMessagePattern": "מחק תבנית הודעות",
+    "addPatternTitle": "הזן כותרת תבנית",
+
+    "messageContent": "תוכן ההודעה",
+    "msgTextLabel": "טקסט ההודעה",
+    "msgFileLabel": "קובץ מצורף",
+
+    "chooseSchools": "בחר בתי ספר",
+    "schoolAmountLabel": "כמות",
+    "schoolStatusesLabel": "סטטוסים של בתי הספר",
+    "schoolLevelsLabel": "שלבי חינוך",
+    "schoolSectorsLabel": "מגזרים",
+    "schoolTypesLabel": "סוגים",
+    "schoolCitiesLabel": "ערים",
+    "noneChosenNote": "לא לבחור כלום מבטל את השימוש בסינון הזה",
+
+    "chooseContacts": "בחר אנשי קשר",
+    "setPriority": "הגדר עדיפות",
+    "contactIsRepLabel": "האם נציג",
+    "contactStatusesLabel": "סטטוסים של אנשי הקשר",
+    "contactRolesLabel": "תפקידים",
+    "addPriority": "הוסף עדיפות",
+    "yes": "כן",
+    "no": "לא",
+    "both": "גם וגם",
+
+    "setStatus": "בחר סטטוס",
+
+    "selectedSchoolsTblHeaderName": "בית ספר",
+    "selectedSchoolsTblHeaderLevel": "שלב חינוך",
+    "selectedSchoolsTblHeaderSector": "מגזר",
+    "selectedSchoolsTblHeaderSchoolType": "סוג",
+    "selectedSchoolsTblHeaderCity": "יישוב",
+    "selectedSchoolsTblHeaderSchoolStatus": "סטטוס",
+
+    "selectedContactsTblHeaderSchoolName": "בית הספר",
+    "selectedContactsTblHeaderFirstName": "שם פרטי",
+    "selectedContactsTblHeaderLastName": "שם משפחה",
+    "selectedContactsTblHeaderRole": "תפקיד",
+    "selectedContactsTblHeaderPhone": "טלפון",
+
+    "schoolAmountError": "הכמות צריכה להיות גדולה מ-0",
+    "newStatusError": "יש להזין סטטוס",
+
+    "emptyFilter": "ריקים",
+
+    "amountSelectedSchools": "כמות בתי הספר שנבחרו:",
+    "amountSelectedContacts": "כמות אנשי הקשר שנבחרו:",
+
+    "sendMessages": "שלח הודעות",
+    "testButton": "טסט"
+}

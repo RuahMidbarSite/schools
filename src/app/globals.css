@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+.ag-cell {
+  overflow: visible !important;
+}
+
+
+.ag-theme-quartz-dark .ag-root-wrapper, 
+  .ag-theme-quartz-dark .ag-root-wrapper-body, 
+  .ag-theme-quartz-dark .ag-header,
+  .ag-theme-quartz-dark .ag-root {
+      border-radius: 0 !important;
+  }
+  .ag-theme-quartz-dark .ag-header-cell {
+      padding: 0 !important;
+      margin: 0 !important;
+  }
+  .ag-theme-quartz-dark .ag-header-cell-label {
+    padding-left: 1px !important;
+    padding-right: 1px !important;
+    margin: 0 !important;
+  }
+
+
+.ag-theme-quartz-dark {
+ 
+    /* then add back a border between rows */
+    --ag-row-border-style:ridge  !important;
+    --ag-row-border-width: 1px !important;
+    --ag-row-border-color: rgb(4, 1, 23) !important;
+    /* and between columns */
+    --ag-cell-horizontal-border: solid rgb(4, 1, 23) !important;
+
+
+     --ag-header-column-separator-display: block !important;
+    --ag-header-column-separator-height: 100% !important;
+    --ag-header-column-separator-width: 1px !important;
+    --ag-header-column-separator-color: rgb(4, 1, 23) !important;
+
+}
+
+.ag-theme-quartz {
+    /* disable all borders */
+
+    /* then add back a border between rows */
+    --ag-row-border-style:ridge  !important;
+    --ag-row-border-width: 1px !important;
+    --ag-row-border-color: rgb(226, 225, 236) !important;
+    /* and between columns */
+    --ag-cell-horizontal-border: solid rgb(226, 225, 236) !important;
+
+
+     --ag-header-column-separator-display: block !important;
+    --ag-header-column-separator-height: 100% !important;
+    --ag-header-column-separator-width: 1px !important;
+    --ag-header-column-separator-color: rgb(226, 225, 236) !important;
+
+}
+
+.ag-header-cell-comp-wrapper{
+position:absolute;
+flex:auto;
+
+}
+[ref="eMenu"] {
+   left:80%; 
+   bottom:1.5vh;
+   margin-right:0%;
+   position:relative;
+
+} 

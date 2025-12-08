@@ -1,0 +1,21 @@
+
+ 
+  
+  .select-button-container {
+    display: flex;            /* Use flexbox for layout */
+    flex-direction: column;   /* Stack elements vertically */
+    align-items: flex-end;   /* Align children to the right */
+    position: relative;       /* Positioning context for absolute elements */
+    
+  }
+  
+  .submit-button {
+    width: 100%;
+    margin-top: 10px; 
+    align-self: flex-end
+  }
+
+  .submit-button:hover {
+    background-color: #005bb5;
+    width: 100%;
+  }

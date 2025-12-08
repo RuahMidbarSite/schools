@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <title>Programs List</title>
+    <style>
+      body {
+        direction: rtl; /* Set the entire page direction to RTL */
+      }
+      h1 {
+        text-align: right; /* Align the title to the right */
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        direction: rtl; /* Make the table's columns RTL */
+      }
+      th,
+      td {
+        padding: 8px;
+        border: 1px solid #ddd;
+        text-align: right; /* Right-align text within the table cells */
+      }
+      th {
+        background-color: #f4f4f4;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>רשימת תוכניות</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>שנה</th>
+          <th>הצעה</th>
+          <th>סטטוס</th>
+          <th>שם מוצר</th>
+          <th>שלב חינוך</th>
+          <th>סמל</th>
+          <th>בית ספר</th>
+          <th>יישוב</th>
+          <th>איש קשר</th>
+          <th>תאריך</th>
+          <th>מחוז</th>
+          <th>תוכנית</th>
+          <th>ימים</th>
+          <th>יום נבחר</th>
+          <th>שבועות</th>
+          <th>שכבה</th>
+          <th>שיעורים ביום</th>
+          <th>שיעורים בתשלום</th>
+          <th>מחיר לשיעור</th>
+          <th>שיעורים בחינם</th>
+          <th>כמות שיעורים</th>
+          <th>תשלומים נוספים</th>
+          <th>סה"כ</th>
+          <th>מדריכים</th>
+        </tr>
+      </thead>
+      <tbody id="programsTable"></tbody>
+    </table>
+    <script>
+     window.addEventListener('beforeunload', () => {
+    if (window.opener) {
+      window.opener.unloading('Window is closing', window.location.origin);
+    }
+  });
+    const StoreSchoolData = localforage.createInstance({
+  name: "School",
+  storeName   : 'SchoolData'
+  
+});
+      StoreSchoolData.getItem('chosenPrograms').then((programs)=> {
+                const tableBody = document.getElementById("programsTable");
+          programs.forEach(
+            ({
+              Year,
+              Proposal,
+              Status,
+              Product,
+              EducationStage,
+              Schoolid,
+              SchoolName,
+              CityName,
+              SchoolContact,
+              Date,
+              District,
+              Plan,
+              Days,
+              ChosenDay,
+              Weeks,
+              Grade,
+              LessonsPerDay,
+              PaidLessonNumbers,
+              PricingPerPaidLesson,
+              FreeLessonNumbers,
+              AdditionalPayments,
+              Assigned_guide,
+            }) => {
+              tableBody.innerHTML += `<tr>
+                <td>${Year}</td>
+                <td>${Proposal}</td>
+                <td>${Status}</td>
+                <td>${Product}</td>
+                <td>${EducationStage}</td>
+                <td>${Schoolid}</td>
+                <td>${SchoolName}</td>
+                <td>${CityName}</td>
+                <td>${SchoolContact}</td>
+                <td>${Date}</td>
+                <td>${District}</td>
+                <td>${Plan}</td>
+                <td>${Days}</td>
+                <td>${ChosenDay}</td>
+                <td>${Weeks}</td>
+                <td>${Grade}</td>
+                <td>${LessonsPerDay}</td>
+                <td>${PaidLessonNumbers}</td>
+                <td>${PricingPerPaidLesson}</td>
+                <td>${FreeLessonNumbers}</td>
+                <td>${PaidLessonNumbers + FreeLessonNumbers}</td>
+                <td>${AdditionalPayments}</td>
+                <td>${
+                  PaidLessonNumbers * PricingPerPaidLesson + AdditionalPayments
+                }</td>
+                <td>${Assigned_guide}</td>
+            </tr>`;
+
+          })
+      })
+         
+            
+          
+        
+        
+     
+      
+    </script>
+  </body>
+</html>

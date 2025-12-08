@@ -1,0 +1,364 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("MONGODB_URI")
+}
+
+
+model SchoolsContact {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Contactid           Int  
+  Schoolid            Int?              
+  FirstName           String?
+  LastName            String?
+  Role                String?             @default("מנהל/ת")
+  Cellphone           String?             
+  Phone               String?             @default("")
+  Email               String?             @default("0")
+  GoogleContactLink   String?             @default("")
+  Status              String?             @default("")
+  IsRepresentive      Boolean?            @default(false)
+
+ @@index([Contactid]) // Create an index on the Schoolid field
+ @@index([Schoolid ]) // Create an index on the Schoolid field
+ @@index([Schoolid,Contactid ]) // Create an index on the Schoolid field
+
+
+}
+
+model Recommender {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  id               Int?          @unique @default(1)
+  Schoolid         Int?         
+  Contactid        Int?          @unique
+  City             String?
+  Area             String?
+  SchoolName       String?
+  ReligiousSector  String?          @default("יהודי")
+  EducationStage   String?          @default("יסודי")
+  ProgramsInSchool String?
+  Cellphone        String?
+
+
+}
+
+model Guide {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Guideid          Int            @unique
+  FirstName        String?
+  LastName         String?
+  CellPhone        String?
+  WhatsApp String? // this is just for model order
+  isAssigned Boolean @default(false) // this is if the guide is assigned to some program.
+  CV               String?
+  City             String?
+  Area             String?
+  ReligiousSector  String?
+  PriceRequirement Int?
+  Status           String?          @default("None")
+  Notes            String?          @default("")
+  Documents        String?          @default("")
+  PoliceApproval   String?          @default("")
+  Aggrement        String?          @default("")
+  Insurance        String?          @default("")
+  Other_Documents String? @default("")
+  Professions String?
+  Profession             Profession?
+}
+//TODO: go back to here when you check contacts.
+model Profession {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  //id                Int?          @unique
+  //Contactid         Int?          @unique
+  Guideid           Int?          @unique
+  GoogleContarct    String?
+  Status            String?
+  Theather          Boolean @default(false)
+  Chess             Boolean @default(false)
+  Fighting          Boolean @default(false)
+  Styling           Boolean @default(false)
+  Sustainability    Boolean @default(false)
+  NewMedia          Boolean @default(false)
+  HiTech            Boolean @default(false)
+  Yoga              Boolean @default(false)
+  Writing           Boolean @default(false)
+  Finances          Boolean @default(false)
+  Sporst            Boolean @default(false)
+  Magic             Boolean @default(false)
+  Doghandling       Boolean @default(false)
+  Medicine          Boolean @default(false)
+  Sciene            Boolean @default(false)
+  Dance             Boolean @default(false)
+  Communication     Boolean @default(false)
+  Studying          Boolean @default(false)
+  Psychometric      Boolean @default(false)
+  Thoughts          Boolean @default(false)
+  Juggling          Boolean @default(false)
+  SexEducation      Boolean @default(false)
+  Treatment         Boolean @default(false)
+  Music             Boolean @default(false)
+  Escort            Boolean @default(false)
+  Cinema            Boolean @default(false)
+  Woodwork          Boolean @default(false)
+  Entrepreneurship  Boolean @default(false)
+  English           Boolean @default(false)
+  Coaching          Boolean @default(false)
+  Custom            Boolean @default(false)
+  Flight            Boolean @default(false)
+  HollisticCoaching Boolean @default(false)
+  Judaism           Boolean @default(false)
+  LeaderShip        Boolean @default(false)
+  Mathematics       Boolean @default(false)
+  Telemarketing     Boolean @default(false)
+  //Contact           SchoolsContact? @relation(fields: [Contactid], references: [Contactid])
+  Guide             Guide?          @relation(fields: [Guideid], references: [Guideid])
+}
+
+model School {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Schoolid                 Int            
+  SchoolName               String?
+  EducationStage           String?          @default("יסודי")
+  ReligiousSector          String?          @default("יהודי")
+  SchoolType               String?
+  City                     String?
+  SymbolNumber             Int?
+  Representive             String?
+  Status                   String?
+  Date                     DateTime?
+  RepresentiveID Int?
+  //Program                  Program[]
+  Remarks                 String?         @default("")
+   @@index([Schoolid])
+}
+
+model Assigned_Guide {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Programid    Int
+  Guideid      Int     @default(1)
+
+  @@unique(fields:[Programid,Guideid])
+}
+
+model Guides_ToAssign {
+
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Guideid Int
+  Programid Int 
+
+
+ @@unique(fields:[Programid,Guideid])
+  
+}
+
+model ContactsInProgram {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  id             Int          @unique @default(1)
+  Programid      Int         
+  Contactid      Int     @unique    
+  //Programs       Program        @relation(fields: [Programid], references: [Programid])
+}
+
+model Program {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Programid                 Int             
+  Year                      String?              @default("תשפד")
+  Proposal                  String?              @default("")
+  Status                    String?             @default("")
+  Product                   String?
+  Order                     String?
+  EducationStage            String?
+  Schoolid                  Int?
+  SchoolName                String?
+  CityName                  String?
+  SchoolsContact            String?
+  Date                      DateTime?
+  District                  String?
+  Plan                      String?
+  Days                      String?
+  ChosenDay                 String?
+  Weeks                     Int?
+  Grade                     String?
+  LessonsPerDay             Int?
+  PaidLessonNumbers         Int?
+  PricingPerPaidLesson      Int?
+  FreeLessonNumbers         Int? 
+  AdditionalPayments        Int?  
+  Details                   String?
+  Assigned_guide            String?
+  ProgramName               String?
+  ProgramLink               String?
+ @@index([Programid])
+}
+
+model ProgramPricing {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Pricingid                 Int   @unique
+  Programid                 Int   @unique
+  EstimatedExpenses         Int
+  FinalPrice                Int?
+  FreeLessonNumbers         Int?
+  PaidLessonNumbers         Int?
+  PricingPerPaidLesson      Int?
+  TotalAmountIncludingTaxes Int
+  //Program                   //Program @relation(fields: [Programid], references: [Programid])
+}
+
+model Payments {
+  Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Id           Int     @unique
+  Programid    Int?     
+  Issuer       String?
+  SchoolName   String?
+  ProgramName  String?
+  Amount       Int?
+}
+
+model ReligionSector {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Religionid   Int    @unique @default(1)
+  ReligionName String   @unique
+}
+
+model Cities {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Cityid   Int  @unique @default(1)
+  CityCode Int @unique
+  CityName String  @unique 
+}
+
+model Role {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  RoleId   Int  @unique @default(1)
+  RoleName String
+}
+
+model StatusSchools {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  StatusId   Int  @unique @default(1)
+  StatusName String
+}
+model StatusContacts {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  StatusId   Int  @unique @default(1)
+  StatusName String
+}
+
+model StatusPrograms {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  StatusId   Int  @unique @default(1)
+  StatusName String
+}
+model StatusGuides{
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  StatusId   Int  @unique @default(1)
+  StatusName String
+}
+
+model EducationStage {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  StageId   Int  @unique @default(1)
+  StageName String
+}
+
+model Areas {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Areaid   Int  @unique @default(1)
+  AreaName String
+}
+
+model Colors {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  Colorid      Int  @unique @default(1)
+  ColorName    String
+  ColorHexCode String
+  ColorMeaning String?
+}
+
+model MessagePattern {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+  PatternId Int  @unique @default(1)
+  Caption   String
+  Message1  String?
+  Message2  String?
+  File      String?
+}
+
+model Program_Schedule {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+Programid Int? @unique
+Sunday Boolean @default(false)
+Monday Boolean @default(false)
+Tuesday Boolean @default(false)
+Wednesday Boolean @default(false)
+Thursday Boolean @default(false)
+Friday Boolean @default(false)
+Saturday Boolean @default(false)
+
+
+
+}
+
+
+model ColorCandidate {
+Objectid String @id @default(auto()) @map("_id") @db.ObjectId
+Guideid Int?  
+Programid Int? 
+ColorHexCode String? @default("#FFFFFF")
+ @@unique(fields:[Programid,Guideid])
+}
+
+model SchoolTypes {
+  Objectid  String @id @default(auto()) @map("_id") @db.ObjectId
+  TypeId    Int  @unique @default(1)
+  TypeName  String
+}
+
+model Years {
+  Objectid  String @id @default(auto()) @map("_id") @db.ObjectId
+  YearId    Int  @unique @default(1)
+  YearName  String
+}
+
+model PendingPayments {
+  Objectid  String @id @default(auto()) @map("_id") @db.ObjectId
+  Id           Int     @unique
+  Programid    Int?
+  Issuer       String?
+  Date         DateTime?    
+  ProgramName  String?
+  Amount       Int?
+  CheckDate    DateTime?          
+}
+
+model ProductTypes {
+  Objectid    String @id @default(auto()) @map("_id") @db.ObjectId
+  ProductId   Int     @unique
+  ProductName String
+}
+
+model Orders {
+  Objectid    String @id @default(auto()) @map("_id") @db.ObjectId
+  OrderId   Int     @unique
+  OrderName String
+}
+
+model Distances {
+  Objectid        String @id @default(auto()) @map("_id") @db.ObjectId
+  OriginId        Int?
+  DestinationId  Int?
+  Distance        Float? 
+}
+
+
+model Auth {
+ Objectid        String @id @default(auto()) @map("_id") @db.ObjectId
+ TableName String @unique
+ TokenObject  String 
+ TimeStamp Int 
+
+}
+

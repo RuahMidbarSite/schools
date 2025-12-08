@@ -1,0 +1,85 @@
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .ag-theme-quartz {
+    height: 100%;
+  }
+  
+  .main-container {
+    display: flex;
+    flex-direction: column;
+    height: 75vh; /* Full viewport height */
+  }
+  
+ .ag-popup-editor {
+  position: fixed !important; /* Force fixed positioning for pop-ups */
+  z-index: 1000; /* High z-index to prevent clipping */
+}
+  
+  .top-component {
+    flex-shrink: 0; /* Ensure top component stays at its original size */
+    width: 10%;
+    margin-left: auto;
+    padding: 10px; /* Optional padding for layout */
+  }
+
+  .page-caption {
+    text-align: right;
+  }
+
+  .custom-select {
+    font-size: 25px; /* Adjust the font size for the select input */
+    padding: 8px; /* Optional: Adjust padding for better appearance */
+    text-align: end;
+  }
+
+  
+  .grid-container {
+    flex-grow: 1; /* Take up remaining space */
+    display: flex;
+    justify-content: space-between; /* Adjust for even spacing */
+    overflow: hidden;
+  }
+  
+  .component {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allow the component to grow and fill space */
+    margin: 0 10px;
+  }
+  
+  .component h2 {
+    flex-shrink: 0; /* Header doesn't shrink */
+    margin: 0 0 10px 0; /* Optional margin for spacing */
+    text-align: right;
+  }
+  
+  .component div[id^="grid-1"] {
+    flex-grow: 1; /* Allow grid to take remaining space */
+    height: auto; /* Allow height to adjust */
+  }
+
+.move-row-div {
+    margin-left: auto;
+}
+
+.move-row-button {
+  direction: ltr;
+  text-align: left;
+}
+
+.remaining-payment-div {
+    margin-left: auto;
+}
+
+
+.custom-text-size .ag-cell, /* Target all cell elements */
+.custom-text-size .ag-header-cell-label { /* Target all header elements */
+  font-size: 20px; /* Uniform text size */
+}
+
+
+
