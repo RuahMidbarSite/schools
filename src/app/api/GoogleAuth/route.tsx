@@ -27,8 +27,8 @@ export async function GET(req: Request) {
     },
     body: new URLSearchParams({
       code,
-      client_id: process.env.clientId,
-      client_secret: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
       redirect_uri: process.env.NODE_ENV === "development" ? 'http://localhost:3666/api/GoogleAuth' : 'https://ruahmidbarproject.vercel.app/api/GoogleAuth',
       grant_type: 'authorization_code',
     }),
