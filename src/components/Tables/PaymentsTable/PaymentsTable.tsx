@@ -1,12 +1,11 @@
 "use client"
-import React, { useCallback, useContext, useEffect, useMemo } from 'react';
-import { useState, Suspense, useRef } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
-import { getPrograms, getSchoolsPrograms, } from '@/db/programsRequests';
-import { SchoolsContact, School, Program, Payments, PendingPayments } from "@prisma/client";
-import { getYears, getModelFields, getPayments, } from '@/db/generalrequests';
+import "ag-grid-community/styles/ag-theme-quartz.css";
+import { getPrograms } from '@/db/programsRequests';
+import { School, Program, Payments, PendingPayments } from "@prisma/client";
+import { getYears, getModelFields, getPayments } from '@/db/generalrequests';
 import {
   getPendingPayments,
   updatePaymentColumn,
@@ -18,24 +17,20 @@ import {
 } from '@/db/paymentsRequests';
 import { AgGridReact } from "ag-grid-react";
 import Select from 'react-select'
-
-import { CellValueChangedEvent, ColDef, GetRowIdParams, ICellRendererParams, SizeColumnsToContentStrategy, SizeColumnsToFitGridStrategy, SizeColumnsToFitProvidedWidthStrategy } from 'ag-grid-community';
+import { CellValueChangedEvent, ColDef, GetRowIdParams, ICellRendererParams } from 'ag-grid-community';
 import { OverlayTrigger, Tooltip, Row, Col, Button, Form, Container } from 'react-bootstrap';
 import { FcAddRow } from 'react-icons/fc';
 import { CustomDateCellEditor } from '@/components/Tables/GeneralFiles/Date/CustomDateCellEditor/CustomDateCellEditor';
 import { getAllSchools, updateSchoolColumn } from '@/db/schoolrequests';
-
 import { ThemeContext } from '@/context/Theme/Theme';
-import { DataType, getFromStorage, getFromStorageWithKey, updateStorage } from '../PricingTable/Storage/PricingDataStorage';
+import { DataType, getFromStorage, getFromStorageWithKey, updateStorage } from '@/components/Tables/PricingTable/Storage/PricingDataStorage';
 import { getAllContacts } from '@/db/contactsRequests';
-import { useYear, YearContext } from '@/context/YearContext';
+import { useYear } from '@/context/YearContext';
 
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
-import DialogTitle from "@mui/material/DialogTitle";
-
 
 
 export const PaymentsTable = () => {
@@ -46,11 +41,13 @@ export const PaymentsTable = () => {
     acounts: "חשבונות",
     funds: "כספים",
     treasurer: "גזבר",
+    adminM: "מנהלן",
+    adminF: "מנהלנית"
   }), [])
 
   const PaymentsRowCount = useRef(0);
-  const PendingPaymentsRowCount = useRef(0)
-
+  
+  // State definitions
   const [schoolsData, setSchoolsData] = useState<School[]>([]);
   const [schoolsColDefs, setSchoolsColDefs] = useState([]);
   const [selectedSchools, setSelectedSchools] = useState<School[]>()
@@ -58,7 +55,7 @@ export const PaymentsTable = () => {
   const [ProgramsData, setProgrmsData] = useState<Program[]>([]);
   const [programsColDefs, setProgramsColDefs] = useState([]);
 
-  const [contactsData, setContactsData] = useState<SchoolsContact[]>([]);
+  const [contactsData, setContactsData] = useState<any[]>([]);
   const [contactsColDefs, setContactsColDefs] = useState([]);
 
   const [pricingColDefs, setPricingColDefs] = useState([]);
@@ -80,45 +77,63 @@ export const PaymentsTable = () => {
   const [selectedSchool, setSelectedSchool] = useState<School>()
 
   const [totalPrice, setTotalPrice] = useState(0)
-
-
   const [totalPayments, setTotalPayments] = useState(0)
 
-
-
-  const gridRef: any = useRef(null);
-
+  // Refs
+  const contactsGridRef: any = useRef(null);
+  const programsGridRef: any = useRef(null);
+  const pricingGridRef: any = useRef(null);
   const paymentsGridRef: any = useRef(null);
   const pendingPaymentsGridRef: any = useRef(null);
   const schoolsGridRef: any = useRef(null);
 
   const [textValue, setTextValue] = useState("");
-
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogType, setDialogType] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
 
-
-
-  // Define global column properties
-  const defaultColDef = useMemo(() => ({
-    minWidth: 100,
-    maxWidth: 200,
-    sortable: true,
-    filter: true,
-  }), []);
   const { theme } = useContext(ThemeContext)
 
-  const autoSizeStrategy = useMemo<
-    | SizeColumnsToFitGridStrategy
-    | SizeColumnsToFitProvidedWidthStrategy
-    | SizeColumnsToContentStrategy
-  >(() => {
-    return {
-      type: "fitCellContents",
-    };
+  // --- 1. DEFAULT COL DEF ---
+  const defaultColDef = useMemo(() => ({
+    minWidth: 100, 
+    sortable: true,
+    filter: true,
+    resizable: true, 
+    flex: 1, 
+  }), []);
+
+
+  // --- 2. MANAGED STATE FUNCTIONS ---
+
+  const onColumnEvent = useCallback((params) => {
+      if (params.type === 'columnResized' && params.finished === false) return;
+      
+      let key = null;
+      if(params.api === schoolsGridRef.current?.api) key = 'state_schools';
+      else if(params.api === contactsGridRef.current?.api) key = 'state_contacts';
+      else if(params.api === programsGridRef.current?.api) key = 'state_programs';
+      else if(params.api === pricingGridRef.current?.api) key = 'state_pricing';
+      else if(params.api === paymentsGridRef.current?.api) key = 'state_payments';
+      else if(params.api === pendingPaymentsGridRef.current?.api) key = 'state_pending';
+
+      if (key) {
+          const colState = params.api.getColumnState();
+          localStorage.setItem(key, JSON.stringify(colState));
+      }
   }, []);
 
+  const onFirstDataRendered = useCallback((params, key) => {
+      const savedState = localStorage.getItem(key);
+      if (savedState) {
+          params.api.applyColumnState({
+              state: JSON.parse(savedState),
+              applyOrder: true
+          });
+      }
+  }, []);
+
+  // -----------------------------------------------------
 
   const CustomNoRowsOverlay = useCallback(() => {
     const Name = "לא זוהו נתונים"
@@ -129,23 +144,16 @@ export const PaymentsTable = () => {
     );
   }, [])
 
+  // --- DATA FETCHING ---
   useEffect(() => {
-
     const fetchData = async () => {
-
       getFromStorage().then(({ Programs, Schools, schoolsContacts, Payments, PendingPayments, Years }: DataType) => {
         if (Programs && Schools && schoolsContacts && Payments && PendingPayments && Years) {
-
-          const formattedOptions = [{
-            label: 'הכל',
-            value: undefined,
-          }].concat(Years.map(selectedYear => ({
-            label: selectedYear.YearName,
-            value: selectedYear.YearName,
-          })));
+          const formattedOptions = [{ label: 'הכל', value: undefined }].concat(Years.map(y => ({ label: y.YearName, value: y.YearName })));
           const initialSelectedOption = formattedOptions.find(option => option.value === selectedYear);
           let AllProgramsSchool = [...Programs.map((program) => program.Schoolid)]
           let AllSchoolsWithPrograms = Schools.filter((school) => AllProgramsSchool.includes(school.Schoolid))
+          
           setProgrmsData(Programs)
           setSchoolsData(AllSchoolsWithPrograms)
           setSelectedSchools(AllSchoolsWithPrograms)
@@ -154,30 +162,16 @@ export const PaymentsTable = () => {
           setPendingPaymentsData(PendingPayments)
           setYearOptions(formattedOptions);
           setSelectedYearOption(initialSelectedOption || { label: "הכל", value: undefined });
-          return
         }
         else {
-
           Promise.all([
-            getPrograms(),
-            getAllSchools(),
-            getAllContacts(),
-            getYears(),
-            getPayments(),
-            getPendingPayments()
+            getPrograms(), getAllSchools(), getAllContacts(), getYears(), getPayments(), getPendingPayments()
           ]).then(([programsData, schoolsData, contacts, yearsData, paymentsData, pendingPaymentsData]) => {
-
-
-            const formattedOptions = [{
-              label: 'הכל',
-              value: undefined,
-            }].concat(yearsData.map(selectedYear => ({
-              label: selectedYear.YearName,
-              value: selectedYear.YearName,
-            })));
+            const formattedOptions = [{ label: 'הכל', value: undefined }].concat(yearsData.map(y => ({ label: y.YearName, value: y.YearName })));
             const initialSelectedOption = formattedOptions.find(option => option.value === selectedYear);
             let AllProgramsSchool = [...programsData.map((program) => program.Schoolid)]
             let AllSchoolsWithPrograms = schoolsData.filter((school) => AllProgramsSchool.includes(school.Schoolid))
+            
             setProgrmsData(programsData)
             setSchoolsData(AllSchoolsWithPrograms)
             setSelectedSchools(AllSchoolsWithPrograms)
@@ -188,17 +182,9 @@ export const PaymentsTable = () => {
             setSelectedYearOption(initialSelectedOption || { label: "הכל", value: undefined });
             updateStorage({ Programs: programsData, Schools: schoolsData, schoolsContacts: contacts, Payments: paymentsData, Years: yearsData, PendingPayments: pendingPaymentsData })
           })
-
-
         }
-
       })
-
     }
-
-
-
-
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -208,24 +194,14 @@ export const PaymentsTable = () => {
 
   useEffect(() => {
     const updateSum = async () => {
-      const totalPrice = Array.isArray(selectedPrograms)
-        ? selectedPrograms.reduce((sum, obj) => sum + (obj.PaidLessonNumbers * obj.PricingPerPaidLesson + obj.AdditionalPayments), 0)
-        : 0;
-
-      const totalPayments = Array.isArray(selectedPayments)
-        ? selectedPayments.reduce((sum, obj) => sum + obj.Amount, 0)
-        : 0;
-
+      const totalPrice = Array.isArray(selectedPrograms) ? selectedPrograms.reduce((sum, obj) => sum + (obj.PaidLessonNumbers * obj.PricingPerPaidLesson + obj.AdditionalPayments), 0) : 0;
+      const totalPayments = Array.isArray(selectedPayments) ? selectedPayments.reduce((sum, obj) => sum + obj.Amount, 0) : 0;
       setTotalPrice(totalPrice);
       setTotalPayments(totalPayments);
     };
     updateSum();
   }, [selectedPrograms, selectedPayments]);
 
-
-  /** On Programselected and year selected:
-   1. Filter all programs
-   */
   useEffect(() => {
     const filterPrograms = () => {
       let filteredPrograms = [...ProgramsData]
@@ -233,44 +209,31 @@ export const PaymentsTable = () => {
         filteredPrograms = ProgramsData.filter(program => program.Schoolid === selectedSchool?.Schoolid)
       }
       const YearFilter = filteredPrograms.filter((program) => {
-        if (selectedYear === "הכל" || selectedYear === undefined) {
-          return true
-        } else {
-          return program.Year === selectedYear
-        }
+        if (selectedYear === "הכל" || selectedYear === undefined) return true;
+        else return program.Year === selectedYear;
       })
       const schools_after_filter = YearFilter.map((program) => program.Schoolid)
       const SchoolYearFilter = [...schoolsData].filter((school) => schools_after_filter.includes(school.Schoolid))
-      if (selectedSchool) {
-        setSelectedPrograms(YearFilter)
-      }
-
+      
+      if (selectedSchool) setSelectedPrograms(YearFilter)
       setSelectedSchools(SchoolYearFilter)
     }
-
     filterPrograms()
-
   }, [selectedYear, selectedSchool, ProgramsData, schoolsData])
 
   useEffect(() => {
     const onSelectSchoolStorage = () => {
       if (selectedSchool) {
         getFromStorageWithKey(selectedSchool.Schoolid).then(({ Payments, PendingPayments }: DataType) => {
-
-          if (Payments) {
-            setPaymentsData(Payments)
-          }
-          if (PendingPayments) {
-            setPendingPaymentsData(PendingPayments)
-          }
+          if (Payments) setPaymentsData(Payments)
+          if (PendingPayments) setPendingPaymentsData(PendingPayments)
         })
-
       }
-
     }
     onSelectSchoolStorage()
-
   }, [selectedSchool])
+
+  // --- UPDATED: Filtering Logic with Year Check ---
   useEffect(() => {
     const filterPayments = () => {
       if (!selectedPrograms || selectedPrograms.length === 0) {
@@ -278,59 +241,52 @@ export const PaymentsTable = () => {
         setSelectedPendingPayments([])
         return
       }
-
+      
       const programs = selectedPrograms.map(program => program.ProgramName)
-      const filteredPayments = PaymentsData.filter(payment => {
-        return (programs.includes(payment.ProgramName))
-      })
+      
+      // Helper function to check if year matches (or "All" is selected)
+      const isYearMatch = (rowYear) => {
+          if (!selectedYear || selectedYear === "הכל") return true;
+          return rowYear === selectedYear;
+      };
+
+      // 1. Filter Payments
+      const filteredPayments = PaymentsData.filter(payment => 
+          programs.includes(payment.ProgramName) && 
+          payment.SchoolName === selectedSchool?.SchoolName &&
+          isYearMatch(payment.Year) // <-- Added Year Check
+      )
+
+      // 2. Filter Pending Payments (Strict Filter)
       const filteredPendingPayments = pendingPaymentsData.filter(payment => {
-        return (programs.includes(payment.ProgramName))
-      })
+          const relatedProgram = selectedPrograms.find(p => p.ProgramName === payment.ProgramName);
+          return relatedProgram && 
+                 relatedProgram.Schoolid === selectedSchool?.Schoolid &&
+                 isYearMatch(payment.Year); // <-- Added Year Check
+      });
+
       setSelectedPayments(filteredPayments)
       setSelectedPendingPayments(filteredPendingPayments)
 
       setPaymentsColDef((colDef: ColDef<Payments>[]) => {
-        let new_coldef = []
-        for (let def of colDef) {
-          if (def.field === "ProgramName") {
-            let new_def = def
-            new_def['cellEditorParams'] = { values: selectedPrograms.map((val) => val.ProgramName) }
-            new_coldef.push(new_def)
-          } else {
-            new_coldef.push(def)
-          }
-        }
-        return new_coldef
+        return colDef.map(def => {
+            if (def.field === "ProgramName") return { ...def, cellEditorParams: { values: selectedPrograms.map((val) => val.ProgramName) } }
+            return def;
+        })
       })
 
       setPendingPaymentsColDef((colDef: ColDef<PendingPayments>[]) => {
-        let new_coldef = []
-        for (let def of colDef) {
-          if (def.field === "ProgramName") {
-            let new_def = def
-            new_def['cellEditorParams'] = { values: selectedPrograms.map((val) => val.ProgramName) }
-            new_coldef.push(new_def)
-          } else {
-            new_coldef.push(def)
-          }
-        }
-        return new_coldef
+        return colDef.map(def => {
+            if (def.field === "ProgramName") return { ...def, cellEditorParams: { values: selectedPrograms.map((val) => val.ProgramName) } }
+            return def;
+        })
       })
-
     }
-
-
     filterPayments()
-
-  }, [selectedPrograms, PaymentsData, pendingPaymentsData])
+  }, [selectedPrograms, PaymentsData, pendingPaymentsData, selectedSchool, selectedYear]) // Added selectedYear dependency
 
   const filterContactsBySchool = useCallback((schoolId: number) => {
-
-    const filteredContacts = contactsData.filter(contact => {
-      return (
-        contact.Schoolid == schoolId
-      );
-    });
+    const filteredContacts = contactsData.filter(contact => contact.Schoolid == schoolId);
     setSelectedContacts(filteredContacts)
   }, [contactsData])
 
@@ -339,877 +295,410 @@ export const PaymentsTable = () => {
     setTotalPayments(total);
   }, [selectedPayments]);
 
-
   const onDeleteRow = useCallback((params, tableName: string) => {
     const rowData = params.data;
-
-
     if (tableName === "Payments") {
       paymentsGridRef.current?.api.applyTransaction({ remove: [rowData] })
-
       deletePaymentRow(params.data.Id)
       setPaymentsData(prevRowData => {
-        const updatedPayments = prevRowData.filter(row => row.Id !== rowData.Id);
-
-        // Update cache 
-        updateStorage({ Payments: updatedPayments, PendingPayments: pendingPaymentsData })
-
-
-        return updatedPayments;
+        const updated = prevRowData.filter(row => row.Id !== rowData.Id);
+        updateStorage({ Payments: updated, PendingPayments: pendingPaymentsData })
+        return updated;
       });
-
     }
-
     if (tableName === "PendingPayments") {
       pendingPaymentsGridRef.current?.api.applyTransaction({ remove: [rowData] })
-
       deletePendingPaymentRow(params.data.Id)
-
       setPendingPaymentsData(prevRowData => {
-        const updatedPendingPayments = prevRowData.filter(row => row.Id !== rowData.Id);
-
-        // Update cache 
+        const updated = prevRowData.filter(row => row.Id !== rowData.Id);
         updateStorage({ PendingPayments: pendingPaymentsData })
-
-        return updatedPendingPayments;
+        return updated;
       });
     }
-
   }, [pendingPaymentsData])
 
   const handleMoveRow = useCallback(() => {
-
-    if (pendingPaymentsData.length === 0) {
-      console.log("empty")
-      return
-    }
-
+    if (pendingPaymentsData.length === 0) return
     const selectedNodes = pendingPaymentsGridRef.current.api.getSelectedNodes();
-    if (!selectedNodes) {
-      console.log("no row selected")
-      return
-    }
-
+    if (!selectedNodes) return
     const selectedRow = selectedNodes[0].data;
-
+    // Ensure we copy the Year to the new Payment record
     const newRow: Payments = {
-      Objectid: undefined,
-      Id: PaymentsRowCount.current + 1,
-      Programid: selectedRow.Programid,
-      Issuer: selectedRow.Issuer,
-      SchoolName: selectedSchool.SchoolName,
-      ProgramName: selectedRow.ProgramName,
-      Amount: selectedRow.Amount
+      Objectid: undefined, Id: PaymentsRowCount.current + 1, Programid: selectedRow.Programid,
+      Issuer: selectedRow.Issuer, SchoolName: selectedSchool.SchoolName, ProgramName: selectedRow.ProgramName, 
+      Amount: selectedRow.Amount, Year: selectedRow.Year // <-- Copy Year
     }
-
-    console.log("newRow", newRow)
-
     addPaymentsRow(newRow)
     setPaymentsData((prevRowData) => {
-      const updatedPayments = [...prevRowData, newRow];
-      updateStorage({ Payments: updatedPayments })
-      // Update Payments cache 
-
-      return updatedPayments; // Update the state
+      const updated = [...prevRowData, newRow];
+      updateStorage({ Payments: updated })
+      return updated; 
     });
-
     const updatedRowData = pendingPaymentsData.filter((row) => row.Id != selectedRow.Id);
     deletePendingPaymentRow(selectedRow.Id);
-
     setPendingPaymentsData(updatedRowData)
-
-
-
     updateStorage({ PendingPayments: updatedRowData })
-
   }, [pendingPaymentsData, selectedSchool])
 
-
   const isInChosenRoles = useCallback((role: string) => {
+    if (!role) return false;
     const rolesNames = Object.values(rolesDict)
-
     let isFound = false
-
-    rolesNames.forEach((roleName) => {
-      if (role.includes(roleName)) {
-        isFound = true;
-      }
-    })
-
+    rolesNames.forEach((roleName) => { if (role.includes(roleName)) isFound = true; })
     return isFound
   }, [rolesDict])
 
   const handleDialogClose = () => {
-    setDialogOpen(false);
-    setDialogType("");
-    setDialogMessage("");
+    setDialogOpen(false); setDialogType(""); setDialogMessage("");
   };
 
+  // --- GRID DEFINITIONS ---
 
   const onSchoolsGridReady = useCallback(async () => {
     const schoolsModel = await getModelFields("School")
-
     var schoolsColDef: any = schoolsModel[0]
-      ?.filter((value: any) =>
-        value === "SchoolName" ||
-        value === "EducationStage" ||
-        value === "City" ||
-        value === "SymbolNumber"
-      )
+      ?.filter((value: any) => value === "SchoolName" || value === "EducationStage" || value === "City" || value === "SymbolNumber")
       .map((value: any, index: any) => {
         const idx = schoolsModel[0].indexOf(value);
         if (value === "SchoolName") {
-          return {
-            field: value,
-            headerName: schoolsModel[1][idx],
-            editable: false,
-            width: 50,
-            cellEditor: "agTextCellEditor",
-            filter: false,
-            checkboxSelection: true,
-
-
-          };
+          return { field: value, headerName: schoolsModel[1][idx], editable: false, width: 50, cellEditor: "agTextCellEditor", filter: false, checkboxSelection: true };
         }
-
-        return {
-          field: value,
-          headerName: schoolsModel[1][idx],
-          editable: false,
-          width: 50,
-          cellEditor: "agTextCellEditor",
-          filter: true,
-
-        };
+        return { field: value, headerName: schoolsModel[1][idx], editable: false, width: 50, cellEditor: "agTextCellEditor", filter: true };
       });
-
     setSchoolsColDefs(schoolsColDef)
-
-
   }, [])
 
   const onProgramsGridReady = useCallback(async () => {
     const programsModel = await getModelFields("Program")
-
-
     var programsColDef: any = programsModel[0]
-      ?.filter((value: any) =>
-        value === "Status" ||
-        value === "ProgramName" ||
-        value === "Days" ||
-        value === "Year" ||
-        value === "Proposal"
-      )
+      ?.filter((value: any) => value === "Status" || value === "ProgramName" || value === "Days" || value === "Year" || value === "Proposal")
       .map((value: any, index: any) => {
         const idx = programsModel[0].indexOf(value);
         if (value === "ProgramName") {
-          return {
-            field: value,
-            headerName: "תוכנית",
-            editable: false,
-            cellEditor: "agTextCellEditor",
-            filter: true,
-            width: 50,
-          };
+          return { field: value, headerName: "תוכנית", editable: false, cellEditor: "agTextCellEditor", filter: true, minWidth: 150 };
         }
         if (value === "Proposal") {
           return {
-            field: value,
-            headerName: "הצעה",
-            editable: false,
-            cellEditor: "agTextCellEditor",
-            width: 50,
-            cellRenderer: (params: ICellRendererParams<Program>) => (<a
-              href={params.getValue()}
-              target="_blank"
-
-              className="font-medium text-blue-600 no-underline dark:text-blue-500 hover:underline ltr"
-            >
-              הצעה
-            </a>),
-            filter: true,
+            field: value, headerName: "הצעה", editable: false, cellEditor: "agTextCellEditor", width: 50, 
+            cellRenderer: (params: ICellRendererParams<Program>) => (<a href={params.getValue()} target="_blank" className="font-medium text-blue-600 no-underline dark:text-blue-500 hover:underline ltr">הצעה</a>),
+            filter: true
           };
         }
-        return {
-          field: value,
-          headerName: programsModel[1][idx],
-          editable: false,
-          width: 50,
-          cellEditor: "agTextCellEditor",
-          filter: true,
-
-        };
+        return { field: value, headerName: programsModel[1][idx], editable: false, width: 50, cellEditor: "agTextCellEditor", filter: true };
       });
-
     setProgramsColDefs(programsColDef)
-    setSelectedPrograms([])
   }, [])
+
   const valueFormatterDate = useCallback((params) => {
     if (!params.value) return '';
     const date = new Date(params.value);
     if (isNaN(date.getTime())) return '';
-    return date.toLocaleDateString('en-GB', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
+    return date.toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' });
   }, [])
 
   const onContactsGridReady = useCallback(async () => {
     const contactsModel = await getModelFields("SchoolsContact")
-
-    // TODO:  Add Whatsapp column
     var contactsColDef: any = contactsModel[0]
-      ?.filter((value: any) =>
-        value === "FirstName" ||
-        value === "LastName" ||
-        value === "Role" ||
-        value === "Cellphone"
-      )
+      ?.filter((value: any) => value === "FirstName" || value === "LastName" || value === "Role" || value === "Cellphone")
       .map((value: any, index: any) => {
         const idx = contactsModel[0].indexOf(value);
+        
+        // --- WHATSAPP LINK ---
+        if (value === "FirstName") {
+            return {
+              field: value,
+              headerName: contactsModel[1][idx],
+              editable: false,
+              width: 90,
+              filter: true,
+              cellRenderer: (params) => {
+                 const name = params.value;
+                 const phone = params.data.Cellphone;
+                 if (!phone) return <span>{name}</span>;
+                 let cleanPhone = phone.replace(/\D/g, ''); 
+                 if (cleanPhone.startsWith('0')) { cleanPhone = '972' + cleanPhone.substring(1); }
+                 return (
+                     <a href={`https://wa.me/${cleanPhone}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium"
+                       title={`שלח הודעה ל-${name}`} onClick={(e) => e.stopPropagation()}>{name}</a>
+                 )
+              }
+            };
+        }
+        // ---------------------
+
         if (value === "Role") {
           return {
-            field: value,
-            headerName: contactsModel[1][idx],
-            editable: false,
-            width: 50,
-            cellEditor: "agTextCellEditor",
-            filter: true,
-
-            cellStyle: (params) => {
-              if (isInChosenRoles(params.value)) { // External condition
-                return { color: 'red' }; // Paint in red
-              }
-              return null; // Leave it as is (default style)
-            },
+            field: value, headerName: contactsModel[1][idx], editable: false, width: 50, cellEditor: "agTextCellEditor", filter: true,
+            cellStyle: (params) => { if (isInChosenRoles(params.value)) { return { color: 'red' }; } return null; },
           };
         }
-        if (value === 'CellPhone') {
-          return {
-            field: value,
-            headerName: contactsModel[1][idx],
-            editable: false,
-          };
-
-        }
-        return {
-          field: value,
-          headerName: contactsModel[1][idx],
-          width: 50,
-          editable: false,
-          cellEditor: "agTextCellEditor",
-          filter: true,
-
-        };
+        if (value === 'CellPhone') return { field: value, headerName: contactsModel[1][idx], editable: false };
+        return { field: value, headerName: contactsModel[1][idx], width: 50, editable: false, cellEditor: "agTextCellEditor", filter: true };
       });
-
     setContactsColDefs(contactsColDef)
-    setSelectedContacts([])
   }, [isInChosenRoles])
-
 
   const onPricingGridReady = useCallback(async () => {
     const pricingModel = await getModelFields("ProgramPricing")
-
-    console.log("pricing model: ", pricingModel)
-
-    const fieldsNames = ["Year", "PaidLessonNumbers", "PricingPerPaidLesson", "FreeLessonNumbers", "TotalLessonNumbers",
-      "AdditionalPayments", "FinalPrice", "ProgramName"]
-
+    const fieldsNames = ["Year", "PaidLessonNumbers", "PricingPerPaidLesson", "FreeLessonNumbers", "TotalLessonNumbers", "AdditionalPayments", "FinalPrice", "ProgramName"]
     var pricingColDef: any = fieldsNames.map((value: any, index: any) => {
       const idx = fieldsNames.indexOf(value);
-
       const columnDef: any = {
-        field: value,
-        headerName: pricingModel[1][idx],
-        editable: false,
-        width: 50,
-        cellEditor: "agTextCellEditor",
-        filter: true,
-        cellEditorParams: {
-      popupParent: document.body,
-    },
-
+        field: value, headerName: pricingModel[1][idx], editable: false, width: 80, cellEditor: "agTextCellEditor", filter: true,
+        cellEditorParams: { popupParent: document.body },
       };
-
-      if (value === 'FinalPrice') {
-        columnDef.valueGetter = (params: any) => {
-          return FinalValueGetter(params);
-        };
-        columnDef.headerName = "סהכ מחיר"
-      }
-      if (value === 'TotalLessonNumbers') {
-        columnDef.valueGetter = (params: any) => {
-          return TotalValueGetter(params);
-        };
-        columnDef.headerName = "שיעורים כולל"
-      }
-      if (value === "FreeLessonNumbers") {
-        columnDef.headerName = "בחינם"
-      }
-      if (value === "PaidLessonNumbers") {
-        columnDef.headerName = "בתשלום"
-      }
-      if (value === "AdditionalPayments") {
-        columnDef.headerName = "תוספות"
-      }
-
-
+      const shouldWrap = ['PricingPerPaidLesson', 'TotalLessonNumbers', 'FinalPrice'].includes(value);
+      if (shouldWrap) { columnDef.wrapHeaderText = true; columnDef.autoHeaderHeight = true; columnDef.width = 75; }
+      if (value === 'FinalPrice') { columnDef.valueGetter = (params: any) => FinalValueGetter(params); columnDef.headerName = "סהכ מחיר" }
+      if (value === 'TotalLessonNumbers') { columnDef.valueGetter = (params: any) => TotalValueGetter(params); columnDef.headerName = "שיעורים כולל" }
+      if (value === "FreeLessonNumbers") { columnDef.headerName = "בחינם" }
+      if (value === "PaidLessonNumbers") { columnDef.headerName = "בתשלום" }
+      if (value === "PricingPerPaidLesson") { columnDef.headerName = "עלות שיעור"; }
+      if (value === "AdditionalPayments") { columnDef.headerName = "תוספות" }
       return columnDef;
     });
-
     setPricingColDefs(pricingColDef)
   }, [FinalValueGetter, TotalValueGetter])
 
   const onPaymentsGridReady = useCallback(async () => {
     const paymentsModel = await getModelFields("Payments")
-
     var paymentsColDef: any = paymentsModel[0]
-      ?.filter((value: any) =>
-        value === "Issuer" ||
-        value === "SchoolName" ||
-        value === "ProgramName" ||
-        value === "Amount"
-      )
+      ?.filter((value: any) => value === "Issuer" || value === "SchoolName" || value === "ProgramName" || value === "Amount")
       .map((value: any, index: any) => {
         const idx = paymentsModel[0].indexOf(value);
         if (value === "ProgramName") {
-          return {
-
-            field: "ProgramName",
-            headerName: "תוכנית",
-            editable: true,
-            cellEditor: "agSelectCellEditor",
-            cellEditorParams: {
-              values: selectedPrograms.map((val) => val.ProgramName)
-            },
-          };
-
+          return { field: "ProgramName", headerName: "תוכנית", editable: true, cellEditor: "agSelectCellEditor", cellEditorParams: { values: selectedPrograms.map((val) => val.ProgramName) } };
         }
-        if (value === "Issuer") {
-          return {
-            field: value,
-            headerName: paymentsModel[1][idx],
-            editable: true,
-            cellEditor: "agTextCellEditor",
-            filter: true,
-          };
-        }
-
-        return {
-          field: value,
-          headerName: paymentsModel[1][idx],
-          editable: true,
-          cellEditor: "agTextCellEditor",
-          filter: true,
-        };
+        if (value === "Issuer") return { field: value, headerName: paymentsModel[1][idx], editable: true, cellEditor: "agTextCellEditor", filter: true };
+        return { field: value, headerName: paymentsModel[1][idx], editable: true, cellEditor: "agTextCellEditor", filter: true };
       });
-
     paymentsColDef.push({
-      headerName: "",
-      field: "actions",
-      cellRenderer: (params) => {
-        return (
-          <button onClick={() => onDeleteRow(params, "Payments")}>
-            🗑️
-          </button>
-        );
-      },
-      suppressMovable: true,
+      headerName: "", field: "actions", suppressMovable: true,
+      cellRenderer: (params) => { return ( <button onClick={() => onDeleteRow(params, "Payments")}> 🗑️ </button> ); },
     });
-
-
     setPaymentsColDef(paymentsColDef)
-    setSelectedPayments([])
   }, [onDeleteRow, selectedPrograms])
 
   const onPendingPaymentsGridReady = useCallback(async () => {
     const pendingPaymentsModel = await getModelFields("PendingPayments")
-    console.log("pendingPaymentsModel: ", pendingPaymentsModel)
-
-
-    // TODO - fix column mapping
     var pendingPaymentsColDef: any = pendingPaymentsModel[0]
-      ?.filter((value: any) =>
-        value === "Issuer" ||
-        value === "Date" ||
-        value === "ProgramName" ||
-        value === "CheckDate" ||
-        value === "Amount"
-
-      )
+      ?.filter((value: any) => value === "Issuer" || value === "Date" || value === "ProgramName" || value === "CheckDate" || value === "Amount")
       .map((value: any, index: any) => {
-        const idx = pendingPaymentsModel[0].indexOf(value);
         if (value === "ProgramName") {
-          return {
-            field: value,
-            headerName: "תוכנית",
-            editable: true,
-            width: 50,
-            cellEditor: "agSelectCellEditor",
-            cellEditorParams: {
-              values: ProgramsData.map((val) => val.ProgramName)
-            },
-
-          };
+          return { field: value, headerName: "תוכנית", editable: true, width: 50, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ProgramsData.map((val) => val.ProgramName) } };
         }
-
-        if (value === "Date") {
-          return {
-            field: "Date",
-            headerName: "תאריך",
-            editable: true,
-            width: 50,
-            cellDataType: 'date',
-            cellEditor: CustomDateCellEditor,
-            valueFormatter: valueFormatterDate
-          }
-        }
-        if (value === "CheckDate") {
-          return {
-            field: "CheckDate",
-            headerName: "תאריך תשלום",
-            width: 50,
-            editable: true,
-            cellDataType: 'date',
-            cellEditor: CustomDateCellEditor,
-            valueFormatter: valueFormatterDate
-          }
-        }
-
-
+        if (value === "Date") return { field: "Date", headerName: "תאריך", editable: true, width: 50, cellDataType: 'date', cellEditor: CustomDateCellEditor, valueFormatter: valueFormatterDate }
+        if (value === "CheckDate") return { field: "CheckDate", headerName: "תאריך תשלום", width: 50, editable: true, cellDataType: 'date', cellEditor: CustomDateCellEditor, valueFormatter: valueFormatterDate }
         if (value === "Issuer") {
-          return {
-            field: value,
-            headerName: "מנפיק",
-            editable: true,
-            width: 50,
-            cellEditor: "agTextCellEditor",
-            filter: true,
-            checkboxSelection: true,
-            cellRenderer: (props: ICellRendererParams<PendingPayments>) => {
-
-              return (
-                <div> {props.getValue()} </div>
-              )
-
-            }
-
-          };
+          return { field: value, headerName: "מנפיק", editable: true, width: 50, cellEditor: "agTextCellEditor", filter: true, checkboxSelection: true, cellRenderer: (props: ICellRendererParams<PendingPayments>) => { return ( <div> {props.getValue()} </div> ) } };
         }
-
-        return {
-          field: value,
-          headerName: "סכום",
-          width: 50,
-          editable: true,
-          cellEditor: "agTextCellEditor",
-          filter: true,
-        };
+        return { field: value, headerName: "סכום", width: 50, editable: true, cellEditor: "agTextCellEditor", filter: true };
       });
-
     pendingPaymentsColDef.push({
-      headerName: "",
-      field: "actions",
-      cellRenderer: (params) => {
-        return (
-          <button onClick={() => onDeleteRow(params, "PendingPayments")}>
-            🗑️
-          </button>
-        );
-      },
-      suppressMovable: true,
+      headerName: "", field: "actions", suppressMovable: true,
+      cellRenderer: (params) => { return ( <button onClick={() => onDeleteRow(params, "PendingPayments")}> 🗑️ </button> ); },
     });
-
     setPendingPaymentsColDef(pendingPaymentsColDef)
-    setSelectedPendingPayments([])
-
   }, [ProgramsData, onDeleteRow, valueFormatterDate])
 
 
-  const onPaymentCellValueChanged = useCallback(
-    (event: CellValueChangedEvent<any>) => {
+  // --- UPDATES ---
+  const onPaymentCellValueChanged = useCallback((event: CellValueChangedEvent<any>) => {
       calculateTotalAmount()
-      if (event.oldValue === event.newValue) {
-        return;
-      }
-
+      if (event.oldValue === event.newValue) return;
       const colName = event.column.getColId()
       const newCellValue = event.newValue
       const id = event.data.Id
-
+      const rowData = event.data;
       if (colName === "ProgramName") {
-        const program = selectedPrograms.filter(
-          (program) => program.ProgramName === newCellValue)
-        const programId = program.map((p) => p.Programid)[0]
-        updatePaymentColumn(
-          "Programid",
-          programId,
-          id,
-        );
-      }
-      updatePaymentColumn(
-        colName,
-        newCellValue,
-        id,
-      );
-
-      const future_data: Payments[] = [];
-      paymentsGridRef.current.api.forEachNode((node: any) => {
-        if (node.data) {
-          future_data.push(node.data);
+        const program = selectedPrograms.filter((program) => program.ProgramName === newCellValue)
+        if (program.length > 0) {
+            const programId = program[0].Programid;
+            updatePaymentColumn("Programid", programId, id);
+            rowData.Programid = programId; 
         }
-      });
-
-      setPaymentsData(future_data);
-      updateStorage({ Payments: future_data })
-
-
-    },
-    [calculateTotalAmount, selectedPrograms]
-  );
-
-  const onPendingPaymentCellValueChanged = useCallback(
-    (event: CellValueChangedEvent<any>) => {
-      if (event.oldValue === event.newValue) {
-        return;
       }
+      updatePaymentColumn(colName, newCellValue, id);
+      setPaymentsData((prevData) => {
+        const newData = prevData.map((row) => row.Id === id ? { ...row, [colName]: newCellValue, Programid: rowData.Programid } : row);
+        updateStorage({ Payments: newData });
+        return newData;
+      });
+    }, [calculateTotalAmount, selectedPrograms]);
 
-
+  const onPendingPaymentCellValueChanged = useCallback((event: CellValueChangedEvent<any>) => {
+      if (event.oldValue === event.newValue) return;
       const colName = event.column.getColId()
       const newCellValue = event.newValue
       const id = event.data.Id
-
+      const rowData = event.data;
       if (colName === "ProgramName") {
-        console.log("selectedPrograms: ", selectedPrograms)
-        const program = selectedPrograms.filter(
-          (program) => program.ProgramName === newCellValue)
-        const programId = program.map((p) => p.Programid)[0]
-        updatePendingPaymentColumn(
-          "Programid",
-          programId,
-          id,
-        );
-      }
-      updatePendingPaymentColumn(
-        colName,
-        newCellValue,
-        id,
-      );
-
-      const future_data: PendingPayments[] = [];
-      pendingPaymentsGridRef.current.api.forEachNode((node: any) => {
-        if (node.data) {
-          future_data.push(node.data);
+        const program = selectedPrograms.filter((program) => program.ProgramName === newCellValue)
+        if (program.length > 0) {
+            const programId = program[0].Programid;
+            updatePendingPaymentColumn("Programid", programId, id);
+            rowData.Programid = programId; 
         }
+      }
+      updatePendingPaymentColumn(colName, newCellValue, id);
+      setPendingPaymentsData((prevData) => {
+         const newData = prevData.map((row) => row.Id === id ? { ...row, [colName]: newCellValue, Programid: rowData.Programid } : row);
+         updateStorage({ PendingPayments: newData });
+         return newData;
       });
-
-      setPendingPaymentsData(future_data);
-      updateStorage({ PendingPayments: future_data })
-
-    },
-    [selectedPrograms]
-  );
+    }, [selectedPrograms]);
 
   const onPaymentsAddRowToolBarClick = useCallback(() => {
     const rowCount = PaymentsData.length
-    if (!selectedSchool) {
-      console.log("please select school");
-      setDialogMessage("!אנא בחר בית ספר")
-      setDialogType("error");
-      setDialogOpen(true);
-      return
+    if (!selectedSchool) { setDialogMessage("!אנא בחר בית ספר"); setDialogType("error"); setDialogOpen(true); return; }
+    // Initialize Year with selectedYear
+    const paymentsRow: any = { 
+        Objectid: undefined, Id: rowCount + 1, SchoolName: selectedSchool.SchoolName, 
+        Amount: 0, ProgramName: selectedPrograms[0].ProgramName,
+        Year: selectedYear // <-- Default to current selected year
     }
-
-
-    const paymentsRow: any =
-    {
-      Objectid: undefined,
-      Id: rowCount + 1,
-      SchoolName: selectedSchool.SchoolName,
-      Amount: 0,
-      ProgramName: selectedPrograms[0].ProgramName
-
-    }
-
-    addPaymentsRow(paymentsRow).then((res) => {
-
-
-    })
-    setPaymentsData((prevData) => {
-      const updatedPaymentsData = [...prevData, paymentsRow];
-
-      // Update the cache 
-      updateStorage({ Payments: updatedPaymentsData })
-      return updatedPaymentsData;
-    });
-
-  }, [PaymentsData, selectedSchool, selectedPrograms]);
-
-
-
+    addPaymentsRow(paymentsRow);
+    setPaymentsData((prevData) => { const updated = [...prevData, paymentsRow]; updateStorage({ Payments: updated }); return updated; });
+  }, [PaymentsData, selectedSchool, selectedPrograms, selectedYear]);
 
   const onPendingPaymentsAddRowToolBarClick = useCallback(() => {
-    if (!selectedSchool) {
-      console.log("please select school");
-      setDialogMessage("נא בחר בית ספר!")
-      setDialogType("error");
-      setDialogOpen(true);
-      return
-    }
-
+    if (!selectedSchool) { setDialogMessage("נא בחר בית ספר!"); setDialogType("error"); setDialogOpen(true); return; }
     const rowCount = pendingPaymentsData.length
-    const pendingPaymentsRow: PendingPayments =
-    {
-      Objectid: undefined,
-      Programid: selectedPrograms[0].Programid,
-      Id: rowCount + 1,
-      Amount: 0,
-      ProgramName: selectedPrograms[0].ProgramName,
-      Issuer: "",
-      Date: undefined,
-      CheckDate: undefined
-
-
+    // Initialize Year with selectedYear
+    const pendingPaymentsRow: PendingPayments = { 
+        Objectid: undefined, Programid: selectedPrograms[0].Programid, Id: rowCount + 1, 
+        Amount: 0, ProgramName: selectedPrograms[0].ProgramName, Issuer: "", Date: undefined, CheckDate: undefined,
+        Year: selectedYear // <-- Default to current selected year
     }
-
-    console.log("pendingPaymentsRow: ", pendingPaymentsRow)
-
-
     addPendingPaymentsRow(pendingPaymentsRow);
-    setPendingPaymentsData((prevData) => {
-      const updatedPendingPaymentsData = [...prevData, pendingPaymentsRow];
-
-      updateStorage({ PendingPayments: [...prevData, pendingPaymentsRow] })
-      return updatedPendingPaymentsData;
-    });
-
-
-  }, [pendingPaymentsData.length, selectedPrograms, selectedSchool]);
-
+    setPendingPaymentsData((prevData) => { const updated = [...prevData, pendingPaymentsRow]; updateStorage({ PendingPayments: updated }); return updated; });
+  }, [pendingPaymentsData.length, selectedPrograms, selectedSchool, selectedYear]);
 
   const onSchoolSelectionChanged = useCallback(async (event: any) => {
     const selectedNodes = event.api.getSelectedNodes();
     if (selectedNodes.length > 0) {
-
-      // Process the newly selected row
       const school = selectedNodes[0].data;
-      const schoolId = school.Schoolid;
-      const schoolRemarks = school.Remarks;
-      if (!schoolRemarks) {
-        setTextValue("");
-      }
-      else {
-        setTextValue(school.Remarks);
-      }
-
+      if (!school.Remarks) setTextValue(""); else setTextValue(school.Remarks);
       setSelectedSchool(school);
-
-      filterContactsBySchool(schoolId);
-
+      filterContactsBySchool(school.Schoolid);
     } else {
-      setSelectedSchool(selectedNodes[0]);
-      setSelectedContacts([]);
-      setTextValue("");
-      setSelectedPrograms([]);
-      setSelectedPayments([]);
-      setSelectedPendingPayments([]);
+      setSelectedSchool(selectedNodes[0]); setSelectedContacts([]); setTextValue(""); setSelectedPrograms([]); setSelectedPayments([]); setSelectedPendingPayments([]);
     }
   }, [filterContactsBySchool])
 
-
-
-
-  const handleYearChange = useCallback(async (selectedOption) => {
-    const year = selectedOption.value
-    setSelectedYear(year)
-    setSelectedYearOption(selectedOption);
-  }, [])
-
+  const handleYearChange = useCallback(async (selectedOption) => { setSelectedYear(selectedOption.value); setSelectedYearOption(selectedOption); }, [])
 
   const updateSchoolRow = useCallback(async (event) => {
+    if (!selectedSchool) return; 
     const newCellValue = event.target.value
-    const colName = "Remarks"
     const id = selectedSchool?.Schoolid
-    updateSchoolColumn(
-      colName,
-      newCellValue,
-      id
-    )
-    const school: School = schoolsData.find((res) => res.Schoolid === id)
-    const updated_school: School = { ...school, Remarks: newCellValue }
-
-    const updatedSchoolsData = schoolsData.map((school) =>
-      school.Schoolid === id ? { ...school, Remarks: newCellValue } : school
-    );
+    updateSchoolColumn("Remarks", newCellValue, id)
+    const updatedSchoolsData = schoolsData.map((school) => school.Schoolid === id ? { ...school, Remarks: newCellValue } : school);
     setSchoolsData(updatedSchoolsData)
     updateStorage({ Schools: updatedSchoolsData })
-
-
-
-    return
   }, [schoolsData, selectedSchool])
 
-  const getRowId = useCallback(
-    (params: GetRowIdParams<School>) => String(params.data.Schoolid),
-    [],
-  );
-  return (
+  const getRowId = useCallback((params: GetRowIdParams<School>) => String(params.data.Schoolid), []);
 
+  return (
     <Container fluid={true} className={theme === "dark-theme" ? "bg-[#1f2936]" : "bg-[white]"}>
       <Dialog open={dialogOpen} onClose={handleDialogClose}>
-        {dialogType === "error" && (
-          <>
-
-            <DialogContent>
-              <DialogContentText>{dialogMessage}</DialogContentText>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleDialogClose}>Close</Button>
-            </DialogActions>
-          </>
-        )}
+        {dialogType === "error" && (<><DialogContent> <DialogContentText>{dialogMessage}</DialogContentText> </DialogContent><DialogActions> <Button onClick={handleDialogClose}>Close</Button> </DialogActions></>)}
       </Dialog>
 
-
       <Row lg={{ cols: 12 }} >
-        <Col lg={{ span: 3, offset: 1, order: 3 }} >
+        <Col lg={{ span: 3, offset: 0, order: 3 }} >
           <Row>
-            <Col lg={{ order: 'last' }} className="text-right" >
-              <h3 className={theme === "dark-theme" ? "text-white" : "text-black"}>
-                שנה
-              </h3>
-            </Col>
-            <Col className="text-right">
-              <Select
-                options={yearOptions}
-                value={selectedYearOption}
-                placeholder="..בחר שנה"
-                onChange={handleYearChange}
-                className="text-end"
-                menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-              />
-            </Col>
+            <Col lg={{ order: 'last' }} className="text-right" ><h3 className={theme === "dark-theme" ? "text-white" : "text-black"}> שנה </h3></Col>
+            <Col className="text-right"><Select options={yearOptions} value={selectedYearOption} placeholder="..בחר שנה" onChange={handleYearChange} className="text-end" menuPortalTarget={typeof document !== 'undefined' ? document.body : null} /></Col>
           </Row>
-
-
           <Row className="text-right" >
-
             <h3 className={theme === "dark-theme" ? "text-white" : "text-black"}>בתי ספר</h3>
-
             <Suspense>
-              <div
-                id="grid-5"
-                className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size "}
-              >
+              <div id="grid-5" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size "}>
                 <AgGridReact
-                  noRowsOverlayComponent={CustomNoRowsOverlay}
-                  ref={schoolsGridRef}
-                  rowHeight={25}
-                  rowData={selectedSchools}
-                  columnDefs={schoolsColDefs}
-                  defaultColDef={defaultColDef}
-                  enableRtl={true}
-
+                  noRowsOverlayComponent={CustomNoRowsOverlay} ref={schoolsGridRef} rowHeight={25} rowData={selectedSchools} columnDefs={schoolsColDefs} defaultColDef={defaultColDef} enableRtl={true}
                   onGridReady={onSchoolsGridReady}
-                  autoSizeStrategy={autoSizeStrategy}
-                  onSelectionChanged={onSchoolSelectionChanged}
-                  rowSelection='single'
-                  getRowId={getRowId}
-                  domLayout='autoHeight'
+                  onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+                  onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_schools')}
+                  onSelectionChanged={onSchoolSelectionChanged} rowSelection='single' getRowId={getRowId} domLayout='autoHeight'
                 />
               </div>
             </Suspense>
           </Row>
         </Col>
-        <Col lg={{ span: 3, offset: 0, order: 2 }}>
+
+        <Col lg={{ span: 4, offset: 0, order: 2 }}>
           <Row>
-            <Col  >
-              <Row>
-                <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>אנשי קשר</h5>
-
+            <Col><Row>
+                <div className="text-right"> <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>אנשי קשר</h5> </div>
                 <Suspense>
-                  <div
-                    id="grid-4"
-                    className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size " : "ag-theme-quartz custom-text-size"}
-                  >
+                  <div id="grid-4" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
                     <AgGridReact
-                      noRowsOverlayComponent={CustomNoRowsOverlay}
-                      ref={gridRef}
-                      rowHeight={25}
-                      rowData={selectedContacts}
-                      columnDefs={contactsColDefs}
-                      defaultColDef={defaultColDef}
-                      enableRtl={true}
-                      autoSizeStrategy={autoSizeStrategy}
+                      noRowsOverlayComponent={CustomNoRowsOverlay} ref={contactsGridRef} rowHeight={25} rowData={selectedContacts} columnDefs={contactsColDefs} defaultColDef={defaultColDef} enableRtl={true}
                       onGridReady={onContactsGridReady}
+                      onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+                      onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_contacts')}
                       domLayout='autoHeight'
-
                     />
                   </div>
                 </Suspense>
-              </Row>
-            </Col>
+              </Row></Col>
           </Row>
           <Row>
-            <Col   >
-              <div className="flex flex-row-reverse">
-                <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>
-                  תוכניות
-                </h5>
-                <button
-                  className="hover:bg-[#253d37] rounded opacity-0"
-                >
-                  <FcAddRow className="w-[37px] h-[37px] opacity-0" />
-                </button>
+            <Col>
+              <div className="flex items-center justify-between mb-2">
+                  <button className="hover:bg-[#253d37] rounded opacity-0"> <FcAddRow className="w-[37px] h-[37px] opacity-0" /> </button>
+                  <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}> תוכניות </h5>
               </div>
               <Suspense>
-
-                <div
-                  id="grid-1"
-                  className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size  " : "ag-theme-quartz custom-text-size "}
-
-                >
+                <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
                   <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay}
-                    ref={gridRef}
-                    rowHeight={25}
-                    rowData={selectedPrograms}
-                    columnDefs={programsColDefs}
-                    defaultColDef={defaultColDef}
-                    enableRtl={true}
-                    autoSizeStrategy={autoSizeStrategy}
+                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={programsGridRef} rowHeight={25} rowData={selectedPrograms} columnDefs={programsColDefs} defaultColDef={defaultColDef} enableRtl={true}
                     onGridReady={onProgramsGridReady}
+                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_programs')}
                     domLayout='autoHeight'
                   />
                 </div>
               </Suspense>
             </Col>
           </Row>
-
+          <Row>
+            <Col>
+              <div className="flex flex-row-reverse items-center justify-start gap-2">
+                <OverlayTrigger placement={"top"} overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}>
+                  <button className="hover:bg-[#253d37] rounded relative" onClick={onPendingPaymentsAddRowToolBarClick}> <FcAddRow className="w-[37px] h-[37px]" /> </button>
+                </OverlayTrigger>
+                <h5 className={`${theme === "dark-theme" ? "text-white" : "text-black"} mb-0`}>תשלומים בדרך</h5>
+                 <Button size="sm" className="move-row-btn px-2 py-0 text-sm whitespace-nowrap h-[28px] flex items-center ms-2" onClick={handleMoveRow}> סמן כשולם </Button>
+              </div>
+              <Suspense>
+                <div id="grid-3" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size overflow-visible " : "ag-theme-quartz custom-text-size overflow-visible "}>
+                  <AgGridReact
+                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={pendingPaymentsGridRef} rowHeight={25} rowData={selectedPendingPayments} columnDefs={pendingPaymentsColDef} defaultColDef={defaultColDef} enableRtl={true}
+                    onGridReady={onPendingPaymentsGridReady}
+                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_pending')}
+                    singleClickEdit={true} onCellValueChanged={onPendingPaymentCellValueChanged} domLayout='autoHeight'
+                  />
+                </div>
+              </Suspense>
+            </Col>
+          </Row>
         </Col>
 
         <Col lg={{ span: 5, offset: 0, order: 1 }} className="overflow-visible">
           <Row>
-            <Col  >
-              <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>תמחור</h5>
-
+            <Col>
+              <div className="text-right"> <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>תמחור</h5> </div>
               <Suspense>
-                <div
-                  id="grid-1"
-                  className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}
-                >
+                <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
                   <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay}
-                    ref={gridRef}
-                    rowHeight={25}
-                    rowData={selectedPrograms}
-                    columnDefs={pricingColDefs}
-                    defaultColDef={defaultColDef}
-                    enableRtl={true}
-                    autoSizeStrategy={autoSizeStrategy}
+                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={pricingGridRef} rowHeight={25} rowData={selectedPrograms} columnDefs={pricingColDefs} defaultColDef={defaultColDef} enableRtl={true}
                     onGridReady={onPricingGridReady}
+                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_pricing')}
                     domLayout='autoHeight'
                   />
                 </div>
@@ -1217,120 +706,51 @@ export const PaymentsTable = () => {
             </Col>
           </Row>
           <Row>
-            <Col >
+            <Col>
               <div className="flex flex-row-reverse">
-                <OverlayTrigger
-                  placement={"top"}
-                  overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}
-                >
-                  <button
-                    className="hover:bg-[#253d37] rounded"
-                    onClick={onPaymentsAddRowToolBarClick}
-                  >
-                    <FcAddRow className="w-[37px] h-[37px]" />
-                  </button>
+                <OverlayTrigger placement={"top"} overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}>
+                  <button className="hover:bg-[#253d37] rounded" onClick={onPaymentsAddRowToolBarClick}> <FcAddRow className="w-[37px] h-[37px]" /> </button>
                 </OverlayTrigger>
                 <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>תשלומים</h5>
-
               </div>
               <Suspense>
-                <div
-                  id="grid-2"
-                  className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}
-                >
+                <div id="grid-2" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
                   <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay}
-                    ref={paymentsGridRef}
-                    rowHeight={25}
-                    rowData={selectedPayments}
-                    columnDefs={paymentsColDef}
-                    defaultColDef={defaultColDef}
-                    enableRtl={true}
-                    autoSizeStrategy={autoSizeStrategy}
+                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={paymentsGridRef} rowHeight={25} rowData={selectedPayments} columnDefs={paymentsColDef} defaultColDef={defaultColDef} enableRtl={true}
                     onGridReady={onPaymentsGridReady}
-                    onCellValueChanged={onPaymentCellValueChanged}
-                    domLayout='autoHeight'
+                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_payments')}
+                    onCellValueChanged={onPaymentCellValueChanged} domLayout='autoHeight'
                   />
                 </div>
               </Suspense>
             </Col>
           </Row>
-          <Row >
-            <Col    >
-              <div className="flex flex-row-reverse">
-                <OverlayTrigger
-                  placement={"top"}
-                  overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}
-                >
-                  <button
-                    className="hover:bg-[#253d37] rounded relative"
-                    onClick={onPendingPaymentsAddRowToolBarClick}
-                  >
-                    <FcAddRow className="w-[37px] h-[37px]" />
-                  </button>
-                </OverlayTrigger>
-                <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>תשלומים בדרך</h5>
-
-              </div>
-              <Suspense>
-                <div
-                  id="grid-3"
-                  className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size overflow-visible " : "ag-theme-quartz custom-text-size overflow-visible "}
-                >
-                  <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay}
-                    ref={pendingPaymentsGridRef}
-                    rowHeight={25}
-                    rowData={selectedPendingPayments}
-                    columnDefs={pendingPaymentsColDef}
-                    defaultColDef={defaultColDef}
-                    enableRtl={true}
-                    autoSizeStrategy={autoSizeStrategy}
-                    onGridReady={onPendingPaymentsGridReady}
-                    singleClickEdit={true}
-                    onCellValueChanged={onPendingPaymentCellValueChanged}
-                    domLayout='autoHeight'
-                  />
-
-
-
+          
+          <div className="flex flex-col mt-2">
+                <div className="flex flex-row-reverse justify-between items-center mb-1">
+                    <h5 className={theme === "dark-theme" ? "text-white " : "text-black"}>{`${totalPrice - totalPayments}:נותר לתשלום`}</h5>
                 </div>
-
-              </Suspense>
-              <div className="flex flex-row-reverse">
-                <Button
-                  className="move-row-btn w-[55px] h-[55px]"
-                  onClick={handleMoveRow}>
-                  סמן כשולם
-                </Button>
-
-                <h5 className={theme === "dark-theme" ? "text-white " : "text-black"}>{`${totalPrice - totalPayments}:נותר לתשלום`}</h5>
-                {selectedSchool && (
-                  <div className={theme === "dark-theme" ? "bg-[#1f2936] relative z-1 " : "bg-white relative z-1"}>
-                    <h5>הערות</h5>
-                    <Form.Control
-                      as="textarea"
-                      className={theme === "dark-theme" ? "bg-[#1f2936]" : "bg-white"}
-                      rows={5}
-                      value={textValue}
-                      onChange={(e) => setTextValue(e.target.value)}
-                      onBlur={updateSchoolRow}
-                      style={{ direction: "rtl", textAlign: "right" }}
-                    />
-                  </div>
-                )}
-
-
-              </div>
-
-
-            </Col>
-          </Row>
-
+                
+                {/* Changed: Always show the wrapper, disable input if no school selected */}
+                <div className={`w-100 ${theme === "dark-theme" ? "bg-[#1f2936]" : "bg-white"}`}>
+                  <h5 className="text-right">הערות</h5>
+                  <Form.Control
+                    as="textarea" 
+                    className={theme === "dark-theme" ? "bg-[#1f2936]" : "bg-white"} 
+                    rows={2} 
+                    value={textValue}
+                    placeholder={!selectedSchool ? "בחר בית ספר כדי להוסיף הערה" : ""}
+                    disabled={!selectedSchool}
+                    onChange={(e) => setTextValue(e.target.value)} 
+                    onBlur={updateSchoolRow} 
+                    style={{ direction: "rtl", textAlign: "right", width: "100%" }}
+                  />
+                </div>
+          </div>
         </Col>
       </Row>
     </Container>
-
   )
 }
 
