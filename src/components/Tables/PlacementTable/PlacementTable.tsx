@@ -8,22 +8,18 @@ import {
   ICellRendererParams,
   IRowNode,
   IsExternalFilterPresentParams,
-  RowDataUpdatedEvent,
   RowDoubleClickedEvent,
   RowDragEndEvent,
-  RowDragEnterEvent,
-  RowDropZoneParams,
   RowNode,
-  RowSelectedEvent,
   SelectionChangedEvent,
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
-import { Suspense, useCallback, useEffect, useRef, useState, Fragment, useMemo, useContext } from "react";
-import { Button, Col, Container, ListGroup, OverlayTrigger, Row, Spinner, Tooltip } from "react-bootstrap";
+import { Suspense, useCallback, useEffect, useRef, useState, useMemo, useContext } from "react";
+import { Button, Container, Row, Spinner, Col } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
-import { getAllCandidates, getAllColorCandidates, getAllColors, getAllDistances, getInstructors, removedAssignCandidate, setAssignCandidate, setColorCandidate } from "@/db/instructorsrequest";
+import { getAllCandidates, getAllColorCandidates, getAllColors, removedAssignCandidate, setAssignCandidate, setColorCandidate } from "@/db/instructorsrequest";
 import {
   getAllAssignedInstructors,
   getAllCities,
@@ -36,7 +32,6 @@ import {
 } from "@/db/generalrequests";
 import { Areas, Assigned_Guide, Guide, Guides_ToAssign, Profession, Colors, Program, School, SchoolsContact, ColorCandidate, Years, Distances, Cities, StatusGuides } from "@prisma/client";
 import { SiGooglemaps } from "react-icons/si";
-import Select, { ActionMeta, OnChangeValue, StylesConfig } from "react-select";
 import CustomFilter from "../GeneralFiles/Filters/CustomFilter";
 import ColorPicker from "../PlacementTable/components/ColorPicker";
 import { SimpleLink } from "./components/SimpleLink";
@@ -48,18 +43,22 @@ import { ChooseProfessions } from "../GuidesTable/components/CustomChooseProfess
 import CustomFilterAreas from "../PlacementTable/components/CustomFilterAreas";
 
 import { getPrograms } from "@/db/programsRequests";
-import { getAllSchools, getContacts } from "@/db/schoolrequests";
+import { getAllSchools } from "@/db/schoolrequests";
 import { getAllContacts } from "@/db/contactsRequests";
 import { DistanceComponent } from "./components/DistanceComponent";
-import { getFromStorage, PlaceFilters, PlacementFilter, updateStorage } from "./Storage/PlacementDataStorage";
+import { getFromStorage, PlacementFilter, updateStorage } from "./Storage/PlacementDataStorage";
 import { DataType } from "./Storage/PlacementDataStorage";
-import { YearContext } from "@/context/YearContext";
 import useColumnEffects from "./hooks/ColumnEffects";
 import { useExternalEffect } from "../GeneralFiles/Hooks/ExternalUseEffect";
 import useColumnHook from "../ContactsTable/hooks/ColumnHooks";
-import { MdPestControlRodent } from "react-icons/md";
 
-
+// --- תוספות חדשות עבור התפריטים שהועברו ---
+import CustomSelectNoComp from "../PlacementTable/components/CustomSelectNoComp";
+import YearSelect from "@/components/Tables/PlacementTable/components/YearSelect";
+import StatusSelect from "@/components/Tables/PlacementTable/components/StatusSelect";
+import { useYear } from "@/context/YearContext";
+import { useStatus } from "@/context/StatusContext";
+// ------------------------------------------
 
 const rightDefaultCol: any = [
   {
@@ -154,6 +153,14 @@ export default function PlacementTable() {
   // Global States related to data
   const [CurrentProgram, setCurrentProgram]: [{ label: string, value: number }, any] = useState({ label: '', value: -1 })
 
+  // --- States שהועברו מ-ProgramModule ---
+  const selectedYear = useYear().selectedYear
+  const defaultStatus = useStatus().defaultStatus
+
+  const [FilterYear, setFilterYear] = useState<{ label: string, value: any }>({ label: selectedYear ? selectedYear : "הכל", value: selectedYear ? selectedYear : undefined })
+  const [FilterStatus, setFilterStatus] = useState<{ label: string, value: any }>({ label: defaultStatus ? defaultStatus : "הכל", value: defaultStatus ? defaultStatus : undefined })
+  // --------------------------------------
+
   // this is a lazy hack for onDragStop not detecting changes. Later will fix it probably.
   const ProgramID = useRef(-1)
 
@@ -221,7 +228,7 @@ export default function PlacementTable() {
 
 
 
-  /**  we put draggable only if not assigned  */
+  /** we put draggable only if not assigned  */
   const rowDragCheck = useCallback((params: ICellRendererParams<Guide>, side?: string) => {
     const p = params as any
     if (side) {
@@ -429,7 +436,7 @@ export default function PlacementTable() {
     } else {
       setRightApi(params.api);
 
-      getFromStorage().then(({ Professions, Schools, ProgramsStatuses, Programs, AssignedGuides, Candidates, Tablemodel, Colors, ColorCandidates, schoolsContacts, Years, Distances, Guides, Cities, Filters,Areas }: Required<DataType>) => {
+      getFromStorage().then(({ Professions, Schools, ProgramsStatuses, Programs, AssignedGuides, Candidates, Tablemodel, Colors, ColorCandidates, schoolsContacts, Years, Distances, Guides, Cities, Filters, Areas }: Required<DataType>) => {
         if (Professions && Schools && ProgramsStatuses && Programs && AssignedGuides && Candidates && Tablemodel && Colors && ColorCandidates && schoolsContacts && Years && Distances && Guides && Cities && Filters && Areas) {
           const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(Tablemodel, Colors, ColorCandidates)
           const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(Tablemodel, Colors, ColorCandidates)
@@ -457,14 +464,14 @@ export default function PlacementTable() {
           const candidates_details = Guides.filter((res) => candidates_ids.includes(res.Guideid))
           setAllCandidates_Details(candidates_details)
           setAllAssignedGuides_Details(assigned_details)
-        
+
           setAreas(Areas)
 
           setRightRowData(Guides != null ? Guides : [])
         } else {
 
-          Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(),getAllDistricts()])
-            .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities,areas]) => {
+          Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts()])
+            .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities, areas]) => {
               const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates)
               const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates)
               setLeftColDef(coldefleft)
@@ -497,7 +504,7 @@ export default function PlacementTable() {
                 Professions: professions, Schools: schools,
                 Programs: programs, Candidates: candidates, AssignedGuides: assigned_guides,
                 Tablemodel: model, Colors: colors, schoolsContacts: contacts, ColorCandidates: color_candidates, Years: years,
-                ProgramsStatuses: statuses, Distances: distances, Cities: cities, Guides: guides, Filters: [],Areas:areas
+                ProgramsStatuses: statuses, Distances: distances, Cities: cities, Guides: guides, Filters: [], Areas: areas
               })
             })
 
@@ -522,13 +529,12 @@ export default function PlacementTable() {
         api!.applyTransaction(transaction)
 
         if (side === "Right") {
-          /** 
-                When we move from right to left.
+          /** When we move from right to left.
               1. We add to candidates.
               2. we update the allcandidates and candidate details
               if the detail already exists, of course we don't add it.
               3. we update storage
-
+  
              */
 
           setAssignCandidate(data.Guideid, ProgramID.current).then((new_candidate: Guides_ToAssign) => {
@@ -550,7 +556,7 @@ export default function PlacementTable() {
             2. Make color of candidate red. (In color candidates)
             2. update allcandidates and candidate details.
             3. we update storage
-          */
+           */
           removedAssignCandidate(data.Guideid, ProgramID.current).then((_) => {
             // 2
             let candidate = setColorCandidate(params.node.data.Guideid, ProgramID.current, "#FF0000")
@@ -735,7 +741,7 @@ export default function PlacementTable() {
     []
   );
 
-
+  // ************ CHANGED HERE FOR DEBUGGING BORDERS ************
   const getToolBar = useCallback(() => {
 
 
@@ -747,14 +753,39 @@ export default function PlacementTable() {
       //   <SiGooglemaps />
       // </Button> 
 
-      <Container fluid={true}>
-        <Row className="max-w-[50%] float-right" >
+      <Container fluid={true} className="border-4 border-red-600 p-2"> {/* RED: Main Container */}
+        
+        {/* שינינו כאן את הקונטיינר ל-flex flex-col כדי שנוכל לערום את האלמנטים אחד מתחת לשני */}
+        <div className="max-w-[50%] float-right border-4 border-blue-600 flex flex-col p-2" > {/* BLUE: Filters (Right side) */}
+          
+          {/* 1. כפתורי מקצועות */}
+          <Row>
+             <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+          </Row>
 
-          <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
-          <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+          {/* 2. כפתורי אזורים - הוספנו מרווח עליון */}
+          <div className="mt-4">
+             <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+          </div>
 
-        </Row>
+          {/* 3. שלושת התפריטים (תוכנית, סטטוס, שנה) - בשורה חדשה עם מרווח */}
+          <Row className="mt-4 rtl d-flex justify-content-between">
+            <Col>
+               <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
+            </Col>
 
+            <Col>
+               <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
+            </Col>
+            
+            <Col>
+               <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
+            </Col>
+          </Row>
+
+        </div>
+
+        <div className="border-4 border-green-600"> {/* GREEN: Program Module (Left side) */}
         <ProgramModule
           setCurrentProgram={setCurrentProgram} CurrentProgram={CurrentProgram} LeftGridApi={leftApi}
           RightGridApi={rightApi} SelectedRows={SelectedRows} setAssigned_guides={setAllAssignedGuides}
@@ -762,37 +793,49 @@ export default function PlacementTable() {
           AllSchools={AllSchools} AllContacts={AllContacts} All_Assigned_Guides={All_Assigned_Guides}
           All_Assigned_Guides_Details={All_Assigned_Guides_Details} setAllAssignedGuides={setAllAssignedGuides}
           setAllAssignedGuides_Details={setAllAssignedGuides_Details} AllYears={AllYears} AllStatuses={AllStatuses} setAllCandidates={setAllCandidates} setAllCandidates_Details={setAllCandidates_Details} />
+        </div>
       </Container>
     )
-  }, [rightApi, Professions, CurrentProgram, FilterProf, AllFilters, Areas, FilterAreas, leftApi, SelectedRows, AllPrograms, AllCandidates, AllCandidates_Details, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, AllYears, AllStatuses]);
+  }, [rightApi, Professions, CurrentProgram, FilterProf, AllFilters, Areas, FilterAreas, leftApi, SelectedRows, AllPrograms, AllCandidates, AllCandidates_Details, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, AllYears, AllStatuses, FilterYear, FilterStatus]);
 
   const isExternalFilterPresent = useCallback((params: IsExternalFilterPresentParams<any, any>): boolean => {
     return true
   }, [])
 
+  // THIS IS THE UPDATED FUNCTION
   const doesExternalFilterPassRight = useCallback((node: IRowNode<Guide>): boolean => {
-    if (node.data) {
-      const prof: string[] = node.data.Professions?.split(",")
-      const area = node.data?.Area
-      for (const filter of FilterProf) {
-        if (filter.active && prof?.includes(filter.value)) {
-          return true
+    if (!node.data) return true;
 
-        }
+    // 1. קבלת הפילטרים הפעילים
+    const activeProfFilters = FilterProf.filter(f => f.active).map(f => f.value);
+    const activeAreaFilters = FilterAreas.filter(f => f.active).map(f => f.value);
 
-      }
-      for (const filter of FilterAreas) {
-        if (filter.active && area === filter?.value) {
-          return true
-        }
+    // נכין את הנתונים מהשורה
+    const rowProfessions = node.data.Professions 
+      ? node.data.Professions.split(",").map(p => p.trim()) 
+      : [];
+    const rowArea = node.data.Area;
 
-      }
-
-
-      return false
-
+    // 2. לוגיקה למקצועות:
+    // אם אין פילטרים פעילים למקצוע - מעבירים הכל (true).
+    // אם יש - בודקים האם למדריך יש אחד מהמקצועות שנבחרו.
+    let profPass = true;
+    if (activeProfFilters.length > 0) {
+       profPass = rowProfessions.some(p => activeProfFilters.includes(p));
     }
-    return true
+
+    // 3. לוגיקה לאזורים:
+    // אם אין פילטרים פעילים לאזור - מעבירים הכל (true).
+    // אם יש - בודקים האם המדריך שייך לאחד האזורים שנבחרו.
+    let areaPass = true;
+    if (activeAreaFilters.length > 0) {
+      areaPass = activeAreaFilters.includes(rowArea);
+    }
+
+    // 4. החזרה סופית: גם מקצוע וגם אזור צריכים לעבור (AND)
+    // הערה: אם קטגוריה מסוימת לא סוננה, היא תחזיר true ולכן לא תשפיע לרעה.
+    return profPass && areaPass;
+
   }, [FilterProf, FilterAreas])
 
   const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) =>
@@ -856,12 +899,12 @@ export default function PlacementTable() {
         leftApi!.applyTransaction({ add: [data] })
       } else {
         /**
-     Moving from left to right:
-     1. Delete candidate
-     2. Make color of candidate red. (In color candidates)
-     2. update allcandidates and candidate details.
-     3. we update storage
-   */
+        Moving from left to right:
+        1. Delete candidate
+        2. Make color of candidate red. (In color candidates)
+        2. update allcandidates and candidate details.
+        3. we update storage
+       */
         removedAssignCandidate(data.Guideid, ProgramID.current).then((_) => {
           // 2
           let candidate = setColorCandidate(data.Guideid, ProgramID.current, "#FF0000")
@@ -1000,7 +1043,7 @@ export default function PlacementTable() {
       <div className="toolbar ">{getToolBar()}</div>
       <div className="flex">
 
-        <div className="w-1/2">
+        <div className="w-1/2 border-4 border-orange-500"> {/* ORANGE: Left Table Column */}
           <h1 className="text-right"> {name_1}</h1>
 
           {getInnerGridCol("Left")}
@@ -1008,7 +1051,7 @@ export default function PlacementTable() {
 
         </div>
 
-        <div className="w-1/2">
+        <div className="w-1/2 border-4 border-purple-500"> {/* PURPLE: Right Table Column */}
           <h1 className="text-right"> {name_2} </h1>
 
           {getInnerGridCol("Right")}
@@ -1018,10 +1061,3 @@ export default function PlacementTable() {
     </Suspense>
   );
 }
-
-
-
-
-
-
-

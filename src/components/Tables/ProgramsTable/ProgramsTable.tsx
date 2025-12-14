@@ -1,10 +1,10 @@
 "use client";
-import { School, Guide, Program, SchoolsContact, Assigned_Guide, Profession, Cities, Areas, Years, ProductTypes, Orders, StatusPrograms, Guides_ToAssign, ColorCandidate } from "@prisma/client"; // look at this type to know the fields in the table.
+import { School, Guide, Program, SchoolsContact, Assigned_Guide, Profession, Cities, Areas, Years, ProductTypes, Orders, StatusPrograms, Guides_ToAssign, ColorCandidate } from "@prisma/client";
 import { useState, useRef, useCallback, Suspense, useMemo, useEffect, useContext } from "react";
 import { AgGridReact, getInstance } from "ag-grid-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
+import "ag-grid-community/styles/ag-theme-quartz.css";
 
 import {
   CellValueChangedEvent,
@@ -361,9 +361,19 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
           cellEditor: "CustomDateCellEditor",
           valueFormatter: valueFormatterDate,
           filter: "CustomFilter",
-          cellDataType: 'date',
+          // Removed cellDataType: 'date' to prevent conflicts
           editable: true,
-          singleClickEdit: true
+          singleClickEdit: true,
+          // Robust Value Setter
+          valueSetter: (params) => {
+            // --- FIX: Added check for params.newValue === null
+            if (params.newValue || params.newValue === null) {
+                // Ensure value is set
+                params.data[value] = params.newValue;
+                return true;
+            }
+            return false;
+          }
         }
       }
 
@@ -1199,7 +1209,7 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
             suppressRowTransform={true}
             onColumnMoved={onColumnMoved}
             suppressMenuHide={true}
-            stopEditingWhenCellsLoseFocus={true}
+            stopEditingWhenCellsLoseFocus={false} 
               pagination={true}
             paginationPageSize={25}
 
