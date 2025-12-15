@@ -20,11 +20,13 @@ export const ProgramLinkDetailsCellRenderer = forwardRef<RefFunctions, ProgramDe
     const [Link, setLink] = useState(props.data.ProgramLink)
     const [ProgramName, setProgramName] = useState(props.data.ProgramName)
     const [currentProgram, setCurrentProgram] = useState<Program>()
+    
     const updateProgram = useCallback((program: Program) => {
       if (program) {
         setCurrentProgram(program)
+        // הנתונים האלה מגיעים מ-event.data שהעורך עדכן
         setLink(program.ProgramLink)
-        setProgramName(program.ProgramName)
+        setProgramName(program.ProgramName) 
         // set value for customfilter to work.
         props.setValue(program.ProgramName)
       }
@@ -33,7 +35,8 @@ export const ProgramLinkDetailsCellRenderer = forwardRef<RefFunctions, ProgramDe
     useEffect(() => {
       const GetOrSetData = async () => {
         const program = AllPrograms?.find((program) => program.Programid === props.data.Programid)
-        if (program?.ProgramName && program?.ProgramLink) {
+        if (program?.ProgramName) {
+          // נשתמש בנתונים הקיימים, גם אם הלינק חסר
           setLink(program.ProgramLink)
           setProgramName(program.ProgramName)
           // set value for customfilter to work.
@@ -63,23 +66,29 @@ export const ProgramLinkDetailsCellRenderer = forwardRef<RefFunctions, ProgramDe
     )
 
     const getCell = useCallback(() => {
-      if (Link !== '' && ProgramName !== '') {
-        return (
-          <a
-            href={Link}
-            target="_blank"
-            className="font-medium text-blue-600 no-underline dark:text-blue-500 hover:underline"
-          > {ProgramName} </a>
+      // אם יש שם תוכנית, אנחנו מציגים אותו בכל מקרה
+      if (ProgramName) {
+        // אם יש גם לינק, נציג אותו כקישור פעיל
+        if (Link) {
+          return (
+            <a
+              href={Link}
+              target="_blank"
+              className="font-medium text-blue-600 no-underline dark:text-blue-500 hover:underline"
+            > {ProgramName} </a>
+  
+          )
+        }
+        // אם אין לינק, נציג רק את שם התוכנית כטקסט רגיל
+        return ProgramName;
 
-        )
       }
-      return ""
+      // אם אין שם תוכנית בכלל, נחזיר ריק
+      return "";
+
     }, [Link, ProgramName])
 
     return getCell()
-
-
-
 
   })
 

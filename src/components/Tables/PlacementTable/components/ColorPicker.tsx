@@ -1,9 +1,7 @@
 "use client"
-import { getColorCandidate, setColorCandidate } from '@/db/instructorsrequest';
+import { setColorCandidate } from '@/db/instructorsrequest';
 import { ICellRendererParams } from 'ag-grid-community';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CirclePicker } from 'react-color';
-import CustomColorPicker from './CustomColorPicker';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ColorCandidate, Colors, Guide } from '@prisma/client';
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { updateStorage } from '../Storage/PlacementDataStorage';
@@ -13,112 +11,120 @@ interface CellWithProgramNumber extends ICellRendererParams<Guide> {
   Colors: Colors[],
   AllColorCandidates: ColorCandidate[]
 }
-const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, ...props }: CellWithProgramNumber) => {
-  const [Color, setColor]: [{ displayColorPicker: boolean, background: string, meaning: string }, any] = useState({ displayColorPicker: false, background: '#F5F5F5', meaning: "לא נבחר תכנית" })
-  const [Loaded, setLoaded] = useState(false)
 
+const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, ...props }: CellWithProgramNumber) => {
+  // סטייט לצבע התצוגה הנוכחי
+  const [Color, setColor] = useState({ displayColorPicker: false, background: '#F5F5F5', meaning: "לא נבחר תכנית" })
+  
+  // יצירת רשימת צבעים ממוינת (עם העתקה כדי למנוע מוטציה של הפרופס)
   const ColorOptions: Colors[] = useMemo(
     () => {
-      return Colors.sort((arg1, arg2) => arg1.Colorid - arg2.Colorid) ? Colors : []
+      return Colors ? [...Colors].sort((arg1, arg2) => arg1.Colorid - arg2.Colorid) : []
     },
     [Colors]
   );
 
-  //  const [ColorOptions, setColorOptions] = useState(['#4D4D4D',"#FF0000", '#999999', '#FFFFFF', '#F44E3B', '#FE9200', '#FCDC00', '#DBDF00', '#A4DD00', '#68CCCA', '#73D8FF', '#AEA1FF', '#FDA1FF', '#333333', '#808080', '#cccccc', '#D33115', '#E27300', '#FCC400', '#B0BC00', '#68BC00', '#16A5A5', '#009CE0', '#7B64FF', '#FA28FF', '#000000', '#666666', '#B3B3B3', '#9F0500', '#C45100', '#FB9E00', '#808900', '#194D33', '#0C797D', '#0062B1', '#653294', '#AB149E'])
-  const [Index, setIndex] = useState<number>(0)
-  const onChange = useCallback((color: any) => {
-    setColor({ displayColorPicker: false, background: color.hex })
-    setColorCandidate(props.data.Guideid, currentProgram.value, color.hex)
-  }, [currentProgram, props])
-
-
+  // הערה: הסרנו את התלות ב-Index עבור ה-onClick כדי למנוע באגים של סנכרון
 
   const onClick = useCallback((event) => {
+    // מונע אירועים מתנגשים בטבלה
+    event.stopPropagation(); 
 
-    var new_color_index = Index + 1
-    if (new_color_index >= ColorOptions.length) {
-      new_color_index = 0
+    // 1. מציאת האינדקס של הצבע *הנוכחי* מתוך הרשימה
+    const currentHex = Color.background;
+    const currentIndex = ColorOptions.findIndex(c => c.ColorHexCode === currentHex);
+
+    let nextIndex = 0;
+
+    // 2. לוגיקת המעבר
+    if (currentIndex === -1) {
+        // אם הצבע הנוכחי לא נמצא ברשימה (כלומר הוא אפור/ברירת מחדל), נתחיל מהראשון
+        nextIndex = 0;
+    } else {
+        // אחרת, מתקדמים לאינדקס הבא בצורה מעגלית
+        nextIndex = (currentIndex + 1) % ColorOptions.length;
     }
-    const color = ColorOptions[new_color_index]
 
-    setIndex(Index => Index + 1 >= ColorOptions.length ? 0 : Index + 1)
+    // 3. שליפת הצבע החדש
+    const nextColor = ColorOptions[nextIndex];
+    
+    // הגנה למקרה שאין צבעים
+    if (!nextColor) return;
 
-    setColor({ displayColorPicker: false, background: color.ColorHexCode, meaning: color.ColorMeaning })
-    setColorCandidate(props.data.Guideid, currentProgram.value, color.ColorHexCode).then((res) => {
+    // 4. עדכון מיידי של התצוגה (אופטימי)
+    setColor({ displayColorPicker: false, background: nextColor.ColorHexCode, meaning: nextColor.ColorMeaning });
+
+    // 5. עדכון השרת והסטורג'
+    setColorCandidate(props.data.Guideid, currentProgram.value, nextColor.ColorHexCode).then((res) => {
       let color_candidates = []
       let old_entry = false
       for (let candidate of AllColorCandidates) {
         if (candidate.Guideid === props.data.Guideid && candidate.Programid === currentProgram.value) {
-          let entry = candidate
-          entry.ColorHexCode = color.ColorHexCode
+          // יצירת עותק כדי למנוע בעיות הפניה
+          let entry = { ...candidate }
+          entry.ColorHexCode = nextColor.ColorHexCode
           color_candidates.push(entry)
           old_entry = true
         } else {
           color_candidates.push(candidate)
         }
       }
-      let updated_candidates = old_entry ? color_candidates : [...color_candidates, res].sort((arg1, arg2) => arg1.Colorid - arg2.Colorid)
+      
+      const updated_candidates = old_entry ? color_candidates : [...color_candidates, res].sort((arg1, arg2) => arg1.Colorid - arg2.Colorid)
       updateStorage({ ColorCandidates: updated_candidates })
-
     })
 
+  }, [Color.background, ColorOptions, currentProgram, props.data.Guideid, AllColorCandidates]) // תלות ב-Color.background קריטית כאן
 
-  }, [ColorOptions, Index, currentProgram, props.data.Guideid, AllColorCandidates])
-
-
-
+  // useEffect לסנכרון ראשוני ושינויים מבחוץ
   useEffect(() => {
+    const initColor = async () => {
+      if (props.data.Guideid) {
+        const ColorCandidate = AllColorCandidates.find((res) => res.Guideid === props.data.Guideid && res.Programid === currentProgram.value)
+        
+        // ברירת מחדל (אפור)
+        let initialColorHex = '#F5F5F5';
+        let initialMeaning = "לא נבחר תכנית";
 
-    const getColor = async () => {
-      if (props.data.Guideid && Color.displayColorPicker === false) {
-        const ColorCandidate: ColorCandidate = AllColorCandidates.find((res) => res.Guideid === props.data.Guideid && res.Programid === currentProgram.value)
-        const color = Colors.find((res) => res.ColorHexCode === ColorCandidate?.ColorHexCode)
-        if (color) {
-          setColor({ displayColorPicker: Color.displayColorPicker, background: ColorCandidate?.ColorHexCode, meaning: color.ColorMeaning })
-          props.setValue(color.ColorName)
-          // this is for index
-          const index: number = ColorOptions.findIndex((res) => res.ColorHexCode === ColorCandidate?.ColorHexCode)
-          setIndex(index != -1 ? index : 0)
-
-          setLoaded(true)
+        if (ColorCandidate) {
+            const color = Colors.find((res) => res.ColorHexCode === ColorCandidate.ColorHexCode)
+            if (color) {
+                initialColorHex = ColorCandidate.ColorHexCode;
+                initialMeaning = color.ColorMeaning;
+            }
         }
-
+        
+        // עדכון הסטייט של הצבע
+        setColor(prev => ({ ...prev, background: initialColorHex, meaning: initialMeaning }));
+        
+        if (props.setValue) {
+            props.setValue(initialMeaning);
+        }
       }
     }
-    getColor()
-
+    initColor()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProgram, AllColorCandidates])
+  }, [currentProgram, AllColorCandidates, Colors])
 
-
+  // פונקציית הרינדור - כוללת תיקון לשגיאת ה-OverlayTrigger
   const getPicker = useCallback(() => {
     return (
-      <OverlayTrigger key={Color.background} placement={"left"} overlay={<Tooltip className="absolute">{Color.meaning}</Tooltip>}>
-
-        <button style={{ background: Color.background }} className="border-r-[50%] rounded-full w-[40px] h-[40px] relative z-0" onClick={onClick} />
+      <OverlayTrigger
+        // שימוש ב-Key מכריח רענון של הטולטיפ כשהצבע משתנה
+        key={Color.background} 
+        placement="left"
+        overlay={<Tooltip id={`tooltip-${props.data.Guideid}`} className="absolute">{Color.meaning}</Tooltip>}
+      >
+        <button
+          style={{ background: Color.background }}
+          className="border-r-[50%] rounded-full w-[40px] h-[40px] relative z-0 focus:outline-none"
+          onClick={onClick}
+        />
       </OverlayTrigger>
     )
+  }, [Color, onClick, props.data.Guideid])
 
-    // else {
-    //   return (
-    //        <CustomColorPicker colors={ColorOptions} onChange={onChange}/> 
-
-    //   )
-
-    // }
-
-  }, [Color, onClick])
-
-
-
-
-
-  return (
-    getPicker()
-
-  )
-
-
-
+  return getPicker();
 }
-export default ColorPicker
+
+export default ColorPicker;

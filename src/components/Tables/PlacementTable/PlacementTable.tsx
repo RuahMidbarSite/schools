@@ -208,7 +208,7 @@ export default function PlacementTable() {
   const [Colors, setColors] = useState<Colors[]>()
   const [AllColorCandidates, setAllColorCandidates] = useState<ColorCandidate[]>()
 
-  // save columns sate  
+  // save columns sate 	
   const [colState, setColState]: any = useState([])
 
 
@@ -228,7 +228,7 @@ export default function PlacementTable() {
 
 
 
-  /** we put draggable only if not assigned  */
+  /** we put draggable only if not assigned 	*/
   const rowDragCheck = useCallback((params: ICellRendererParams<Guide>, side?: string) => {
     const p = params as any
     if (side) {
@@ -335,7 +335,19 @@ export default function PlacementTable() {
       };
     });
 
-    const color_col = { field: 'color', filter: CustomFilter, headerName: "צבע", cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates }, checkboxSelection: true, headerCheckboxSelection: true, rowDrag: rowDragCheck }
+    // 💡 תיקון 4: שינוי רוחב ל-110px
+    const color_col = { 
+        field: 'color', 
+        filter: CustomFilter, 
+        headerName: "צבע", 
+        cellRenderer: "ColorPicker", 
+        cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates }, 
+        checkboxSelection: true, 
+        headerCheckboxSelection: true, 
+        rowDrag: rowDragCheck,
+        width: 110, // **הערך שונה ל-110**
+        maxWidth: 110 // **הערך שונה ל-110**
+    }
     const distance_col = { field: 'distance', headerName: "מרחק", filter: CustomFilter, editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms } }
     coldef = [color_col, distance_col, ...coldef]
     return coldef
@@ -416,7 +428,17 @@ export default function PlacementTable() {
         filter: CustomFilter
       };
     });
-    const color_col = { field: 'color', headerName: "צבע", cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates }, rowDrag: rowDragCheck, filter: CustomFilter }
+    // 💡 תיקון 4: שינוי רוחב ל-110px
+    const color_col = { 
+        field: 'color', 
+        headerName: "צבע", 
+        cellRenderer: "ColorPicker", 
+        cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates }, 
+        rowDrag: rowDragCheck, 
+        filter: CustomFilter,
+        width: 110, // **הערך שונה ל-110**
+        maxWidth: 110 // **הערך שונה ל-110**
+    }
     const distance_col = { field: 'distance', headerName: "מרחק", editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter }
     coldef = [color_col, distance_col, ...coldef]
     return coldef
@@ -530,11 +552,11 @@ export default function PlacementTable() {
 
         if (side === "Right") {
           /** When we move from right to left.
-              1. We add to candidates.
-              2. we update the allcandidates and candidate details
-              if the detail already exists, of course we don't add it.
-              3. we update storage
-  
+             1. We add to candidates.
+             2. we update the allcandidates and candidate details
+             if the detail already exists, of course we don't add it.
+             3. we update storage
+     
              */
 
           setAssignCandidate(data.Guideid, ProgramID.current).then((new_candidate: Guides_ToAssign) => {
@@ -551,12 +573,12 @@ export default function PlacementTable() {
           })
         } else {
           /**
-            Moving from left to right:
-            1. Delete candidate
-            2. Make color of candidate red. (In color candidates)
-            2. update allcandidates and candidate details.
-            3. we update storage
-           */
+             Moving from left to right:
+             1. Delete candidate
+             2. Make color of candidate red. (In color candidates)
+             2. update allcandidates and candidate details.
+             3. we update storage
+             */
           removedAssignCandidate(data.Guideid, ProgramID.current).then((_) => {
             // 2
             let candidate = setColorCandidate(params.node.data.Guideid, ProgramID.current, "#FF0000")
@@ -642,7 +664,6 @@ export default function PlacementTable() {
     }
 
 
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addGridDropZone, leftApi, rightApi, CurrentProgram]);
 
@@ -654,8 +675,29 @@ export default function PlacementTable() {
       const Right_Coldef: ColDef<any>[] = rightColDef
       const Left_Coldef: ColDef<any>[] = leftColDef
       // we want to re-render the color component for both the cell renderer, the program and the drag which needs to be activated again.
-      const color_col_left = { field: 'color', headerName: "צבע", cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: Colors, AllColorCandidates: AllColorCandidates }, checkboxSelection: (params) => rowDragCheck(params, "Left"), headerCheckboxSelection: true, rowDrag: (params) => rowDragCheck(params, "Left"), filter: CustomFilter }
-      const color_col_right = { field: 'color', headerName: "צבע", cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: Colors, AllColorCandidates: AllColorCandidates }, rowDrag: true, filter: CustomFilter }
+      // 💡 תיקון 4: שינוי רוחב ל-110px בפונקציית העדכון
+      const color_col_left = { 
+          field: 'color', 
+          headerName: "צבע", 
+          cellRenderer: "ColorPicker", 
+          cellRendererParams: { currentProgram: CurrentProgram, Colors: Colors, AllColorCandidates: AllColorCandidates }, 
+          checkboxSelection: (params) => rowDragCheck(params, "Left"), 
+          headerCheckboxSelection: true, 
+          rowDrag: (params) => rowDragCheck(params, "Left"), 
+          filter: CustomFilter,
+          width: 110, // **הערך שונה ל-110**
+          maxWidth: 110 // **הערך שונה ל-110**
+      }
+      const color_col_right = { 
+          field: 'color', 
+          headerName: "צבע", 
+          cellRenderer: "ColorPicker", 
+          cellRendererParams: { currentProgram: CurrentProgram, Colors: Colors, AllColorCandidates: AllColorCandidates }, 
+          rowDrag: true, 
+          filter: CustomFilter,
+          width: 110, // **הערך שונה ל-110**
+          maxWidth: 110 // **הערך שונה ל-110**
+      }
       var LeftCol_withoutcolor = Left_Coldef.filter((colDef) => colDef.field !== "color")
       var updated_left_coldef = [color_col_left, ...LeftCol_withoutcolor]
 
@@ -747,10 +789,10 @@ export default function PlacementTable() {
 
     return (
 
-      //  <div className="flex justify-between">
+      // 	<div className="flex justify-between">
 
       // <Button variant="primary">
-      //   <SiGooglemaps />
+      // 	<SiGooglemaps />
       // </Button> 
 
       <Container fluid={true} className="border-4 border-red-600 p-2"> {/* RED: Main Container */}
@@ -760,26 +802,26 @@ export default function PlacementTable() {
           
           {/* 1. כפתורי מקצועות */}
           <Row>
-             <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+            <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </Row>
 
           {/* 2. כפתורי אזורים - הוספנו מרווח עליון */}
           <div className="mt-4">
-             <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+            <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </div>
 
           {/* 3. שלושת התפריטים (תוכנית, סטטוס, שנה) - בשורה חדשה עם מרווח */}
           <Row className="mt-4 rtl d-flex justify-content-between">
             <Col>
-               <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
+              <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
             </Col>
 
             <Col>
-               <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
+              <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
             </Col>
             
             <Col>
-               <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
+              <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
             </Col>
           </Row>
 
@@ -840,7 +882,7 @@ export default function PlacementTable() {
 
   const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) =>
 
-    <div className="max-w-[150px] max-h-[50px] overflow-y-hidden whitespace-nowrap text-ellipsis hover:text-clip truncate  hover:overflow-x-auto hover:whitespace-nowra">
+    <div className="max-w-[150px] max-h-[50px] overflow-y-hidden whitespace-nowrap text-ellipsis hover:text-clip truncate 	hover:overflow-x-auto hover:whitespace-nowra">
       {props.data.Professions}
 
     </div>, [])
@@ -869,7 +911,7 @@ export default function PlacementTable() {
 
   const onRowDoubleClick = useCallback((event: RowDoubleClickedEvent<Guide, any>, side: string): void => {
     if (ProgramID.current !== -1 && AllCandidates && AllColorCandidates) {
-      // we add the draggable in  rowDragCheck of ag grid.
+      // we add the draggable in 	rowDragCheck of ag grid.
       if (typeof (event.node as any).isDraggable !== "undefined" && !(event.node as any).isDraggable) {
         return
       }
@@ -899,12 +941,12 @@ export default function PlacementTable() {
         leftApi!.applyTransaction({ add: [data] })
       } else {
         /**
-        Moving from left to right:
-        1. Delete candidate
-        2. Make color of candidate red. (In color candidates)
-        2. update allcandidates and candidate details.
-        3. we update storage
-       */
+         Moving from left to right:
+         1. Delete candidate
+         2. Make color of candidate red. (In color candidates)
+         2. update allcandidates and candidate details.
+         3. we update storage
+         */
         removedAssignCandidate(data.Guideid, ProgramID.current).then((_) => {
           // 2
           let candidate = setColorCandidate(data.Guideid, ProgramID.current, "#FF0000")

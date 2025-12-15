@@ -558,6 +558,7 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
           editable: false,
         }
       }
+      
       if (value === "Plan") {
         return {
           field: value,
@@ -567,12 +568,17 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
             AllPrograms: Programs,
           },
           cellEditor: ProgramLinkDetailsCellEditor,
+          // הוספת הפרמטר המאפשר לינק ריק לעורך התא
+          cellEditorParams: {
+            allowEmptyLink: true
+          },
           filter: "CustomFilter",
           editable: true,
           singleClickEdit: true
 
         };
       }
+      
       if (value === "Year") {
         return {
           field: value,
@@ -910,21 +916,50 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
   }, [InTheMiddleOfAddingRows, AllSchools, AllContacts]);
 
   const onCellEditingStarted = (event: CellEditingStartedEvent) => { };
+
+  // --- התיקון העיקרי: טיפול בעמודה מורכבת "Plan" ---
   const onCellEditingStopped =
     useCallback((event: CellEditingStoppedEvent) => {
-      // We sometimes handle in this function instead of value in case the user doesn't press enter
-      // for example on Datetime.
+      
       if (event.oldValue === event.newValue || InTheMiddleOfAddingRows) {
+        // אם הערך המוצג ב-AG Grid לא השתנה, או אם אנו באמצע הוספת שורה חדשה, יציאה
         return;
       }
 
-      // if Date, for now we just treat it as string.
+      if (event.column.getColId() === "Plan") {
+        // טיפול מיוחד עבור עמודת "Plan" המעדכנת שני שדות (ProgramName ו-ProgramLink)
+        
+        // ה-Cell Editor המותאם אישית (CustomProgramLinkDetailsCellEditor) כבר עדכן
+        // את ProgramName ו-ProgramLink ישירות בתוך event.data
+        const newProgramName = event.data.ProgramName;
+        const newProgramLink = event.data.ProgramLink;
+        const programId = event.data.Programid;
 
-      updateProgramsColumn(
-        event.column.getColId(),
-        event.newValue,
-        event.data.Programid
-      );
+        // 1. עדכון שני השדות ב-Database
+        updateProgramsColumn("ProgramName", newProgramName, programId);
+        updateProgramsColumn("ProgramLink", newProgramLink, programId);
+        
+        // 2. רענון ה-Renderer של התא כדי להציג את הערך החדש מיד
+        const cellRendererInstances = event.api.getCellRendererInstances({
+          rowNodes: [event.node],
+          columns: [event.column.getColId()],
+        });
+
+        if (cellRendererInstances.length > 0) {
+          const cellRendererInstance: RefFunctions = cellRendererInstances[0] as unknown as RefFunctions;
+          // קוראים לפונקציית עדכון ב-Renderer
+          cellRendererInstance.updateProgram(event.data)
+        }
+
+      } else {
+          // טיפול רגיל עבור כל שאר העמודות המעדכנות שדה יחיד
+          updateProgramsColumn(
+            event.column.getColId(),
+            event.newValue,
+            event.data.Programid
+          );
+      }
+
 
       if (typeof window !== "undefined") {
         const future_data: Program[] = [];
@@ -933,24 +968,10 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
         });
         updateStorage({ Programs: future_data })
       }
-      // we want to show the update program details (name and link)
-      if (event.column.getColId() === "Plan") {
-        const cellRendererInstances = event.api.getCellRendererInstances({
-          rowNodes: [event.node],
-          columns: [event.column.getColId()],
-        });
-
-        if (cellRendererInstances.length > 0) {
-          const cellRendererInstance: RefFunctions = cellRendererInstances[0] as unknown as RefFunctions;
-          cellRendererInstance.updateProgram(event.data)
-
-        }
-
-      }
-
-
 
     }, [InTheMiddleOfAddingRows]);
+    // --- סוף התיקון העיקרי ---
+
 
   const onFilterTextBoxChanged = useCallback(() => {
     gridRef.current?.api.setGridOption(
