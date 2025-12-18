@@ -1,7 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, Col, Container, Row } from "react-bootstrap";
-import { Assigned_Guide, Guide, Guides_ToAssign, Program, Program_Schedule, School, SchoolsContact } from "@prisma/client";
+import { Assigned_Guide, ColorCandidate, Guide, Guides_ToAssign, Program, Program_Schedule, School, SchoolsContact } from "@prisma/client";
 import { getProgramSchedule, getProgramWithId, updateProgramsColumn } from "@/db/programsRequests";
 import { getSchoolsByIds } from "@/db/schoolrequests";
 import {
@@ -11,6 +11,7 @@ import {
   getAllCandidatesByProgramID,
   getAssignedInstructorsByProgramID,
   getGuidesById,
+  setColorCandidate, // *** לוודא שקיים import זה ***
   updateInstructorsColumn,
 } from "@/db/instructorsrequest";
 import Spinner from 'react-bootstrap/Spinner';
@@ -34,9 +35,12 @@ type Data = {
   setAllAssignedGuides: any,
   setAllAssignedGuides_Details: any,
   setAllCandidates_Details: any,
-  setAllCandidates: any
-
+  setAllCandidates: any,
+  // *** תוספת פרופס ***
+  AllColorCandidates: ColorCandidate[],
+  setAllColorCandidates: any
 };
+
 const TableNames: { [index: string]: any } = {
   Title: "כרטיסיית תוכניות",
   SchoolName: "בית ספר",
@@ -50,21 +54,36 @@ const TableNames: { [index: string]: any } = {
   AdditionalDetails: "פרטים",
 };
 
-const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgram, ChosenCandidate, LeftGridApi, AllPrograms, AllCandidates, AllCandidates_Details, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, setAllAssignedGuides, setAllAssignedGuides_Details }: Data) => {
+const ProgramModal = ({ 
+    setAllCandidates_Details, 
+    setAllCandidates, 
+    CurrentProgram, 
+    ChosenCandidate, 
+    LeftGridApi, 
+    AllPrograms, 
+    AllCandidates, 
+    AllCandidates_Details, 
+    AllSchools, 
+    AllContacts, 
+    All_Assigned_Guides, 
+    All_Assigned_Guides_Details, 
+    setAllAssignedGuides, 
+    setAllAssignedGuides_Details,
+    // *** קבלת הפרופס ***
+    AllColorCandidates,
+    setAllColorCandidates
+}: Data) => {
   const [SchoolName, setSchoolName] = useState("");
   const [SchoolGrade, setSchoolGrade] = useState("");
   const [CityName, setCityName] = useState("");
   const [ContactList, setContact]: [SchoolsContact[], any] = useState([]);
   const [Weeks, setWeeks] = useState(0);
-  //const [Guides, setGuides] = useState<{guide:Guide[],key:number}>(data.Assigned_Guide);
   const [Details, setDetails] = useState("");
   const [LoadData, setLoadData] = useState<{ guide: Guide, key: number }[]>()
   const [LinkProgram, setLinkProgram] = useState("")
   const [DaysChosen, setDays] = useState<string>("")
 
 
-  // Yeah, i know that this is bad, but this was in the previous program and i don't have time to get creative.
-  // if i have time i will change it to one use state of an array.
   const [Guide_1, setGuide_1] = useState<Guide>()
   const [Guide_2, setGuide_2] = useState<Guide>()
   const [Guide_3, setGuide_3] = useState<Guide>()
@@ -93,9 +112,8 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
 
   const getGuidesMap = useCallback(() => {
     var map = new Map<number, Guide>()
-    // Array to hold all the Guide variables
-    map[1] = Guide_1,
-      map[2] = Guide_2
+    map[1] = Guide_1
+    map[2] = Guide_2
     map[3] = Guide_3
     map[4] = Guide_4
     map[5] = Guide_5
@@ -109,7 +127,6 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
 
   const getRange = useCallback((start: number, end: number) => {
     return Array.from({ length: end - start + 1 }, (_, i) => start + i);
-
   }, [])
 
   // this will be activated when clicking on 'Add' to assigned guides.
@@ -125,57 +142,58 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
           LeftGridApi.deselectAll()
           break
         }
-
       }
 
       if (searchFlag) {
-        // it is already assigned, do nothing.
         return
       }
 
       for (const index of all_numbers) {
         const current_guide: Guide | null = map[index]
-        // we place the guide at the first available one
         if (!current_guide) {
           const method: React.Dispatch<React.SetStateAction<Guide>> = GuideMap()[index]
           const row: Guide = ChosenCandidate.guide ? ChosenCandidate.guide : undefined
           method(row)
           var new_guide: Partial<Assigned_Guide> = { Guideid: row.Guideid, Programid: CurrentProgram.value }
+          
           addAssignedInstructors(CurrentProgram.value, row.Guideid, new_guide).then((guide: Assigned_Guide) => {
-
             setAllAssignedGuides((arr: Assigned_Guide[]) => {
               return [...arr, guide]
             })
             setAllAssignedGuides_Details((arr: Guide[]) => [...arr, row])
-
-
-
             updateStorage({ AssignedGuides: [...All_Assigned_Guides, guide] })
+            
+            // *** שינוי: הגדרת צבע אפור בהיר בעת שיבוץ ***
+            const GRAY_HEX = "#D3D3D3";
+            setColorCandidate(row.Guideid, CurrentProgram.value, GRAY_HEX);
+            
+            setAllColorCandidates((prevColors: ColorCandidate[]) => {
+                const exists = prevColors.find(c => c.Guideid === row.Guideid && c.Programid === CurrentProgram.value);
+                let newColors;
+                if (exists) {
+                     newColors = prevColors.map(c => c.Guideid === row.Guideid && c.Programid === CurrentProgram.value ? { ...c, ColorHexCode: GRAY_HEX } : c);
+                } else {
+                     newColors = [...prevColors, { Guideid: row.Guideid, Programid: CurrentProgram.value, ColorHexCode: GRAY_HEX, id: -1 }];
+                }
+                updateStorage({ ColorCandidates: newColors });
+                return newColors;
+            });
           })
+          
           updateInstructorsColumn("isAssigned", true, row.Guideid)
-
           const rowNode = LeftGridApi.getRowNode(row.Guideid.toString())
           rowNode.setDataValue("isAssigned", true)
-
-
           LeftGridApi.deselectAll()
-
-
           break
-
         }
-
       }
-
     }
     if (ChosenCandidate) {
       updateGuides()
     }
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ChosenCandidate])
 
-  /** we use this so that if user deletes an entry that is not lastest guide, it will reset accordingly in getData */
   const resetGuides = useCallback(() => {
     const rn: number[] = getRange(1, 10)
     const map = GuideMap()
@@ -183,20 +201,14 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
       const method: React.Dispatch<React.SetStateAction<Guide>> = map[number]
       method(undefined)
     }
-
-
   }, [getRange, GuideMap])
 
 
   // this is deleting the assigned guide.
   const onClick = useCallback((event, key: number) => {
-
     const current_guide: Guide = getGuidesMap()[key]
     deleteAssignedInstructor(CurrentProgram.value, current_guide.Guideid)
 
-    // updateStorage({AssignedGuides:[...All_Assigned_Guides,guide]})
-    // update the assigned_guides.
-    let assigned_guides
     let new_list_assigned_guides: Assigned_Guide[] = []
     let new_list_assigned_guides_details: Guide[] = []
     for (let guide_s of All_Assigned_Guides) {
@@ -210,12 +222,26 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
         continue
       }
       new_list_assigned_guides_details.push(guide_s)
-
-
     }
     setAllAssignedGuides(new_list_assigned_guides ?? [])
     setAllAssignedGuides_Details(new_list_assigned_guides_details ?? [])
     updateStorage({ AssignedGuides: new_list_assigned_guides ?? [] })
+
+    // *** שינוי: הגדרת צבע אדום בעת מחיקה/הסרה ***
+    const RED_HEX = "#FF0000";
+    setColorCandidate(current_guide.Guideid, CurrentProgram.value, RED_HEX);
+    
+    setAllColorCandidates((prevColors: ColorCandidate[]) => {
+        const exists = prevColors.find(c => c.Guideid === current_guide.Guideid && c.Programid === CurrentProgram.value);
+        let newColors;
+        if (exists) {
+             newColors = prevColors.map(c => c.Guideid === current_guide.Guideid && c.Programid === CurrentProgram.value ? { ...c, ColorHexCode: RED_HEX } : c);
+        } else {
+             newColors = [...prevColors, { Guideid: current_guide.Guideid, Programid: CurrentProgram.value, ColorHexCode: RED_HEX, id: -1 }];
+        }
+        updateStorage({ ColorCandidates: newColors });
+        return newColors;
+    });
 
     resetGuides()
     const rowNode = LeftGridApi.getRowNode(current_guide.Guideid.toString())
@@ -226,10 +252,7 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
     LeftGridApi.onFilterChanged()
     LeftGridApi.deselectAll()
 
-  }, [getGuidesMap, CurrentProgram.value, LeftGridApi, setAllAssignedGuides, setAllAssignedGuides_Details, resetGuides, All_Assigned_Guides, All_Assigned_Guides_Details])
-
-
-
+  }, [getGuidesMap, CurrentProgram.value, LeftGridApi, setAllAssignedGuides, setAllAssignedGuides_Details, resetGuides, All_Assigned_Guides, All_Assigned_Guides_Details, setAllColorCandidates])
 
   const getGuides = useCallback(() => {
     const Title: string = "מדריך"
@@ -258,12 +281,7 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
 
         </Row>
       </Container>
-
-
     )
-
-
-
   }, [getGuidesMap, getRange, onClick])
 
 
@@ -327,7 +345,7 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
 
     <Card border="light" className="text-right w-[36rem]">
       <Card.Header>{TableNames["Title"]}</Card.Header>
-      <Row>
+      <Row className="mt-4">
         <Col xs={{ order: 3 }}>
           <Card.Subtitle>
             {" "}
@@ -393,16 +411,6 @@ const ProgramModal = ({ setAllCandidates_Details, setAllCandidates, CurrentProgr
 
       </Row>
     </Card>
-
-
-
-
-
-
-
-
-
-
 
   );
 };

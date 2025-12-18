@@ -19,7 +19,7 @@ import { Button, Container, Row, Spinner, Col } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
-import { getAllCandidates, getAllColorCandidates, getAllColors, removedAssignCandidate, setAssignCandidate, setColorCandidate } from "@/db/instructorsrequest";
+import { getAllCandidates, getAllColorCandidates, getAllColors, removedAssignCandidate, setAssignCandidate, setColorCandidate, getAllDistances } from "@/db/instructorsrequest";
 import {
   getAllAssignedInstructors,
   getAllCities,
@@ -208,7 +208,7 @@ export default function PlacementTable() {
   const [Colors, setColors] = useState<Colors[]>()
   const [AllColorCandidates, setAllColorCandidates] = useState<ColorCandidate[]>()
 
-  // save columns sate 	
+  // save columns sate  
   const [colState, setColState]: any = useState([])
 
 
@@ -225,10 +225,7 @@ export default function PlacementTable() {
   }, []);
 
 
-
-
-
-  /** we put draggable only if not assigned 	*/
+  /** we put draggable only if not assigned  */
   const rowDragCheck = useCallback((params: ICellRendererParams<Guide>, side?: string) => {
     const p = params as any
     if (side) {
@@ -250,12 +247,31 @@ export default function PlacementTable() {
     p.node.isDraggable = true
     return true
 
-
-
-
   }, [All_Assigned_Guides, CurrentProgram])
 
 
+  // *** פונקציה לעדכון ידני של צבע ללא דריסה ***
+  const handleManualColorChange = useCallback((guideId: number, programId: number, newHexColor: string) => {
+      setAllColorCandidates(prevColors => {
+          const safePrev = prevColors || [];
+          const exists = safePrev.find(c => c.Guideid === guideId && c.Programid === programId);
+          
+          let newList;
+          if (exists) {
+              newList = safePrev.map(c => {
+                  if (c.Guideid === guideId && c.Programid === programId) {
+                      return { ...c, ColorHexCode: newHexColor };
+                  }
+                  return c;
+              });
+          } else {
+              newList = [...safePrev, { Guideid: guideId, Programid: programId, ColorHexCode: newHexColor, id: -1 }];
+          }
+          
+          updateStorage({ ColorCandidates: newList });
+          return newList;
+      });
+  }, []);
 
 
   const GetDefaultDefinitionsLeft = useCallback((model, colors, colorcandidates): ColDef<Guide>[] => {
@@ -335,23 +351,33 @@ export default function PlacementTable() {
       };
     });
 
-    // 💡 תיקון 4: שינוי רוחב ל-110px
     const color_col = { 
         field: 'color', 
         filter: CustomFilter, 
         headerName: "צבע", 
         cellRenderer: "ColorPicker", 
-        cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates }, 
+        cellRendererParams: { 
+            currentProgram: CurrentProgram, 
+            Colors: colors, 
+            AllColorCandidates: colorcandidates,
+            onColorChange: handleManualColorChange,
+            // *** Left side: No Clear Option ***
+            canClear: false 
+        }, 
         checkboxSelection: true, 
         headerCheckboxSelection: true, 
         rowDrag: rowDragCheck,
-        width: 110, // **הערך שונה ל-110**
-        maxWidth: 110 // **הערך שונה ל-110**
+        // *** קיבוע רוחב ***
+        width: 105, 
+        minWidth: 105, 
+        maxWidth: 105,
+        suppressSizeToFit: true,
+        resizable: false
     }
     const distance_col = { field: 'distance', headerName: "מרחק", filter: CustomFilter, editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms } }
     coldef = [color_col, distance_col, ...coldef]
     return coldef
-  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, ValueFormatWhatsApp])
+  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, ValueFormatWhatsApp, handleManualColorChange])
 
   const GetDefaultDefinitionsRight = useCallback((model, colors, colorcandidates): ColDef<Guide>[] => {
     var coldef = model[0].map((value: any, index: any) => {
@@ -428,22 +454,26 @@ export default function PlacementTable() {
         filter: CustomFilter
       };
     });
-    // 💡 תיקון 4: שינוי רוחב ל-110px
     const color_col = { 
         field: 'color', 
         headerName: "צבע", 
         cellRenderer: "ColorPicker", 
-        cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates }, 
+        cellRendererParams: { 
+            currentProgram: CurrentProgram, 
+            Colors: colors, 
+            AllColorCandidates: colorcandidates,
+            onColorChange: handleManualColorChange,
+            // *** Right side: Allow Clear Option ***
+            canClear: true 
+        }, 
         rowDrag: rowDragCheck, 
-        filter: CustomFilter,
-        width: 110, // **הערך שונה ל-110**
-        maxWidth: 110 // **הערך שונה ל-110**
+        filter: CustomFilter 
     }
     const distance_col = { field: 'distance', headerName: "מרחק", editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter }
     coldef = [color_col, distance_col, ...coldef]
     return coldef
 
-  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, ValueFormatWhatsApp])
+  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, ValueFormatWhatsApp, handleManualColorChange])
 
 
   const onGridReady = useCallback(async (
@@ -535,8 +565,76 @@ export default function PlacementTable() {
       })
     }
   }, [GetDefaultDefinitionsLeft, GetDefaultDefinitionsRight]);
+
+  // --- Helper Functions to Handle Logic Cleanly ---
+
+  // Handle Right -> Left (Assign)
+  const handleAssignCandidate = useCallback((data: Guide) => {
+      const GRAY_HEX = "#D3D3D3";
+
+      // *** בדיקת כפילויות לפני הוספה ***
+      if (AllCandidates && AllCandidates.some(c => c.Guideid === data.Guideid && c.Programid === ProgramID.current)) {
+          return; // המועמד כבר קיים
+      }
+
+      setAllColorCandidates(prevColors => {
+          const safePrev = prevColors || [];
+          const cleanList = safePrev.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current));
+          
+          const newEntry = { Guideid: data.Guideid, Programid: ProgramID.current, ColorHexCode: GRAY_HEX, id: -1 };
+          const newList = [...cleanList, newEntry];
+          
+          updateStorage({ ColorCandidates: newList });
+          return newList;
+      });
+
+      const new_candidate_to_assign: Partial<Guides_ToAssign> = { Guideid: data.Guideid, Programid: ProgramID.current };
+      const updated_candidates = AllCandidates ? [...AllCandidates, new_candidate_to_assign as Guides_ToAssign] : [new_candidate_to_assign as Guides_ToAssign];
+      
+      const new_candidate_detail = AllGuides.find((guide) => guide.Guideid === data.Guideid);
+      const updated_details = AllCandidates_Details ? [...AllCandidates_Details, new_candidate_detail] : [new_candidate_detail];
+
+      setAllCandidates(updated_candidates);
+      setAllCandidates_Details(updated_details);
+      updateStorage({ Candidates: updated_candidates });
+
+      setAssignCandidate(data.Guideid, ProgramID.current);
+      setColorCandidate(data.Guideid, ProgramID.current, GRAY_HEX);
+
+  }, [AllCandidates, AllGuides, AllCandidates_Details]);
+
+
+  // Handle Left -> Right (Unassign)
+  const handleUnassignCandidate = useCallback((data: Guide) => {
+      const RED_HEX = "#FF0000";
+
+      setAllColorCandidates(prevColors => {
+          const safePrev = prevColors || [];
+          const cleanList = safePrev.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current));
+          
+          const newEntry = { Guideid: data.Guideid, Programid: ProgramID.current, ColorHexCode: RED_HEX, id: -1 };
+          const newList = [...cleanList, newEntry];
+          
+          updateStorage({ ColorCandidates: newList });
+          return newList;
+      });
+
+      const updated_candidates = AllCandidates ? AllCandidates.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current)) : [];
+      const updated_details = AllCandidates_Details ? AllCandidates_Details.filter(g => g.Guideid !== data.Guideid) : [];
+
+      setAllCandidates(updated_candidates);
+      setAllCandidates_Details(updated_details);
+      updateStorage({ Candidates: updated_candidates });
+
+      removedAssignCandidate(data.Guideid, ProgramID.current);
+      setColorCandidate(data.Guideid, ProgramID.current, RED_HEX);
+
+  }, [AllCandidates, AllCandidates_Details]);
+
+  // ------------------------------------------------
+
+
   // This activates when dragging between tables.
-  /** We don't use the states but give them as arguments since this function will detect every state as undefined. */
   const onDragStop = useCallback(
     (params: RowDragEndEvent, side: string, AllCandidates, AllColorCandidates) => {
       if (ProgramID.current !== -1 && AllCandidates && AllColorCandidates) {
@@ -551,90 +649,17 @@ export default function PlacementTable() {
         api!.applyTransaction(transaction)
 
         if (side === "Right") {
-          /** When we move from right to left.
-             1. We add to candidates.
-             2. we update the allcandidates and candidate details
-             if the detail already exists, of course we don't add it.
-             3. we update storage
-     
-             */
-
-          setAssignCandidate(data.Guideid, ProgramID.current).then((new_candidate: Guides_ToAssign) => {
-            const new_candidate_detail = AllGuides.find((guide) => guide.Guideid === new_candidate.Guideid)
-            const test_candidate_detail = AllCandidates_Details.find((guide) => guide.Guideid === new_candidate.Guideid)
-            const updated_candidates = [...AllCandidates, new_candidate]
-
-            const updated_details = test_candidate_detail ? AllCandidates_Details : [...AllCandidates_Details, new_candidate_detail]
-
-            setAllCandidates(updated_candidates)
-            setAllCandidates_Details(updated_details)
-            updateStorage({ Candidates: updated_candidates })
-
-          })
+          /** When we move from right to left (Assign). */
+          handleAssignCandidate(data);
         } else {
-          /**
-             Moving from left to right:
-             1. Delete candidate
-             2. Make color of candidate red. (In color candidates)
-             2. update allcandidates and candidate details.
-             3. we update storage
-             */
-          removedAssignCandidate(data.Guideid, ProgramID.current).then((_) => {
-            // 2
-            let candidate = setColorCandidate(params.node.data.Guideid, ProgramID.current, "#FF0000")
-            setAllColorCandidates((colorCandidates) => {
-              let new_colors = []
-              let found_flag = false
-              for (const color of colorCandidates) {
-                if (color.Guideid === params.node.data.Guideid && color.Programid === ProgramID.current) {
-                  const new_color: ColorCandidate = { ...color, ColorHexCode: "#FF0000" }
-                  new_colors.push(new_color)
-                  found_flag = true
-                } else {
-                  new_colors.push(color)
-                }
-
-              }
-              new_colors = found_flag ? new_colors : [...new_colors, candidate]
-              return new_colors
-            })
-
-
-            //3 
-            let updated_candidates: Guides_ToAssign[] = []
-            for (const candidate of (AllCandidates as Guides_ToAssign[])) {
-              if (candidate.Guideid === data.Guideid && candidate.Programid === ProgramID.current) {
-                continue
-              }
-              updated_candidates.push(candidate)
-
-            }
-            let updated_candidate_details: Guide[] = []
-            const candidate_count = AllCandidates.filter((guide) => guide.Guideid === data.Guideid)
-            const filtered_candidate_details = AllCandidates_Details.filter((res) => res.Guideid !== data.Guideid)
-            if (candidate_count.length != 1) {
-              updated_candidate_details = [...AllCandidates_Details]
-            } else {
-              updated_candidate_details = [...filtered_candidate_details]
-            }
-            setAllCandidates(updated_candidates)
-            setAllCandidates_Details(filtered_candidate_details)
-            // 4
-            let new_colors: ColorCandidate[] = AllColorCandidates?.map((res) => {
-              if (res.Guideid === data.Guideid && res.Programid === ProgramID.current) {
-                return { ...res, ColorHexCode: "#FF0000" }
-              }
-              return res
-            })
-            updateStorage({ Candidates: updated_candidates, ColorCandidates: new_colors })
-          })
-
+          /** Moving from left to right (Unassign): */
+          handleUnassignCandidate(data);
         }
 
       }
     },
 
-    [ProgramID, leftApi, rightApi, AllGuides, AllCandidates_Details]
+    [ProgramID, leftApi, rightApi, handleAssignCandidate, handleUnassignCandidate]
   );
 
 
@@ -664,6 +689,7 @@ export default function PlacementTable() {
     }
 
 
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addGridDropZone, leftApi, rightApi, CurrentProgram]);
 
@@ -675,28 +701,40 @@ export default function PlacementTable() {
       const Right_Coldef: ColDef<any>[] = rightColDef
       const Left_Coldef: ColDef<any>[] = leftColDef
       // we want to re-render the color component for both the cell renderer, the program and the drag which needs to be activated again.
-      // 💡 תיקון 4: שינוי רוחב ל-110px בפונקציית העדכון
       const color_col_left = { 
           field: 'color', 
           headerName: "צבע", 
           cellRenderer: "ColorPicker", 
-          cellRendererParams: { currentProgram: CurrentProgram, Colors: Colors, AllColorCandidates: AllColorCandidates }, 
+          cellRendererParams: { 
+              currentProgram: CurrentProgram, 
+              Colors: Colors, 
+              AllColorCandidates: AllColorCandidates,
+              onColorChange: handleManualColorChange,
+              canClear: false 
+          }, 
           checkboxSelection: (params) => rowDragCheck(params, "Left"), 
           headerCheckboxSelection: true, 
           rowDrag: (params) => rowDragCheck(params, "Left"), 
           filter: CustomFilter,
-          width: 110, // **הערך שונה ל-110**
-          maxWidth: 110 // **הערך שונה ל-110**
+          width: 105, 
+          minWidth: 105, 
+          maxWidth: 105,
+          suppressSizeToFit: true,
+          resizable: false
       }
       const color_col_right = { 
           field: 'color', 
           headerName: "צבע", 
           cellRenderer: "ColorPicker", 
-          cellRendererParams: { currentProgram: CurrentProgram, Colors: Colors, AllColorCandidates: AllColorCandidates }, 
+          cellRendererParams: { 
+              currentProgram: CurrentProgram, 
+              Colors: Colors, 
+              AllColorCandidates: AllColorCandidates,
+              onColorChange: handleManualColorChange,
+              canClear: true // *** HERE IT IS: Passed as True to Right Table ***
+          }, 
           rowDrag: true, 
-          filter: CustomFilter,
-          width: 110, // **הערך שונה ל-110**
-          maxWidth: 110 // **הערך שונה ל-110**
+          filter: CustomFilter 
       }
       var LeftCol_withoutcolor = Left_Coldef.filter((colDef) => colDef.field !== "color")
       var updated_left_coldef = [color_col_left, ...LeftCol_withoutcolor]
@@ -747,10 +785,13 @@ export default function PlacementTable() {
 
         const all_assigned_ids = All_Assigned_Guides.filter((g) => g.Programid === CurrentProgram.value).map((val) => val.Guideid)
         rest_of_guides = rest_of_guides.filter((g) => !!!all_assigned_ids.includes(g.Guideid))
-        // now we filter from right table the guides that we are going to update to the left.
+        
+        // *** ניקוי כפילויות לפני הצגה בטבלה השמאלית ***
+        const uniqueGuides = guides.filter((guide, index, self) =>
+            index === self.findIndex((t) => t.Guideid === guide.Guideid)
+        )
 
-
-        setLeftRowData(guides)
+        setLeftRowData(uniqueGuides)
         setRightRowData(rest_of_guides)
         const [left, right] = updateDragAndColor()
         updateDistances(left, right)
@@ -767,7 +808,7 @@ export default function PlacementTable() {
 
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [AllCandidates, AllCandidates_Details, CurrentProgram, rowDragCheck, AllColorCandidates, All_Assigned_Guides])
+  }, [AllCandidates, AllCandidates_Details, CurrentProgram, rowDragCheck, AllColorCandidates, All_Assigned_Guides, handleManualColorChange])
 
 
 
@@ -789,10 +830,10 @@ export default function PlacementTable() {
 
     return (
 
-      // 	<div className="flex justify-between">
+      //  <div className="flex justify-between">
 
       // <Button variant="primary">
-      // 	<SiGooglemaps />
+      //   <SiGooglemaps />
       // </Button> 
 
       <Container fluid={true} className="border-4 border-red-600 p-2"> {/* RED: Main Container */}
@@ -802,26 +843,26 @@ export default function PlacementTable() {
           
           {/* 1. כפתורי מקצועות */}
           <Row>
-            <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+             <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </Row>
 
           {/* 2. כפתורי אזורים - הוספנו מרווח עליון */}
           <div className="mt-4">
-            <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+             <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </div>
 
           {/* 3. שלושת התפריטים (תוכנית, סטטוס, שנה) - בשורה חדשה עם מרווח */}
           <Row className="mt-4 rtl d-flex justify-content-between">
             <Col>
-              <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
+               <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
             </Col>
 
             <Col>
-              <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
+               <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
             </Col>
             
             <Col>
-              <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
+               <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
             </Col>
           </Row>
 
@@ -834,11 +875,15 @@ export default function PlacementTable() {
           AllPrograms={AllPrograms} AllCandidates={AllCandidates} AllCandidates_Details={AllCandidates_Details}
           AllSchools={AllSchools} AllContacts={AllContacts} All_Assigned_Guides={All_Assigned_Guides}
           All_Assigned_Guides_Details={All_Assigned_Guides_Details} setAllAssignedGuides={setAllAssignedGuides}
-          setAllAssignedGuides_Details={setAllAssignedGuides_Details} AllYears={AllYears} AllStatuses={AllStatuses} setAllCandidates={setAllCandidates} setAllCandidates_Details={setAllCandidates_Details} />
+          setAllAssignedGuides_Details={setAllAssignedGuides_Details} AllYears={AllYears} AllStatuses={AllStatuses} setAllCandidates={setAllCandidates} setAllCandidates_Details={setAllCandidates_Details}
+          // *** העברת הפרופס של הצבעים גם מכאן ***
+          AllColorCandidates={AllColorCandidates}
+          setAllColorCandidates={setAllColorCandidates}
+        />
         </div>
       </Container>
     )
-  }, [rightApi, Professions, CurrentProgram, FilterProf, AllFilters, Areas, FilterAreas, leftApi, SelectedRows, AllPrograms, AllCandidates, AllCandidates_Details, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, AllYears, AllStatuses, FilterYear, FilterStatus]);
+  }, [rightApi, Professions, CurrentProgram, FilterProf, AllFilters, Areas, FilterAreas, leftApi, SelectedRows, AllPrograms, AllCandidates, AllCandidates_Details, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, AllYears, AllStatuses, FilterYear, FilterStatus, AllColorCandidates]);
 
   const isExternalFilterPresent = useCallback((params: IsExternalFilterPresentParams<any, any>): boolean => {
     return true
@@ -868,7 +913,7 @@ export default function PlacementTable() {
 
     // 3. לוגיקה לאזורים:
     // אם אין פילטרים פעילים לאזור - מעבירים הכל (true).
-    // אם יש - בודקים האם המדריך שייך לאחד האזורים שנבחרו.
+    // אם יש - בודקים האם למדריך יש אחד מהמקצועות שנבחרו.
     let areaPass = true;
     if (activeAreaFilters.length > 0) {
       areaPass = activeAreaFilters.includes(rowArea);
@@ -882,7 +927,7 @@ export default function PlacementTable() {
 
   const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) =>
 
-    <div className="max-w-[150px] max-h-[50px] overflow-y-hidden whitespace-nowrap text-ellipsis hover:text-clip truncate 	hover:overflow-x-auto hover:whitespace-nowra">
+    <div className="max-w-[150px] max-h-[50px] overflow-y-hidden whitespace-nowrap text-ellipsis hover:text-clip truncate  hover:overflow-x-auto hover:whitespace-nowra">
       {props.data.Professions}
 
     </div>, [])
@@ -911,7 +956,7 @@ export default function PlacementTable() {
 
   const onRowDoubleClick = useCallback((event: RowDoubleClickedEvent<Guide, any>, side: string): void => {
     if (ProgramID.current !== -1 && AllCandidates && AllColorCandidates) {
-      // we add the draggable in 	rowDragCheck of ag grid.
+      // we add the draggable in  rowDragCheck of ag grid.
       if (typeof (event.node as any).isDraggable !== "undefined" && !(event.node as any).isDraggable) {
         return
       }
@@ -925,78 +970,13 @@ export default function PlacementTable() {
       api!.applyTransaction(transaction)
       // if added to assign
       if (side === "Right") {
-        setAssignCandidate(data.Guideid, ProgramID.current).then((new_candidate: Guides_ToAssign) => {
-          const new_candidate_detail = AllGuides.find((guide) => guide.Guideid === new_candidate.Guideid)
-          const test_candidate_detail = AllCandidates_Details.find((guide) => guide.Guideid === new_candidate.Guideid)
-          const updated_candidates = [...AllCandidates, new_candidate]
-
-          const updated_details = test_candidate_detail ? AllCandidates_Details : [...AllCandidates_Details, new_candidate_detail]
-
-          setAllCandidates(updated_candidates)
-          setAllCandidates_Details(updated_details)
-          updateStorage({ Candidates: updated_candidates })
-
-
-        })
+        handleAssignCandidate(data);
         leftApi!.applyTransaction({ add: [data] })
       } else {
         /**
-         Moving from left to right:
-         1. Delete candidate
-         2. Make color of candidate red. (In color candidates)
-         2. update allcandidates and candidate details.
-         3. we update storage
-         */
-        removedAssignCandidate(data.Guideid, ProgramID.current).then((_) => {
-          // 2
-          let candidate = setColorCandidate(data.Guideid, ProgramID.current, "#FF0000")
-          setAllColorCandidates((colorCandidates) => {
-            let new_colors = []
-            let found_flag = false
-            for (const color of colorCandidates) {
-              if (color.Guideid === data.Guideid && color.Programid === ProgramID.current) {
-                const new_color: ColorCandidate = { ...color, ColorHexCode: "#FF0000" }
-                new_colors.push(new_color)
-                found_flag = true
-              } else {
-                new_colors.push(color)
-              }
-
-            }
-            new_colors = found_flag ? new_colors : [...new_colors, candidate]
-            return new_colors
-          })
-
-
-          //3 
-          let updated_candidates: Guides_ToAssign[] = []
-          for (const candidate of (AllCandidates as Guides_ToAssign[])) {
-            if (candidate.Guideid === data.Guideid && candidate.Programid === ProgramID.current) {
-              continue
-            }
-            updated_candidates.push(candidate)
-
-          }
-          let updated_candidate_details: Guide[] = []
-          const candidate_count = AllCandidates.filter((guide) => guide.Guideid === data.Guideid)
-          const filtered_candidate_details = AllCandidates_Details.filter((res) => res.Guideid !== data.Guideid)
-          if (candidate_count.length != 1) {
-            updated_candidate_details = [...AllCandidates_Details]
-          } else {
-            updated_candidate_details = [...filtered_candidate_details]
-          }
-          setAllCandidates(updated_candidates)
-          setAllCandidates_Details(filtered_candidate_details)
-          // 4
-          let new_colors: ColorCandidate[] = AllColorCandidates?.map((res) => {
-            if (res.Guideid === data.Guideid && res.Programid === ProgramID.current) {
-              return { ...res, ColorHexCode: "#FF0000" }
-            }
-            return res
-          })
-          updateStorage({ Candidates: updated_candidates, ColorCandidates: new_colors })
-        })
-
+        Moving from left to right:
+       */
+        handleUnassignCandidate(data);
         rightApi!.applyTransaction({ add: [data] })
       }
 
@@ -1008,7 +988,7 @@ export default function PlacementTable() {
 
 
 
-  }, [AllCandidates, AllColorCandidates, leftApi, rightApi, AllCandidates_Details, AllGuides])
+  }, [AllCandidates, AllColorCandidates, leftApi, rightApi, AllCandidates_Details, AllGuides, handleAssignCandidate, handleUnassignCandidate])
 
 
   const onSelectionChanged = useCallback((event: SelectionChangedEvent<Guide>): void => {

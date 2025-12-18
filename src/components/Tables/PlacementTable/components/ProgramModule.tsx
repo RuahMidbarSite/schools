@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Col, Row } from "react-bootstrap";
 import ProgramModal from "./CustomProgramModal";
 import { AssignGuides } from "./AssignGuides";
-import { Assigned_Guide, Guide, Guides_ToAssign, Program, School, SchoolsContact, StatusPrograms, Years } from "@prisma/client";
+import { Assigned_Guide, ColorCandidate, Guide, Guides_ToAssign, Program, School, SchoolsContact, StatusPrograms, Years } from "@prisma/client";
 import { GridApi } from "ag-grid-community";
 import SendMessagesBox from "@/components/Tables/PlacementTable/components/SendMessages";
 
@@ -25,7 +25,10 @@ type ProgramProps = {
    AllYears: Years[],
    AllStatuses: StatusPrograms[],
    setAllCandidates_Details: any,
-   setAllCandidates: any
+   setAllCandidates: any,
+   // *** תוספות חדשות: העברת נתוני הצבעים ***
+   AllColorCandidates: ColorCandidate[],
+   setAllColorCandidates: any
 }
 
 export const ProgramModule = ({
@@ -47,7 +50,10 @@ export const ProgramModule = ({
    setAllAssignedGuides,
    setAllAssignedGuides_Details,
    AllYears,
-   AllStatuses
+   AllStatuses,
+   // *** קבלת הפרופס ***
+   AllColorCandidates,
+   setAllColorCandidates
 }: ProgramProps) => {
 
    // State לשיבוץ המועמד
@@ -58,10 +64,6 @@ export const ProgramModule = ({
    return (
       <>
          <Row>
-            {/* תיקון מיקום: 
-               הוסר offset: '1' כדי למנוע את החפיפה עם הכפתורים בצד ימין.
-               הוגדר span: '3' לתצוגה מרווחת יותר.
-            */}
             <Col className="pr-4" lg={{ order: 'last', span: '3' }} >
                <div className='text-right font-bold'>
                   {TitleMessage}
@@ -86,6 +88,9 @@ export const ProgramModule = ({
                   setAllAssignedGuides_Details={setAllAssignedGuides_Details}
                   setAllCandidates={setAllCandidates}
                   setAllCandidates_Details={setAllCandidates_Details}
+                  // *** העברת הפרופס למודל ***
+                  AllColorCandidates={AllColorCandidates}
+                  setAllColorCandidates={setAllColorCandidates}
                />
             </Col>
          </Row>
