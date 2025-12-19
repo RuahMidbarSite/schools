@@ -109,6 +109,8 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
   const [AllCandidates, setAllCandidates] = useState<Guides_ToAssign[]>([])
   const [AllColorCandidates, setAllColorCandidates] = useState<ColorCandidate[]>([])
   const [AllAssigned, setAllAssigned] = useState<Assigned_Guide[]>([])
+  // --- ADDED: State to hold all guides details for refreshing ---
+  const [AllGuides, setAllGuides] = useState<Guide[]>([]);
 
 
   // this is for adding new rows. This is because we previously used ID for everything, this is a way
@@ -146,6 +148,55 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
       }
     }
   }, [colState])
+
+  // --- תיקון: מנגנון רענון אוטומטי (Polling) ---
+  // מחליף את התלות ב-focus בלבד. המערכת תבדוק שינויים בנתוני המדריכים כל 4 שניות.
+  useEffect(() => {
+    const fetchGuidesData = () => {
+      Promise.all([getAllAssignedInstructors(), getAllGuides()]).then(([assigned_guides, guides]) => {
+         // עדכון ה-State יגרום לחישוב מחדש של העמודות
+         setAllAssigned(assigned_guides);
+         setAllGuides(guides);
+      });
+    };
+
+    // קריאה ראשונית + הפעלת טיימר
+    fetchGuidesData();
+    const intervalId = setInterval(fetchGuidesData, 4000); // רענון כל 4 שניות
+
+    return () => clearInterval(intervalId); // ניקוי ביציאה
+  }, []);
+
+  // --- תיקון: עדכון הגדרות העמודות ורענון הגריד ---
+  useEffect(() => {
+      if (AllAssigned.length > 0 && AllGuides.length > 0 && AllPrograms && AllSchools && AllContacts) {
+          getFromStorage().then(({ Tablemodel, Cities, ProgramsStatuses, Areas, Years, ProductTypes, Orders }: DataType) => {
+              if (Tablemodel) {
+                 let colDefs = GetDefaultDefinitions(
+                    Tablemodel, 
+                    AllSchools, 
+                    Cities.map((val) => val.CityName), 
+                    ProgramsStatuses.map((val) => val.StatusName), 
+                    Areas.map((val) => val.AreaName),
+                    Years.map((val) => val.YearName), 
+                    AllContacts, 
+                    AllAssigned, // הנתונים המעודכנים
+                    AllGuides,   // הנתונים המעודכנים
+                    ProductTypes.map((val) => val.ProductName), 
+                    Orders.map((val) => val.OrderName), 
+                    AllPrograms
+                );
+                setColDefs(colDefs);
+                
+                // רענון ויזואלי של התאים בטבלה
+                if (gridRef.current && gridRef.current.api) {
+                    gridRef.current.api.refreshCells({ force: true, columns: ['AssignedToProgram'] });
+                }
+              }
+          });
+      }
+  }, [AllAssigned, AllGuides]); // התלות ב-AllAssigned ו-AllGuides מבטיחה שהטבלה תתעדכן כשהטיימר מביא מידע חדש
+
 
   const UpdateDefaultFilters = useCallback(() => {
     if (gridRef && gridRef.current) {
@@ -679,7 +730,7 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
 
     return coldef
 
-  }, [FinalValueGetter, TotalValueGetter, valueFormatterDate])
+  }, [FinalValueGetter, TotalValueGetter, valueFormatterDate, AllAssigned, AllGuides]) // <-- חשוב: תלות ב-AllAssigned ו-AllGuides
 
   // not edit cell editor or renderer - ag grid does not support this for some reason.
   const other_components: any = useMemo(
@@ -715,6 +766,7 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
         setAllContacts(schoolsContacts)
         setAllPrograms(Programs)
         setAllAssigned(AssignedGuides)
+        setAllGuides(Guides); // --- ADDED: Store Guides in state ---
 
         params.api.hideOverlay();
         maxIndex.current = Programs.length > 0 ? Math.max(...Programs.map((program) => program.Programid)) : 0
@@ -748,6 +800,7 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
             setAllCandidates(candidates)
             setAllColorCandidates(colorcandidates)
             setAllAssigned(assigned_guides)
+            setAllGuides(guide_details); // --- ADDED: Store Guides in state ---
             maxIndex.current = programs.length > 0 ? Math.max(...programs.map((program) => program.Programid)) : 0
             updateStorage({ Programs: programs, Schools: schools, Tablemodel: model, Cities: cities, ProgramsStatuses: statuses, Areas: districts, Years: years, schoolsContacts: contacts, AssignedGuides: assigned_guides, Guides: guide_details, ProductTypes: products, Orders: orders, Candidates: candidates, ColorCandidates: colorcandidates })
 
@@ -917,7 +970,6 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
 
   const onCellEditingStarted = (event: CellEditingStartedEvent) => { };
 
-  // --- התיקון העיקרי: טיפול בעמודה מורכבת "Plan" ---
   const onCellEditingStopped =
     useCallback((event: CellEditingStoppedEvent) => {
       
@@ -970,7 +1022,6 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
       }
 
     }, [InTheMiddleOfAddingRows]);
-    // --- סוף התיקון העיקרי ---
 
 
   const onFilterTextBoxChanged = useCallback(() => {
