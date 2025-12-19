@@ -1,15 +1,10 @@
 "use client"
 import { addSchoolsRows, updateSchoolRows, getSchoolsPrograms, updateSchoolRowsCascading } from "@/db/schoolrequests";
 import { Program, School, SchoolsContact } from "@prisma/client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { DataType, getFromStorageWithKey, updateStorage } from "../Storage/SchoolDataStorage";
 
-
-
-
-
 const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, setDialogType, setDialogMessage, setOpen, SetInTheMiddleOfAddingRows, setAmount, openedProgramWindow, setLoading, setRowData, AllContacts, setAllContacts, AllPrograms, setAllPrograms, maxIndex): { onFilterTextBoxChanged: any, onSaveChangeButtonClick: any, onCancelChangeButtonClick: any, onSaveDeletions: any, onClearFilterButtonClick: any, onAddRowToolBarClick: any, onDisplayProgramsClicked: any } => {
-
 
   const onFilterTextBoxChanged = useCallback(() => {
     gridRef.current?.api.setGridOption(
@@ -18,24 +13,22 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     );
   }, [gridRef]);
 
-
-
   const onSaveChangeButtonClick = useCallback(() => {
     gridRef.current.api.stopEditing();
 
     const future_data: School[] = [];
     const newly_added: School[] = [];
     var count = 0;
+    
+    // איסוף כל הנתונים הקיימים בגריד
     gridRef.current.api.forEachNode((node: any) => {
       future_data.push(node.data);
-      // only if it is a new row that is not in the database look at it.
+      // בדיקה אם זו שורה חדשה שטרם נשמרה
       if (count < rowCount.current - dataRowCount.current) {
         newly_added.push(node.data);
       }
-
       count++;
     });
-
 
     let n = newly_added.length;
     for (let i = 0; i < n; i++) {
@@ -48,10 +41,9 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     setDialogMessage("בתי ספר נוספו בהצלחה");
     setOpen(true);
 
-
     addSchoolsRows(newly_added);
 
-    // update the Row count in the database and hide the buttons.
+    // עדכון מונים והסתרת כפתורים
     dataRowCount.current = rowCount.current;
     const element: any = document.getElementById("savechangesbutton-school");
     if (element !== null) {
@@ -63,14 +55,14 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     if (element_2 !== null) {
       element_2.style.display = "none";
     }
-    // no longer in adding rows mode.
+    
     SetInTheMiddleOfAddingRows(false);
+    
+    // עדכון הנתונים בטבלה
     setRowData((data) => [...data, ...newly_added].sort((arg1: School, arg2) => arg1.Schoolid - arg2.Schoolid))
 
+    maxIndex.current = future_data.length > 0 ? Math.max(...future_data.map((school) => school.Schoolid)) : 0
 
-    maxIndex.current = future_data.length >0 ? Math.max(...future_data.map((school) => school.Schoolid)):0
-
-    // update cached values rows. 
     updateStorage({ Schools: future_data.sort((arg1, arg2) => arg1.Schoolid - arg2.Schoolid) })
 
     gridRef.current.api.deselectAll()
@@ -80,19 +72,16 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     const prev_data: School[] = [];
     var count = 0;
     gridRef.current.api.forEachNode((node: any) => {
-      // Right now, a new row is added at the top and forEachNode goes through the order that appears in the table.
       if (count >= rowCount.current - dataRowCount.current) {
         prev_data.push(node.data);
       }
       count++;
     });
-    maxIndex.current = prev_data.length >0 ? Math.max(...prev_data.map((school) => school.Schoolid)):0
+    maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((school) => school.Schoolid)) : 0
     setRowData(prev_data)
 
-    // Update the row count to match the database state
     rowCount.current = dataRowCount.current;
 
-    // Hide the buttons
     const element: any = document.getElementById("savechangesbutton-school");
     if (element !== null) {
       element.style.display = "none";
@@ -107,69 +96,85 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     SetInTheMiddleOfAddingRows(false);
   }, [SetInTheMiddleOfAddingRows, dataRowCount, gridRef, maxIndex, rowCount, setRowData]);
 
-  const onSaveDeletions = useCallback(() => {
-    const ids: number[] = gridRef.current.api
-      .getSelectedRows()
-      .map((val: School) => val.Schoolid);
-    // this is what will remain after the deletion.
-    const updated_data: School[] = [];
+  // --- הפונקציה המתוקנת למחיקה ---
+  const onSaveDeletions = useCallback(async () => {
+    // 1. התחלת שעון חול מיד בהתחלה
+    setLoading(true);
 
+    try {
+      const selectedNodes = gridRef.current.api.getSelectedNodes();
+      const ids: number[] = selectedNodes.map((val: any) => val.data.Schoolid);
 
-    // what are the ids in big schoolstable that are not deleted - we need that to reorder the table.
-    let id_range: number[] = []
-    for (let index = 1; index <= dataRowCount.current; index++) {
-      if (ids.includes(index)) {
-        continue
+      if (ids.length === 0) {
+        setLoading(false);
+        return;
       }
-      id_range.push(index)
-    }
 
-    let index = 0
-    gridRef.current.api.forEachNode((node: any) => {
+      // איסוף כל הנתונים הנוכחיים מהגריד כדי לוודא שאין איבוד נתונים בגלל פילטרים
+      const allCurrentData: School[] = [];
+      gridRef.current.api.forEachNode((node: any) => {
+         allCurrentData.push(node.data);
+      });
 
-      if (!ids.includes(node.data.Schoolid)) {
-        updated_data.push(node.data);
+      // יצירת הרשימה המעודכנת (ללא המחוקים)
+      const updated_data = allCurrentData.filter(school => !ids.includes(school.Schoolid));
 
+      // חישוב id_range לשימוש בקריסקיידינג (שמירה על הלוגיקה המקורית שלך)
+      let id_range: number[] = []
+      // שים לב: השימוש כאן הוא בלוגיקה המקורית שלך שמניחה שהמזהים הם עוקבים או קשורים לאינדקסים
+      for (let index = 1; index <= dataRowCount.current; index++) {
+        if (ids.includes(index)) {
+          continue
+        }
+        id_range.push(index)
       }
-    });
 
-    setRowData(updated_data)
+      // עדכון ה-UI באופן מיידי
+      setRowData(updated_data);
+      
+      // עדכון מונים
+      maxIndex.current = updated_data.length > 0 ? Math.max(...updated_data.map((school) => school.Schoolid)) : 0;
+      dataRowCount.current -= ids.length;
+      rowCount.current -= ids.length;
+      setAmount(0);
 
-    maxIndex.current = updated_data.length > 0 ? Math.max(...updated_data.map((school) => school.Schoolid)):0
-    // update the amount of rows
-    dataRowCount.current -= ids.length;
-    rowCount.current -= ids.length;
-    // update the checked amount.
-    setAmount(0);
+      // הסתרת כפתור המחיקה
+      const element: any = document.getElementById("savedeletions");
+      if (element !== null) {
+        element.style.display = "none";
+      }
 
+      // עדכון רשימות מקושרות (Contacts, Programs)
+      const remainining_contacts = (AllContacts as SchoolsContact[]).filter((contact) => !ids.includes(contact.Contactid))
+      const remaining_programs = (AllPrograms as Program[]).filter((program) => !ids.includes(program.Schoolid))
 
-    // hide delete button.
-    const element: any = document.getElementById("savedeletions");
-    if (element !== null) {
-      element.style.display = "none";
-    }
+      setAllContacts(remainining_contacts)
+      setAllPrograms(remaining_programs)
 
-    const remainining_contacts = (AllContacts as SchoolsContact[]).filter((contact) => !ids.includes(contact.Contactid))
-    const remaining_programs = (AllPrograms as Program[]).filter((program) => !ids.includes(program.Schoolid))
+      // ביצוע הקריאות לשרת ולאחסון
+      const start = performance.now();
+      
+      await Promise.all([
+        updateStorage({ Schools: updated_data, Programs: remaining_programs, schoolsContacts: remainining_contacts }),
+        updateSchoolRowsCascading(ids, id_range, AllPrograms, AllContacts)
+      ]);
 
-    setAllContacts(remainining_contacts)
-    setAllPrograms(remaining_programs)
-
-    setLoading(true)
-    const start = performance.now();
-    Promise.all([updateStorage({ Schools: updated_data, Programs: remaining_programs, schoolsContacts: remainining_contacts }), updateSchoolRowsCascading(ids, id_range, AllPrograms, AllContacts).then(() => {
-
-
-    })]).then((_) => {
-      setLoading(false)
       const end = performance.now();
       console.log(`Execution time updating schools: ${end - start} milliseconds`);
-    })
 
-    gridRef.current.api.deselectAll()
-    // update cached values rows.
+      gridRef.current.api.deselectAll();
 
-  }, [AllContacts, AllPrograms, dataRowCount, gridRef, maxIndex, rowCount, setAllContacts, setAllPrograms, setAmount, setLoading, setRowData]);
+    } catch (error) {
+      console.error("Error deleting schools:", error);
+      setDialogType('error');
+      setDialogMessage("אירעה שגיאה בעת מחיקת בתי הספר. אנא נסה שנית.");
+      setOpen(true);
+    } finally {
+      // חובה: עצירת שעון החול בכל מקרה (הצלחה או כישלון)
+      setLoading(false);
+    }
+
+  }, [AllContacts, AllPrograms, dataRowCount, gridRef, maxIndex, rowCount, setAllContacts, setAllPrograms, setAmount, setLoading, setRowData, setDialogMessage, setDialogType, setOpen]);
 
 
   const onClearFilterButtonClick = useCallback(() => {
@@ -199,7 +204,6 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
 
     rowCount.current++
     SetInTheMiddleOfAddingRows(true);
-    // activate( and therfore show) the update button and cancel button
     const element: any = document.getElementById("savechangesbutton-school");
     if (element !== null) {
       element.style.display = "block";
@@ -217,18 +221,16 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     if (!selectedNodes) {
       return
     }
-    const schoolIds = []
-    selectedNodes.forEach((node) => {
+    const schoolIds: any[] = []
+    selectedNodes.forEach((node: any) => {
       schoolIds.push(node.data.Schoolid)
     })
-    let updated_data = []
+    let updated_data: any[] = []
     gridRef.current.api.forEachNode((node: any) => {
       updated_data.push(node.data)
-
     });
 
     getSchoolsPrograms(schoolIds).then((programs) => {
-
       updateStorage({ Schools: updated_data, chosenPrograms: programs })
       const ids = encodeURIComponent(JSON.stringify({
         ids: schoolIds,
@@ -236,17 +238,13 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
       let new_window = window.open(`/ProgramPopUp?ids=${ids}`, '_blank', 'width=800,height=600')
       if (gridRef) { gridRef.current.api.deselectAll() }
       if (new_window === null) {
-        // pop-blocked lmao.
+        // pop-blocked
       }
-
       return
     })
-
-
-
   }, [gridRef]);
 
-  return { onFilterTextBoxChanged: onFilterTextBoxChanged, onSaveChangeButtonClick: onSaveChangeButtonClick, onCancelChangeButtonClick: onCancelChangeButtonClick, onSaveDeletions: onSaveDeletions, onClearFilterButtonClick: onClearFilterButtonClick, onAddRowToolBarClick: onAddRowToolBarClick, onDisplayProgramsClicked: onDisplayProgramsClicked }
+  return { onFilterTextBoxChanged, onSaveChangeButtonClick, onCancelChangeButtonClick, onSaveDeletions, onClearFilterButtonClick, onAddRowToolBarClick, onDisplayProgramsClicked }
 }
 
 export default useToolBarFunctions

@@ -153,6 +153,11 @@ export default function PlacementTable() {
   // Global States related to data
   const [CurrentProgram, setCurrentProgram]: [{ label: string, value: number }, any] = useState({ label: '', value: -1 })
 
+  // --- States עבור שדות הסינון החדשים ---
+  const [leftSearchText, setLeftSearchText] = useState("");
+  const [rightSearchText, setRightSearchText] = useState("");
+  // --------------------------------------
+
   // --- States שהועברו מ-ProgramModule ---
   const selectedYear = useYear().selectedYear
   const defaultStatus = useStatus().defaultStatus
@@ -1059,25 +1064,75 @@ export default function PlacementTable() {
     </div>
   );
 
+  // --- פונקציות טיפול בשינוי קלט בחיפוש ---
+  const onRightSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setRightSearchText(value);
+    if (rightApi) {
+      rightApi.setGridOption('quickFilterText', value);
+    }
+  };
+
+  const onLeftSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLeftSearchText(value);
+    if (leftApi) {
+      leftApi.setGridOption('quickFilterText', value);
+    }
+  };
+  // ---------------------------------------
 
   return (
     <Suspense >
       <div className="toolbar ">{getToolBar()}</div>
       <div className="flex">
 
-        <div className="w-1/2 border-4 border-orange-500"> {/* ORANGE: Left Table Column */}
-          <h1 className="text-right"> {name_1}</h1>
+        {/* --- צד שמאל: מועמדים --- */}
+        <div className="w-1/2 border-4 border-orange-500 flex flex-col"> {/* ORANGE: Left Table Column */}
+          
+          {/* Header Container - שורה אחת לכותרת ולחיפוש */}
+          {/* שינוי כאן: הצמדה לימין עם flex-end ורווח gap-3 */}
+          <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
+            
+            {/* שדה החיפוש מופיע ראשון כדי להיות משמאל לכותרת */}
+            <input
+              type="text"
+              className="form-control"
+              placeholder="סינון..."
+              value={leftSearchText}
+              onChange={onLeftSearchChange}
+              // הקטנת רוחב השדה ל-200 פיקסלים
+              style={{ direction: 'rtl', width: '200px', height: '35px' }}
+            />
+            
+            <h1 className="text-right m-0 text-xl font-bold"> {name_1}</h1>
+          </div>
 
           {getInnerGridCol("Left")}
-
-
         </div>
 
-        <div className="w-1/2 border-4 border-purple-500"> {/* PURPLE: Right Table Column */}
-          <h1 className="text-right"> {name_2} </h1>
+        {/* --- צד ימין: מדריכים --- */}
+        <div className="w-1/2 border-4 border-purple-500 flex flex-col"> {/* PURPLE: Right Table Column */}
+          
+          {/* Header Container - שורה אחת לכותרת ולחיפוש */}
+          {/* שינוי כאן: הצמדה לימין עם flex-end ורווח gap-3 */}
+          <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
+            
+             {/* שדה החיפוש מופיע ראשון כדי להיות משמאל לכותרת */}
+            <input
+              type="text"
+              className="form-control"
+              placeholder="סינון..."
+              value={rightSearchText}
+              onChange={onRightSearchChange}
+              // הקטנת רוחב השדה ל-200 פיקסלים
+              style={{ direction: 'rtl', width: '200px', height: '35px' }}
+            />
+
+            <h1 className="text-right m-0 text-xl font-bold"> {name_2} </h1>
+          </div>
 
           {getInnerGridCol("Right")}
-
         </div>
       </div>
     </Suspense>

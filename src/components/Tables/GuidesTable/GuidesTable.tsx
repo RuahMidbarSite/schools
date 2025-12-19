@@ -85,6 +85,7 @@ import CustomWhatsAppRenderer from "./components/CustomWhatsAppRenderer";
 import { NamePhoneCellEditor } from "./components/NamePhoneCellEditor";
 import { NamePhoneCellRenderer } from "./components/NamePhoneCellRenderer";
 import { getAssignedInstructores } from "@/db/programsRequests";
+
 export default function GuidesTable({
   height,
   width,
@@ -443,11 +444,31 @@ export default function GuidesTable({
 
     return coldef
   }, [AuthenticateActivate, ProfCellRenderer, ValueFormatAssigned, ValueFormatWhatsApp, valueFormatCellPhone])
+  
+  
   const onGridReady = async (params) => {
-    getFromStorage().then(({ Guides, Cities, Areas, Religion, Professions, ProfessionsTablemodel, Tablemodel, GuidesStatuses, ColorCandidates, Candidates, AssignedGuides }: Required<DataType>) => {
-      if (Guides && Cities && Areas && Religion && Professions && ProfessionsTablemodel && Tablemodel && GuidesStatuses && ColorCandidates && Candidates && AssignedGuides) {
+    getFromStorage().then(async ({ Guides, Cities, Areas, Religion, Professions, ProfessionsTablemodel, Tablemodel, GuidesStatuses, ColorCandidates, Candidates, AssignedGuides }: Required<DataType>) => {
+      
+      // ----------- תיקון: הבטחת רשימת ערים עדכנית -----------
+      // אנו מגדירים משתנה חדש שיתחיל מה-Cache אבל יתעדכן מהשרת
+      let currentCities = Cities;
 
-        const colDef = GetDefaultDefinitions(Tablemodel, Cities.map((val) => val.CityName), Religion.map((val) => val.ReligionName), Professions, ProfessionsTablemodel, Guides, Areas.map((val) => val.AreaName), GuidesStatuses.map((val) => val.StatusName))
+      try {
+        // משיכת רשימת הערים העדכנית ביותר מהשרת
+        const freshCities = await getAllCities();
+        if (freshCities && freshCities.length > 0) {
+            currentCities = freshCities;
+            // אופציונלי: עדכון ה-Cache כדי שהפעם הבאה תהיה מהירה יותר
+            updateStorage({ Cities: freshCities });
+        }
+      } catch (e) {
+        console.warn("Could not fetch fresh cities, using cache", e);
+      }
+      // --------------------------------------------------------
+
+      if (Guides && currentCities && Areas && Religion && Professions && ProfessionsTablemodel && Tablemodel && GuidesStatuses && ColorCandidates && Candidates && AssignedGuides) {
+        // שימוש ב-currentCities במקום ב-Cities מהסטורג'
+        const colDef = GetDefaultDefinitions(Tablemodel, currentCities.map((val) => val.CityName), Religion.map((val) => val.ReligionName), Professions, ProfessionsTablemodel, Guides, Areas.map((val) => val.AreaName), GuidesStatuses.map((val) => val.StatusName))
         if (Guides.length == 0) {
           params.api.hideOverlay();
         }

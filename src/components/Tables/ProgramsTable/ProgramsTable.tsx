@@ -150,7 +150,6 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
   }, [colState])
 
   // --- תיקון: מנגנון רענון אוטומטי (Polling) ---
-  // מחליף את התלות ב-focus בלבד. המערכת תבדוק שינויים בנתוני המדריכים כל 4 שניות.
   useEffect(() => {
     const fetchGuidesData = () => {
       Promise.all([getAllAssignedInstructors(), getAllGuides()]).then(([assigned_guides, guides]) => {
@@ -195,7 +194,7 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
               }
           });
       }
-  }, [AllAssigned, AllGuides]); // התלות ב-AllAssigned ו-AllGuides מבטיחה שהטבלה תתעדכן כשהטיימר מביא מידע חדש
+  }, [AllAssigned, AllGuides]); 
 
 
   const UpdateDefaultFilters = useCallback(() => {
@@ -239,15 +238,15 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
   }, [defaultStatus, selectedYear])
 
 
-
-
+  // --- תיקון חשוב: הסרת rowData מהתלויות כדי למנוע איפוס פילטר בעת הוספת שורה ---
   useEffect(() => {
 
     if (gridRef && gridRef.current && colDefinition) {
       UpdateDefaultFilters()
 
     }
-  }, [gridRef, colDefinition, UpdateDefaultFilters, rowData, selectedYear, defaultStatus])
+  }, [gridRef, colDefinition, UpdateDefaultFilters, selectedYear, defaultStatus])
+  // -----------------------------------------------------------------------------
 
   const onColumnResized = useCallback((event) => {
     if (event.finished) {
@@ -500,7 +499,14 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
           cellEditor: "CustomDayChooseEditor",
           filter: "CustomFilter",
           editable: true,
-          singleClickEdit: true
+          singleClickEdit: true,
+          // --- FIX: Formatter to remove leading comma if it exists ---
+          valueFormatter: (params) => {
+            if (params.value && typeof params.value === 'string' && params.value.startsWith(',')) {
+                return params.value.substring(1);
+            }
+            return params.value;
+          }
         };
       }
       if (value === "ChosenDay") {
@@ -510,7 +516,14 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
           cellEditor: "CustomDayPlacementEditor",
           filter: "CustomFilter",
           editable: true,
-          singleClickEdit: true
+          singleClickEdit: true,
+          // --- FIX: Formatter to remove leading comma if it exists ---
+          valueFormatter: (params) => {
+            if (params.value && typeof params.value === 'string' && params.value.startsWith(',')) {
+                return params.value.substring(1);
+            }
+            return params.value;
+          }
         };
 
       }
@@ -817,11 +830,32 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
   }, [GetDefaultDefinitions, SchoolIDs]);
 
   const onAddRowToolBarClick = useCallback(() => {
+    let yearForNewRow = selectedYear;
+    let statusForNewRow = defaultStatus; // ברירת מחדל מה-Context
+
+    // --- תיקון: לקיחת השנה והסטטוס מהשורה הראשונה שמוצגת בטבלה ---
+    if (gridRef.current && gridRef.current.api) {
+      const displayedRowCount = gridRef.current.api.getDisplayedRowCount();
+      
+      if (displayedRowCount > 0) {
+        const firstVisibleNode = gridRef.current.api.getDisplayedRowAtIndex(0);
+        
+        if (firstVisibleNode && firstVisibleNode.data) {
+          // אם יש שורה מוצגת, ניקח ממנה את השנה והסטטוס
+          // זה מבטיח שהשורה החדשה תתאים לפילטרים הפעילים
+          if (firstVisibleNode.data.Year) yearForNewRow = firstVisibleNode.data.Year;
+          if (firstVisibleNode.data.Status) statusForNewRow = firstVisibleNode.data.Status;
+        }
+      }
+    }
+    // -----------------------------------------------------
+
     gridRef.current?.api.applyTransaction({
       add: [
         {
           Programid: maxIndex.current + 1,
-          Year: selectedYear,
+          Year: yearForNewRow, 
+          Status: statusForNewRow, // <-- הוספת הסטטוס לשורה החדשה
           Product: "תלמידים",
           FreeLessonNumbers: 0,
           PaidLessonNumbers: 0,
@@ -831,10 +865,11 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
       ],
       addIndex: 0,
     });
+    
     maxIndex.current = maxIndex.current + 1
     rowCount.current++;
     SetInTheMiddleOfAddingRows(true);
-    // activate( and therfore show) the update button and cancel button
+
     const element: any = document.getElementById("savechangesbutton");
     if (element !== null) {
       element.style.display = "block";
@@ -843,7 +878,7 @@ export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
     if (element_2 !== null) {
       element_2.style.display = "block";
     }
-  }, [selectedYear]);
+  }, [selectedYear, defaultStatus]); // הוספתי תלות ב-defaultStatus
 
 
 

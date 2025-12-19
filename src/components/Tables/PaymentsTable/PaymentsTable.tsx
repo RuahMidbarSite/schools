@@ -76,6 +76,9 @@ export const PaymentsTable = () => {
   const [selectedPendingPayments, setSelectedPendingPayments]: any = useState([]);
   const [selectedSchool, setSelectedSchool] = useState<School>()
 
+  // School Filter State
+  const [schoolFilterText, setSchoolFilterText] = useState(""); 
+
   const [totalPrice, setTotalPrice] = useState(0)
   const [totalPayments, setTotalPayments] = useState(0)
 
@@ -144,6 +147,49 @@ export const PaymentsTable = () => {
     );
   }, [])
 
+  // --- NEW LOGIC: Calculate Totals and Splits (Annual, Omri, Mariana) ---
+  const schoolsTotal = useMemo(() => {
+    const isYearMatch = (rowYear) => !selectedYear || selectedYear === "הכל" || rowYear === selectedYear;
+
+    // 1. Expected Income (Global only - Programs don't have issuer)
+    const totalExpected = ProgramsData
+      .filter(p => isYearMatch(p.Year))
+      .reduce((sum, p) => sum + ((p.PaidLessonNumbers || 0) * (p.PricingPerPaidLesson || 0) + (p.AdditionalPayments || 0)), 0);
+
+    // Helper to sum Paid Payments
+    const sumPaid = (issuerName: string | null) => PaymentsData
+      .filter(p => isYearMatch(p.Year))
+      .filter(p => issuerName ? p.Issuer === issuerName : true)
+      .reduce((sum, p) => sum + (p.Amount || 0), 0);
+
+    // Helper to sum Pending Payments
+    const sumPending = (issuerName: string | null) => pendingPaymentsData
+      .filter(p => isYearMatch(p.Year))
+      .filter(p => issuerName ? p.Issuer === issuerName : true)
+      .reduce((sum, p) => sum + (p.Amount || 0), 0);
+
+    const annualPaid = sumPaid(null);
+    
+    return {
+      annual: {
+        expected: totalExpected,
+        paid: annualPaid,
+        pending: sumPending(null),
+        remaining: totalExpected - annualPaid
+      },
+      omri: {
+        paid: sumPaid("עמרי"),
+        pending: sumPending("עמרי")
+      },
+      mariana: {
+        paid: sumPaid("מריאנה"),
+        pending: sumPending("מריאנה")
+      }
+    };
+  }, [ProgramsData, PaymentsData, pendingPaymentsData, selectedYear]);
+  // --------------------------------------------------------------------
+
+
   // --- DATA FETCHING ---
   useEffect(() => {
     const fetchData = async () => {
@@ -158,7 +204,7 @@ export const PaymentsTable = () => {
           setSchoolsData(AllSchoolsWithPrograms)
           setSelectedSchools(AllSchoolsWithPrograms)
           setContactsData(schoolsContacts)
-          setPaymentsData(Payments)
+          setPaymentsData(Payments) // Initial load of ALL payments
           setPendingPaymentsData(PendingPayments)
           setYearOptions(formattedOptions);
           setSelectedYearOption(initialSelectedOption || { label: "הכל", value: undefined });
@@ -176,7 +222,7 @@ export const PaymentsTable = () => {
             setSchoolsData(AllSchoolsWithPrograms)
             setSelectedSchools(AllSchoolsWithPrograms)
             setContactsData(contacts)
-            setPaymentsData(paymentsData)
+            setPaymentsData(paymentsData) // Initial load of ALL payments
             setPendingPaymentsData(pendingPaymentsData)
             setYearOptions(formattedOptions);
             setSelectedYearOption(initialSelectedOption || { label: "הכל", value: undefined });
@@ -225,15 +271,13 @@ export const PaymentsTable = () => {
     const onSelectSchoolStorage = () => {
       if (selectedSchool) {
         getFromStorageWithKey(selectedSchool.Schoolid).then(({ Payments, PendingPayments }: DataType) => {
-          if (Payments) setPaymentsData(Payments)
-          if (PendingPayments) setPendingPaymentsData(PendingPayments)
+           if (PendingPayments) setPendingPaymentsData(PendingPayments)
         })
       }
     }
     onSelectSchoolStorage()
   }, [selectedSchool])
 
-  // --- UPDATED: Filtering Logic with Year Check ---
   useEffect(() => {
     const filterPayments = () => {
       if (!selectedPrograms || selectedPrograms.length === 0) {
@@ -244,25 +288,22 @@ export const PaymentsTable = () => {
       
       const programs = selectedPrograms.map(program => program.ProgramName)
       
-      // Helper function to check if year matches (or "All" is selected)
       const isYearMatch = (rowYear) => {
           if (!selectedYear || selectedYear === "הכל") return true;
           return rowYear === selectedYear;
       };
 
-      // 1. Filter Payments
       const filteredPayments = PaymentsData.filter(payment => 
           programs.includes(payment.ProgramName) && 
           payment.SchoolName === selectedSchool?.SchoolName &&
-          isYearMatch(payment.Year) // <-- Added Year Check
+          isYearMatch(payment.Year) 
       )
 
-      // 2. Filter Pending Payments (Strict Filter)
       const filteredPendingPayments = pendingPaymentsData.filter(payment => {
           const relatedProgram = selectedPrograms.find(p => p.ProgramName === payment.ProgramName);
           return relatedProgram && 
                  relatedProgram.Schoolid === selectedSchool?.Schoolid &&
-                 isYearMatch(payment.Year); // <-- Added Year Check
+                 isYearMatch(payment.Year); 
       });
 
       setSelectedPayments(filteredPayments)
@@ -283,7 +324,7 @@ export const PaymentsTable = () => {
       })
     }
     filterPayments()
-  }, [selectedPrograms, PaymentsData, pendingPaymentsData, selectedSchool, selectedYear]) // Added selectedYear dependency
+  }, [selectedPrograms, PaymentsData, pendingPaymentsData, selectedSchool, selectedYear])
 
   const filterContactsBySchool = useCallback((schoolId: number) => {
     const filteredContacts = contactsData.filter(contact => contact.Schoolid == schoolId);
@@ -322,11 +363,10 @@ export const PaymentsTable = () => {
     const selectedNodes = pendingPaymentsGridRef.current.api.getSelectedNodes();
     if (!selectedNodes) return
     const selectedRow = selectedNodes[0].data;
-    // Ensure we copy the Year to the new Payment record
     const newRow: Payments = {
       Objectid: undefined, Id: PaymentsRowCount.current + 1, Programid: selectedRow.Programid,
       Issuer: selectedRow.Issuer, SchoolName: selectedSchool.SchoolName, ProgramName: selectedRow.ProgramName, 
-      Amount: selectedRow.Amount, Year: selectedRow.Year // <-- Copy Year
+      Amount: selectedRow.Amount, Year: selectedRow.Year 
     }
     addPaymentsRow(newRow)
     setPaymentsData((prevRowData) => {
@@ -403,7 +443,6 @@ export const PaymentsTable = () => {
       .map((value: any, index: any) => {
         const idx = contactsModel[0].indexOf(value);
         
-        // --- WHATSAPP LINK ---
         if (value === "FirstName") {
             return {
               field: value,
@@ -424,7 +463,6 @@ export const PaymentsTable = () => {
               }
             };
         }
-        // ---------------------
 
         if (value === "Role") {
           return {
@@ -551,11 +589,10 @@ export const PaymentsTable = () => {
   const onPaymentsAddRowToolBarClick = useCallback(() => {
     const rowCount = PaymentsData.length
     if (!selectedSchool) { setDialogMessage("!אנא בחר בית ספר"); setDialogType("error"); setDialogOpen(true); return; }
-    // Initialize Year with selectedYear
     const paymentsRow: any = { 
         Objectid: undefined, Id: rowCount + 1, SchoolName: selectedSchool.SchoolName, 
         Amount: 0, ProgramName: selectedPrograms[0].ProgramName,
-        Year: selectedYear // <-- Default to current selected year
+        Year: selectedYear 
     }
     addPaymentsRow(paymentsRow);
     setPaymentsData((prevData) => { const updated = [...prevData, paymentsRow]; updateStorage({ Payments: updated }); return updated; });
@@ -564,11 +601,10 @@ export const PaymentsTable = () => {
   const onPendingPaymentsAddRowToolBarClick = useCallback(() => {
     if (!selectedSchool) { setDialogMessage("נא בחר בית ספר!"); setDialogType("error"); setDialogOpen(true); return; }
     const rowCount = pendingPaymentsData.length
-    // Initialize Year with selectedYear
     const pendingPaymentsRow: PendingPayments = { 
         Objectid: undefined, Programid: selectedPrograms[0].Programid, Id: rowCount + 1, 
         Amount: 0, ProgramName: selectedPrograms[0].ProgramName, Issuer: "", Date: undefined, CheckDate: undefined,
-        Year: selectedYear // <-- Default to current selected year
+        Year: selectedYear 
     }
     addPendingPaymentsRow(pendingPaymentsRow);
     setPendingPaymentsData((prevData) => { const updated = [...prevData, pendingPaymentsRow]; updateStorage({ PendingPayments: updated }); return updated; });
@@ -612,12 +648,31 @@ export const PaymentsTable = () => {
             <Col lg={{ order: 'last' }} className="text-right" ><h3 className={theme === "dark-theme" ? "text-white" : "text-black"}> שנה </h3></Col>
             <Col className="text-right"><Select options={yearOptions} value={selectedYearOption} placeholder="..בחר שנה" onChange={handleYearChange} className="text-end" menuPortalTarget={typeof document !== 'undefined' ? document.body : null} /></Col>
           </Row>
+          
           <Row className="text-right" >
-            <h3 className={theme === "dark-theme" ? "text-white" : "text-black"}>בתי ספר</h3>
+            {/* School Header & Filter */}
+            <div className="flex flex-row-reverse items-center justify-between mb-2">
+               <h3 className={`mb-0 ${theme === "dark-theme" ? "text-white" : "text-black"}`}>בתי ספר</h3>
+               <input
+                 type="text"
+                 placeholder="חפש בית ספר..."
+                 value={schoolFilterText}
+                 onChange={(e) => setSchoolFilterText(e.target.value)}
+                 className={`form-control form-control-sm w-[150px] text-end ${theme === "dark-theme" ? "bg-[#2b3945] text-white border-gray-600 placeholder-gray-400" : ""}`}
+               />
+            </div>
+
             <Suspense>
               <div id="grid-5" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size "}>
                 <AgGridReact
-                  noRowsOverlayComponent={CustomNoRowsOverlay} ref={schoolsGridRef} rowHeight={25} rowData={selectedSchools} columnDefs={schoolsColDefs} defaultColDef={defaultColDef} enableRtl={true}
+                  noRowsOverlayComponent={CustomNoRowsOverlay} 
+                  ref={schoolsGridRef} 
+                  rowHeight={25} 
+                  rowData={selectedSchools} 
+                  columnDefs={schoolsColDefs} 
+                  defaultColDef={defaultColDef} 
+                  enableRtl={true}
+                  quickFilterText={schoolFilterText}
                   onGridReady={onSchoolsGridReady}
                   onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
                   onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_schools')}
@@ -625,6 +680,67 @@ export const PaymentsTable = () => {
                 />
               </div>
             </Suspense>
+
+            {/* --- NEW SUMMARY TABLE (Centered Headers) --- */}
+            <div className={`mt-3 p-2 rounded shadow-sm ${theme === "dark-theme" ? "bg-[#1f2936] border border-gray-700 text-white" : "bg-white border border-gray-200 text-black"}`} dir="rtl">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-500/30 text-sm opacity-80">
+                    <th className="pb-2 font-bold w-1/4 text-center">מריאנה</th> {/* Added text-center */}
+                    <th className="pb-2 font-bold w-1/4 border-r border-gray-500/20 pr-2 text-center">עמרי</th> {/* Added text-center */}
+                    <th className="pb-2 font-bold w-1/2 border-r border-gray-500/20 pr-2 text-center"> {/* Added text-center */}
+                      סיכום שנתי{' '}
+                      <span style={{ color: '#007bff' }}>
+                        {selectedYear && selectedYear !== "הכל" ? selectedYear : ""}
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="text-sm">
+                  {/* Row 1: Expected */}
+                  <tr>
+                    <td className="py-1 text-gray-500">-</td>
+                    <td className="py-1 border-r border-gray-500/20 pr-2 text-gray-500">-</td>
+                    <td className="py-1 border-r border-gray-500/20 pr-2 flex justify-between">
+                       <span>צפי הכנסות:</span>
+                       <span className="font-bold">{schoolsTotal.annual.expected.toLocaleString()} ₪</span>
+                    </td>
+                  </tr>
+                  
+                  {/* Row 2: Paid */}
+                  <tr>
+                    <td className="py-1 text-green-500 font-bold">{schoolsTotal.mariana.paid.toLocaleString()} ₪</td>
+                    <td className="py-1 border-r border-gray-500/20 pr-2 text-green-500 font-bold">{schoolsTotal.omri.paid.toLocaleString()} ₪</td>
+                    <td className="py-1 border-r border-gray-500/20 pr-2 text-green-500 flex justify-between">
+                       <span>שולם בפועל:</span>
+                       <span className="font-bold">{schoolsTotal.annual.paid.toLocaleString()} ₪</span>
+                    </td>
+                  </tr>
+
+                  {/* Row 3: Pending */}
+                  <tr>
+                    <td className="py-1 text-yellow-600 dark:text-yellow-400 font-bold">{schoolsTotal.mariana.pending.toLocaleString()} ₪</td>
+                    <td className="py-1 border-r border-gray-500/20 pr-2 text-yellow-600 dark:text-yellow-400 font-bold">{schoolsTotal.omri.pending.toLocaleString()} ₪</td>
+                    <td className="py-1 border-r border-gray-500/20 pr-2 text-yellow-600 dark:text-yellow-400 flex justify-between">
+                       <span>תשלומים בדרך:</span>
+                       <span className="font-bold">{schoolsTotal.annual.pending.toLocaleString()} ₪</span>
+                    </td>
+                  </tr>
+
+                  {/* Row 4: Remaining */}
+                  <tr className="border-t border-gray-500/30">
+                     <td className="py-1 pt-2 text-gray-500">-</td>
+                     <td className="py-1 pt-2 border-r border-gray-500/20 pr-2 text-gray-500">-</td>
+                     <td className={`py-1 pt-2 border-r border-gray-500/20 pr-2 flex justify-between font-bold ${schoolsTotal.annual.remaining > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                       <span>יתרה לגבייה:</span>
+                       <span>{schoolsTotal.annual.remaining.toLocaleString()} ₪</span>
+                     </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            {/* ------------------------------------- */}
+
           </Row>
         </Col>
 
@@ -732,7 +848,6 @@ export const PaymentsTable = () => {
                     <h5 className={theme === "dark-theme" ? "text-white " : "text-black"}>{`${totalPrice - totalPayments}:נותר לתשלום`}</h5>
                 </div>
                 
-                {/* Changed: Always show the wrapper, disable input if no school selected */}
                 <div className={`w-100 ${theme === "dark-theme" ? "bg-[#1f2936]" : "bg-white"}`}>
                   <h5 className="text-right">הערות</h5>
                   <Form.Control
