@@ -1,20 +1,17 @@
 "use client"
-import React, { createContext, Suspense, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import AddNamesForm from '../../components/AddNamesForm/AddNamesForm';
-import Select from 'react-select'
-// import { getYears } from '@/db/generalrequests';
-import { YearContext, YearProvider, useYear } from '@/context/YearContext'; // Import the provider and hook
-import { getAllCities, getAllDistricts, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getAllYears, getEducationStages, getOrders, getProductTypes, getRoles, getYears } from '@/db/generalrequests';
+import Select, { StylesConfig } from 'react-select'
+import { YearContext } from '@/context/YearContext';
+import { getAllCities, getAllDistricts, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getAllYears, getEducationStages, getOrders, getProductTypes, getRoles } from '@/db/generalrequests';
 import { DataType, getFromStorage, updateStorage } from '@/components/SettingsPage/Storage/Storage/SettingsDataStorage';
 import { Areas, Cities, Distances, EducationStage, ProductTypes, ReligionSector, Role, SchoolTypes, Years, Orders, StatusPrograms, StatusContacts, StatusGuides, StatusSchools } from '@prisma/client';
 import { CustomContext } from './context';
 import Container from 'react-bootstrap/esm/Container';
-import AsyncSelect from 'react-select/async';
 import { SelectNewCities } from '@/components/SettingsPage/components/SelectNewCities';
 import { getAllDistances } from '@/db/instructorsrequest';
 import { SelectDeleteCities } from '@/components/SettingsPage/components/SelectDeleteCities';
-import { StatusContext, useStatus } from '@/context/StatusContext';
-import { Col, Row } from 'react-bootstrap';
+import { StatusContext } from '@/context/StatusContext';
 
 type OptionsPage = {
   cities: false;
@@ -32,8 +29,74 @@ type OptionsPage = {
   orders: false;
 };
 type OptionsNamed = keyof OptionsPage
+
+// --- עיצוב Select מוקטן וקומפקטי ---
+const purpleSelectStyles: StylesConfig = {
+    control: (base, state) => ({
+        ...base,
+        backgroundColor: '#f5f3ff', 
+        borderColor: '#ddd6fe',
+        boxShadow: 'none',
+        borderRadius: '0.5rem',
+        minHeight: '36px',      
+        height: '36px',
+        width: '100%', 
+        color: '#5b21b6',
+        fontSize: '0.875rem',   
+        transition: 'all 300ms',
+        '&:hover': { borderColor: '#8b5cf6', backgroundColor: '#ede9fe' }
+    }),
+    valueContainer: (base) => ({
+        ...base,
+        padding: '0 8px',
+        height: '36px',
+    }),
+    input: (base) => ({
+        ...base,
+        margin: 0,
+        padding: 0,
+    }),
+    menu: (provided) => ({
+            ...provided,
+            zIndex: 9999,
+            borderRadius: '0.5rem',
+            overflow: 'hidden',
+            backgroundColor: '#f5f3ff',
+            border: '1px solid #ddd6fe',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+    }),
+    menuPortal: (base) => ({ 
+        ...base, 
+        zIndex: 9999 
+    }),
+    option: (base, state) => ({
+        ...base,
+        backgroundColor: state.isSelected ? '#8b5cf6' : (state.isFocused ? '#ddd6fe' : '#f5f3ff'),
+        color: state.isSelected ? 'white' : '#5b21b6',
+        cursor: 'pointer',
+        padding: '6px 10px',
+        fontSize: '0.875rem',
+    }),
+    singleValue: (base) => ({ ...base, color: '#5b21b6', fontWeight: '600' }),
+    placeholder: (base) => ({ ...base, color: '#a78bfa' }),
+    dropdownIndicator: (base) => ({ ...base, color: '#8b5cf6', padding: '4px' }),
+    indicatorSeparator: (base) => ({ ...base, backgroundColor: '#ddd6fe', marginTop: '6px', marginBottom: '6px' }),
+};
+
+// --- משתני עיצוב לכפתורי הטורקיז ---
+const turquoiseTheme = {
+  bg: 'bg-teal-50',            
+  text: 'text-teal-900',       
+  border: 'border-teal-200',   
+  hover: 'hover:bg-teal-100',  
+  active: 'bg-teal-100',       
+  activeBorder: 'border-teal-400', 
+  formBg: 'bg-teal-50/50'      
+};
+
 const SettingsPage = () => {
 
+  // --- States ---
   const [Roles, setRoles] = useState<Role[]>();
   const [Years, setYears] = useState<Years[]>();
   const [ProductTypes, setProductTypes] = useState<ProductTypes[]>();
@@ -59,7 +122,6 @@ const SettingsPage = () => {
 
   const [formUpdate, setFormUpdate] = useState(false);
 
-
   const [showForms, setShowForms] = useState<OptionsPage>({
     cities: false,
     areas: false,
@@ -76,6 +138,7 @@ const SettingsPage = () => {
     orders: false
   });
 
+  // --- Data Fetching ---
   useEffect(() => {
     const getData = async () => {
       getFromStorage().then(({ Role, Years, ProductTypes, SchoolTypes, Stages, Religion, Areas, Cities, SchoolStatuses, ProgramsStatuses, ContactsStatuses, GuidesStatuses, Distances, Orders }: DataType) => {
@@ -119,473 +182,225 @@ const SettingsPage = () => {
                 SchoolStatuses: StatusSchools, ProgramsStatuses: StatusPrograms, GuidesStatuses: StatusGuides, ContactsStatuses: StatusContacts, Distances: Distances, Orders: Orders
               })
             })
-
         }
-
-
       })
-
-
-
     }
     getData().then((res) => console.log('finished loading data'))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
 
   useEffect(() => {
     const fetchData = async () => {
       getFromStorage().then(({ Years, ProgramsStatuses }: DataType) => {
-        // fetch from storage
         if (Years && ProgramStatuses) {
-
           setYears(Years);
           setProgramStatuses(ProgramStatuses)
 
-          const yearOptions = Years.map(year => ({
-            label: year.YearName,
-            value: year.YearName,
-          }));
+          const yearOptions = Years.map(year => ({ label: year.YearName, value: year.YearName }));
           yearOptions.push({ label: "הכל", value: undefined });
           setYearOptions(yearOptions);
-
           const initialSelectedYearOption = yearOptions.find(option => option.value === selectedYear) || { label: "הכל", value: undefined };
           setSelectedYearOption(initialSelectedYearOption);
 
-          const statusOptions = ProgramsStatuses.map(status => ({
-            label: status.StatusName,
-            value: status.StatusName,
-          }));
+          const statusOptions = ProgramsStatuses.map(status => ({ label: status.StatusName, value: status.StatusName }));
           statusOptions.push({ label: "הכל", value: undefined });
           setStatusOptions(statusOptions);
-
           const initialSelectedStatusOption = statusOptions.find(option => option.value === defaultStatus) || { label: "הכל", value: undefined };
           setSelectedStatusOption(initialSelectedStatusOption);
-
-
-          console.log("Years: ", Years);
-          console.log("Statuses: ", ProgramsStatuses);
 
         } else {
           Promise.all([getAllYears(), getAllStatuses("Programs")]).then(([Years, Statuses]) => {
             setYears(Years);
             setProgramStatuses(Statuses)
 
-            // Handle Year Options
-            const yearOptions = Years.map(year => ({
-              label: year.YearName,
-              value: year.YearName,
-            }));
+            const yearOptions = Years.map(year => ({ label: year.YearName, value: year.YearName }));
             yearOptions.push({ label: "הכל", value: undefined });
             setYearOptions(yearOptions);
-
             const initialSelectedYearOption = yearOptions.find(option => option.value === selectedYear) || { label: "הכל", value: undefined };
             setSelectedYearOption(initialSelectedYearOption);
 
-            const statusOptions = Statuses.map(status => ({
-              label: status.StatusName,
-              value: status.StatusName,
-            }));
+            const statusOptions = Statuses.map(status => ({ label: status.StatusName, value: status.StatusName }));
             statusOptions.push({ label: "הכל", value: undefined });
             setStatusOptions(statusOptions);
-
             const initialSelectedStatusOption = statusOptions.find(option => option.value === defaultStatus) || { label: "הכל", value: undefined };
             setSelectedStatusOption(initialSelectedStatusOption);
 
-            console.log("Years: ", Years);
-            console.log("Statuses: ", Statuses);
-
-            // Update storage after fetching data
             updateStorage({ Years: Years, ProgramsStatuses: Statuses });
-
           })
         }
       })
-
     }
-
-
     fetchData();
-
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
   const toggleForm = (formName: OptionsNamed) => {
-    setShowForms((prev) => ({
-      ...prev,
-      [formName]: !prev[formName],
-    }));
+    setShowForms((prev) => ({ ...prev, [formName]: !prev[formName] }));
   };
-
-
-
-
 
   const handleYearChange = (selectedOption) => {
-
-    changeYear(selectedOption.value); // Update the selected selectedYear
+    changeYear(selectedOption.value);
     setSelectedYearOption(selectedOption)
-
   };
-  const handleStatusChange = (selectedOption) => {
-    changeStatus(selectedOption.value); // Update the selected status.
-    setSelectedStatusOption(selectedOption)
 
+  const handleStatusChange = (selectedOption) => {
+    changeStatus(selectedOption.value);
+    setSelectedStatusOption(selectedOption)
   };
 
   const resetSettings = () => {
-    setSelectedYearOption({ label: "הכל", value: undefined });  // Reset selected option
-    changeYear(undefined);        // Reset selected year in context if needed
+    setSelectedYearOption({ label: "הכל", value: undefined });
+    changeYear(undefined);
     changeStatus(undefined)
     setSelectedStatusOption({ label: "הכל", value: undefined });
     closeAllForms();
-
   };
 
   const closeAllForms = () => {
-
     Object.keys(showForms).forEach((formName: OptionsNamed) => {
-      if (showForms[formName]) {
-        toggleForm(formName);
-      }
+      if (showForms[formName]) toggleForm(formName);
     });
   };
 
-  // Find the current selected year option object
-  // const selectedYearOption = yearOptions.find(option => option.value === selectedYear);
+  const settingsButtons = [
+    { key: 'cities', label: 'ערים', component: <><SelectNewCities Cities={Cities} Distances={Distances} setCities={setCities} /><SelectDeleteCities Cities={Cities} Distances={Distances} setCities={setCities} /></> },
+    { key: 'areas', label: 'אזורים', formProps: { collectionName: "Areas", idFieldName: "Areaid", nameFieldName: "AreaName", placeHolder: 'הוסף אזור' } },
+    { key: 'religionSectors', label: 'מגזרים', formProps: { collectionName: "ReligionSector", idFieldName: "Religionid", nameFieldName: "ReligionName", placeHolder: 'הוסף מגזר' } },
+    { key: 'educationStages', label: 'שלבי חינוך', formProps: { collectionName: "EducationStage", idFieldName: "StageId", nameFieldName: "StageName", placeHolder: 'הוסף שלב חינוך' } },
+    { key: 'schoolTypes', label: 'סוגי בית ספר', formProps: { collectionName: "SchoolTypes", idFieldName: "TypeId", nameFieldName: "TypeName", placeHolder: 'הוסף סוג ב"ס' } },
+    { key: 'ContactStatuses', label: 'סטטוס א.קשר', formProps: { collectionName: "StatusContacts", idFieldName: "StatusId", nameFieldName: "StatusName", placeHolder: 'הוסף סטטוס' } },
+    { key: 'GuideStatuses', label: 'סטטוס מדריכים', formProps: { collectionName: "StatusGuides", idFieldName: "StatusId", nameFieldName: "StatusName", placeHolder: 'הוסף סטטוס' } },
+    { key: 'ProgramStatuses', label: 'סטטוס תוכניות', formProps: { collectionName: "StatusPrograms", idFieldName: "StatusId", nameFieldName: "StatusName", placeHolder: 'הוסף סטטוס' } },
+    { key: 'SchoolStatuses', label: 'סטטוס בתי ספר', formProps: { collectionName: "StatusSchools", idFieldName: "StatusId", nameFieldName: "StatusName", placeHolder: 'הוסף סטטוס' } },
+    { key: 'products', label: 'מוצרים', formProps: { collectionName: "ProductTypes", idFieldName: "ProductId", nameFieldName: "ProductName", placeHolder: 'הוסף מוצר' } },
+    { key: 'years', label: 'שנים', formProps: { collectionName: "Years", idFieldName: "YearId", nameFieldName: "YearName", placeHolder: 'הוסף שנה' } },
+    { key: 'roles', label: 'תפקידים', formProps: { collectionName: "Role", idFieldName: "RoleId", nameFieldName: "RoleName", placeHolder: 'הוסף תפקיד' } },
+    { key: 'orders', label: 'הזמנות', formProps: { collectionName: "Orders", idFieldName: "OrderId", nameFieldName: "OrderName", placeHolder: 'הוסף הזמנה' } },
+  ];
 
   return (
     <CustomContext.Provider
       value={{
-        Roles,
-        Years,
-        ProductTypes,
-        Types,
-        Stages,
-        Religion,
-        Areas,
-        Cities,
-        SchoolStatuses,
-        ProgramStatuses,
-        ContactsStatuses,
-        GuidesStatuses,
-        Orders,
-        Distances,
-        setRoles,
-        setYears,
-        setProductTypes,
-        setTypes,
-        setStages,
-        setReligion,
-        setAreas,
-        setCities,
-        setSchoolStatuses,
-        setProgramStatuses,
-        setContactsStatuses,
-        setGuidesStatuses,
-        setOrders,
-        setDistances
+        Roles, Years, ProductTypes, Types, Stages, Religion, Areas, Cities,
+        SchoolStatuses, ProgramStatuses, ContactsStatuses, GuidesStatuses, Orders, Distances,
+        setRoles, setYears, setProductTypes, setTypes, setStages, setReligion, setAreas, setCities,
+        setSchoolStatuses, setProgramStatuses, setContactsStatuses, setGuidesStatuses, setOrders, setDistances
       }}
     >
-      <Container fluid>
+      <div className="bg-slate-50 min-h-screen p-3" dir="rtl">
+        <Container fluid>
 
+          <header className="mb-6">
+             {/* כותרת מוגדלת משמעותית - text-3xl */}
+             <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-l from-violet-600 to-teal-600 tracking-tight drop-shadow-sm pb-1">
+                הגדרות מערכת
+             </h1>
+          </header>
 
+          {/* כרטיסייה 1 */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-3 relative z-20">
+            {/* כותרת מוגדלת - text-xl */}
+            <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 justify-start">
+              <span className="w-1.5 h-6 bg-violet-400 rounded-full"></span>
+              הגדרות ברירת מחדל
+            </h2>
 
-        <Row >
-
-          <Col lg={{ order: 'last', span: 1, offset: 11 }}>
-
-
-            <div> שנה ברירת מחדל בתוכניות</div>
-
-
-            <Select
-              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-              styles={{
-                menu: (provided) => ({
-                  ...provided,
-                  zIndex: 1, // Set your desired z-index
-                }),
-              }}
-              options={yearOptions}
-              value={selectedYearOption}
-              placeholder="בחר שנת ברירת מחדל.."
-              onChange={handleYearChange}
-            />
-
-
-          </Col>
-        </Row>
-        <Row>
-          <Col lg={{ order: 'last', offset: '11', span: 1 }}>
-            <div> סטטוס ברירת מחדל בתוכניות ושיבוצים</div>
-            <Select
-              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-              styles={{
-                menu: (provided) => ({
-                  ...provided,
-                  zIndex: 1, // Set your desired z-index
-                }),
-              }}
-              options={statusOptions}
-              value={selectedStatusOption}
-              placeholder="בחר סטטוס ברירת מחדל..."
-              onChange={handleStatusChange}
-            />
-
-          </Col>
-        </Row>
-        <Row>
-          <Col lg={{ order: 'first', span: 1, offset: 11 }} >
-
-            <button className="px-3 py-2 mr-2 bg-green-500 hover:bg-[#45a049] text-white border-none rounded cursor-pointer" onClick={resetSettings}>איפוס הגדרות</button>
-          </Col>
-        </Row>
-
-        <Row>
-          <Col lg={{ order: 'last' }}>
-            <div className="rtl text-bold text-lg float-right" >:עדכון מסד הנתונים</div>
-          </Col>
-        </Row>
-
-        <Row className="flex-row-reverse" >
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('cities')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.cities ? 'סגור' : 'ערים'}
-            </button>
-            {showForms.cities && (
-              <div>
-                <SelectNewCities Cities={Cities} Distances={Distances} setCities={setCities} />
-                <SelectDeleteCities Cities={Cities} Distances={Distances} setCities={setCities} />
+            <div className="flex flex-wrap items-end gap-4">
+              
+              <div className="w-48"> 
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  שנה ברירת מחדל
+                </label>
+                <Select
+                  menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+                  styles={purpleSelectStyles}
+                  options={yearOptions}
+                  value={selectedYearOption}
+                  placeholder="בחר שנה..."
+                  onChange={handleYearChange}
+                />
               </div>
-            )
 
-            }
+              <div className="w-48">
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  סטטוס ברירת מחדל
+                </label>
+                <Select
+                  menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+                  styles={purpleSelectStyles}
+                  options={statusOptions}
+                  value={selectedStatusOption}
+                  placeholder="בחר סטטוס..."
+                  onChange={handleStatusChange}
+                />
+              </div>
 
-          </Col>
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('areas')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.areas ? 'סגור' : 'אזורים'}
-            </button>
+              <div className="w-32">
+                <button
+                  className="w-full bg-violet-100 text-violet-800 border border-violet-200 hover:bg-violet-200 font-bold py-1.5 px-3 rounded-lg text-xs transition-all duration-300 shadow-sm h-[36px]"
+                  onClick={resetSettings}
+                >
+                  איפוס
+                </button>
+              </div>
 
-            {showForms.areas && (
-              <AddNamesForm
-                collectionName="Areas"
-                idFieldName="Areaid"
-                nameFieldName="AreaName"
-                onClose={() => toggleForm('areas')}
-                placeHolder='הוסף אזור'
+            </div>
+          </div>
 
-              />
+          {/* כרטיסייה 2 */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 relative z-10">
+            {/* כותרת מוגדלת - text-xl */}
+            <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 justify-start">
+                <span className="w-1.5 h-6 bg-teal-400 rounded-full"></span>
+                עדכון וניהול טבלאות נתונים
+            </h2>
 
-            )}
-          </Col>
+            {/* מקסימום 4 עמודות */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
 
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('religionSectors')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.religionSectors ? 'סגור' : 'מגזרים'}
-            </button>
-            {showForms.religionSectors && (
-              <AddNamesForm
-                collectionName="ReligionSector"
-                idFieldName="Religionid"
-                nameFieldName="ReligionName"
-                onClose={() => toggleForm('religionSectors')}
-                placeHolder='הוסף מגזר'
-              />
-            )}
+              {settingsButtons.map((btn) => {
+                const isOpen = showForms[btn.key as OptionsNamed];
 
-          </Col>
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('educationStages')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.educationStages ? 'סגור' : 'שלבי חינוך'}
-            </button>
-            {showForms.educationStages && (
-              <AddNamesForm
-                collectionName="EducationStage"
-                idFieldName="StageId"
-                nameFieldName="StageName"
-                onClose={() => toggleForm('educationStages')}
-                placeHolder='הוסף שלב חינוך'
-              />
-            )}
-          </Col>
+                return (
+                  <div key={btn.key} className={`col-span-1 transition-all duration-300 ease-in-out`}>
 
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('schoolTypes')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.schoolTypes ? 'סגור' : 'סוגי בית ספר'}
-            </button>
-            {showForms.schoolTypes && (
-              <AddNamesForm
-                collectionName="SchoolTypes"
-                idFieldName="TypeId"
-                nameFieldName="TypeName"
-                onClose={() => toggleForm('schoolTypes')}
-                placeHolder='הוסף סוג ב"ס'
-              />
-            )}
-          </Col>
-        </Row>
+                    <button
+                      onClick={() => toggleForm(btn.key as OptionsNamed)}
+                      className={`w-full py-2 px-3 rounded-xl font-bold transition-all shadow-sm flex justify-between items-center border text-sm
+                        ${isOpen
+                          ? `${turquoiseTheme.active} ${turquoiseTheme.text} ${turquoiseTheme.activeBorder} shadow-md`
+                          : `${turquoiseTheme.bg} ${turquoiseTheme.text} ${turquoiseTheme.border} ${turquoiseTheme.hover} hover:shadow-md`
+                        }`}
+                    >
+                      <span className="truncate">{btn.label}</span>
+                      <span className={`text-xs transition-transform duration-300 ${isOpen ? 'rotate-180 opacity-100' : 'opacity-60'}`}>▼</span>
+                    </button>
 
+                    {isOpen && (
+                      <div className={`mt-2 ${turquoiseTheme.formBg} p-3 rounded-xl border ${turquoiseTheme.activeBorder} animate-fadeIn shadow-inner relative z-0`}>
+                        {btn.component ? btn.component : (
+                          <AddNamesForm
+                            collectionName={btn.formProps.collectionName}
+                            idFieldName={btn.formProps.idFieldName}
+                            nameFieldName={btn.formProps.nameFieldName}
+                            onClose={() => {
+                              toggleForm(btn.key as OptionsNamed);
+                              setFormUpdate((prev) => !prev);
+                            }}
+                            placeHolder={btn.formProps.placeHolder}
+                          />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
 
-        <Row>
-           <Col>
-           <div className="h-[20px]"/>
-         </Col>
-     </Row>
+            </div>
+          </div>
 
-        <Row className="flex-row-reverse">
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('ContactStatuses')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.ContactStatuses ? 'סגור' : 'סטטוס אנשי קשר'}
-            </button>
-            {showForms.ContactStatuses && (
-              <AddNamesForm
-                collectionName="StatusContacts"
-                idFieldName="StatusId"
-                nameFieldName="StatusName"
-                onClose={() => {
-
-                  toggleForm('ContactStatuses')
-                  setFormUpdate((prev) => !prev); // Update formUpdate to trigger useEffect again
-                }}
-                placeHolder='הוסף סטטוס'
-              />
-            )}
-          </Col>
-          <Col  lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('GuideStatuses')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.GuideStatuses ? 'סגור' : 'סטטוס מדריכים'}
-            </button>
-            {showForms.GuideStatuses && (
-              <AddNamesForm
-                collectionName="StatusGuides"
-                idFieldName="StatusId"
-                nameFieldName="StatusName"
-                onClose={() => {
-                  toggleForm('GuideStatuses')
-                  setFormUpdate((prev) => !prev); // Update formUpdate to trigger useEffect again
-                }}
-                placeHolder='הוסף סטטוס'
-              />
-            )}
-
-          </Col>
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('ProgramStatuses')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.ProgramStatuses ? 'סגור' : 'סטטוס תוכניות'}
-            </button>
-            {showForms.ProgramStatuses && (
-              <AddNamesForm
-                collectionName="StatusPrograms"
-                idFieldName="StatusId"
-                nameFieldName="StatusName"
-                onClose={() => {
-                  toggleForm('ProgramStatuses')
-                  setFormUpdate((prev) => !prev); // Update formUpdate to trigger useEffect again
-                }}
-                placeHolder='הוסף סטטוס'
-              />
-            )}
-
-          </Col>
-          <Col  lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('SchoolStatuses')} className="show-form-button hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.SchoolStatuses ? 'סגור' : 'סטטוס בתי ספר'}
-            </button>
-            {showForms.SchoolStatuses && (
-              <AddNamesForm
-                collectionName="StatusSchools"
-                idFieldName="StatusId"
-                nameFieldName="StatusName"
-                onClose={() => {
-                  toggleForm('SchoolStatuses')
-                  setFormUpdate((prev) => !prev); // Update formUpdate to trigger useEffect again
-                }}
-                placeHolder='הוסף סטטוס'
-              />
-            )}
-          </Col>
-          <Col  lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('products')} className="show-form-button z-0 relative hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.products ? 'סגור' : 'מוצרים'}
-            </button>
-            {showForms.products && (
-              <AddNamesForm
-                collectionName="ProductTypes"
-                idFieldName="ProductId"
-                nameFieldName="ProductName"
-                onClose={() => toggleForm('products')}
-                placeHolder='הוסף מוצר'
-              />
-            )}
-          </Col>
-          <Col  lg={{span:2,offset:0}}>
-            <button
-              onClick={() => toggleForm("years")}
-              className="show-form-button z-0 relative hover:bg-[#45a049] px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer"
-            >
-              {showForms.years ? "סגור" : "שנים"}
-            </button>
-            {showForms.years && (
-              <AddNamesForm
-                collectionName="Years"
-                idFieldName="YearId"
-                nameFieldName="YearName"
-                onClose={() => {
-                  toggleForm("years");
-                  setFormUpdate((prev) => !prev); // Update formUpdate to trigger useEffect again
-                }}
-                placeHolder="הוסף שנה"
-              />
-            )}
-          </Col>
-          </Row> 
-
-            <Row>
-           <Col>
-           <div className="h-[20px]"/>
-         </Col>
-     </Row>
-           <Row className="flex-row-reverse">
-          <Col  lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('roles')} className="show-form-button  hover:bg-[#45a049] z-0 relative px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.roles ? 'סגור' : 'תפקידים'}
-            </button>
-            {showForms.roles && (
-              <AddNamesForm
-                collectionName="Role"
-                idFieldName="RoleId"
-                nameFieldName="RoleName"
-                onClose={() => toggleForm('roles')}
-                placeHolder='הוסף תפקיד'
-              />
-            )}
-
-          </Col>
-          <Col lg={{span:2,offset:0}}>
-            <button onClick={() => toggleForm('orders')} className="show-form-button  hover:bg-[#45a049] z-0 relative px-3 py-2 mr-2 bg-green-500 text-white border-none rounded cursor-pointer">
-              {showForms.orders ? 'סגור' : 'הזמנות'}
-            </button>
-            {showForms.orders && (
-              <AddNamesForm
-                collectionName="Orders"
-                idFieldName="OrderId"
-                nameFieldName="OrderName"
-                onClose={() => toggleForm('orders')}
-                placeHolder='הוסף הזמנה'
-              />
-            )}
-          </Col>
-        </Row>
-
-      </Container>
+        </Container>
+      </div>
     </CustomContext.Provider>
   );
 };
-
-
 
 export default SettingsPage;
