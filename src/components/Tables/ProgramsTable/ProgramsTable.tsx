@@ -1,1335 +1,236 @@
 "use client";
-import { School, Guide, Program, SchoolsContact, Assigned_Guide, Profession, Cities, Areas, Years, ProductTypes, Orders, StatusPrograms, Guides_ToAssign, ColorCandidate } from "@prisma/client";
+import { School, Guide, Program, SchoolsContact, Assigned_Guide, Cities, Areas, Years, ProductTypes, Orders, StatusPrograms } from "@prisma/client";
 import { useState, useRef, useCallback, Suspense, useMemo, useEffect, useContext } from "react";
-import { AgGridReact, getInstance } from "ag-grid-react";
+import { AgGridReact } from "ag-grid-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 
-import {
-  CellValueChangedEvent,
-  CellEditingStartedEvent,
-  RowSelectedEvent,
-  SelectionChangedEvent,
-  SizeColumnsToContentStrategy,
-  ICellRendererParams,
-  CellEditingStoppedEvent,
-  GetRowIdParams,
-  ColDef,
-  CellKeyDownEvent,
-  IRowNode,
-} from "ag-grid-community";
+import { CellValueChangedEvent, ColDef, IRowNode } from "ag-grid-community";
+import { Button, Navbar, OverlayTrigger, Tooltip } from "react-bootstrap";
+import { FcAddColumn, FcAddRow, FcCancel, FcFullTrash } from "react-icons/fc";
+import { MdStopCircle } from "react-icons/md";
 
-import Spinner from "react-bootstrap/Spinner";
-import { Button, Navbar, OverlayTrigger } from "react-bootstrap";
-import Tooltip from "react-bootstrap/Tooltip";
-
-import Select from "react-select";
-
-import { FcAddColumn, FcAddRow, FcCancel } from "react-icons/fc";
-import { CustomMasterGrid } from ".././SchoolTable/Components/MasterGrid/CustomMasterGrid";
 import { CustomLinkDrive } from ".././GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
-import { getAllAssignedInstructors, getModelFields, getAllGuides, getAllProfessions, getAllCities, getAllDistricts, getYears, getProductTypes, getOrders, getAllStatuses } from "@/db/generalrequests";
-import { addProgramsRows, deleteProgramsCascading, deleteProgramsRows, getAssignedInstructores, getPrograms, updateProgramsColumn, } from "@/db/programsRequests";
-import { CustomMultiSelectCell } from ".././GeneralFiles/Select/CustomMultiSelectCellRenderer";
-import { CustomFilter } from ".././GeneralFiles/Filters/CustomFilter";
-import { getAllSchools } from "@/db/schoolrequests";
-import { CustomSelect } from ".././GeneralFiles/Select/CustomSelect";
-import { CustomDateCellEditor } from ".././GeneralFiles/Date/CustomDateCellEditor/CustomDateCellEditor";
-import { SchoolChoosing } from "../ProgramsTable/components/SchoolChoosing";
-import { ContactRepresentiveRef, RepresentiveComponent } from "../ProgramsTable/components/CustomRepresentive";
-import { ProgramLinkDetailsCellEditor } from "../ProgramsTable/components/CustomProgramLinkDetailsCellEditor";
-import { ProgramLinkDetailsCellRenderer, RefFunctions } from "../ProgramsTable/components/CustomProgramLinkDetailsCellRenderer";
-import { DayChooseEditor } from "../ProgramsTable/components/CustomDayChooseEditor";
-import { DayPlacementEditor } from "../ProgramsTable/components/CustomDayPlacementEditor";
-import { OtherComponentsObject } from "@/util/cache/cachetypes";
-import { ColumnManagementWindow } from "../../../components/ColumnManagementWindow"
-import { YearContext } from "@/context/YearContext";
-import { getAllContacts } from "@/db/contactsRequests";
-import AssignedGuidesColumn from "../ProgramsTable/components/AssignedGuidesColumn";
-import { getAllCandidates, getAllColorCandidates, getInfo } from "@/db/instructorsrequest";
+import { addProgramsRows, updateProgramsColumn } from "@/db/programsRequests";
+import { getFromStorage, DataType } from "./Storage/ProgramsDataStorage";
 import { ThemeContext } from "@/context/Theme/Theme";
-import { DataType, getFromStorage, updateStorage } from "./Storage/ProgramsDataStorage";
-import { AuthDriveStore } from "@/components/Auth/Storage/AuthDrivePrograms";
-
-import { getFromStorage as getFromStageAuth } from "@/components/Auth/Storage/AuthDrivePrograms";
-import { ProgramsStoreColumns } from "./Storage/ProgramsColumnsStorage";
-import { getFromStorage as getColumnStorage, updateStorage as updateColumnsStorage } from "./Storage/ProgramsColumnsStorage";
-import YearFilter, { FilterType } from "./components/YearFilter";
+import { YearContext } from "@/context/YearContext";
 import { StatusContext } from "@/context/StatusContext";
+
+import { SchoolChoosing } from "./components/SchoolChoosing";
+import { RepresentiveComponent, ContactRepresentiveRef } from "./components/CustomRepresentive";
+import { ProgramLinkDetailsCellRenderer, RefFunctions } from "./components/CustomProgramLinkDetailsCellRenderer";
+import { ProgramLinkDetailsCellEditor } from "./components/CustomProgramLinkDetailsCellEditor";
+import AssignedGuidesColumn from "./components/AssignedGuidesColumn";
 import CustomSelectCellEditor from "@/components/CustomSelect/CustomSelectCellEditor";
+import YearFilter from "./components/YearFilter";
+import StatusFilter from "./components/StatusFilter";
 import Redirect from "@/components/Auth/Components/Redirect";
-import Programs from "@/app/plansPage/page";
-import StatusFilter, { FilterTypeStatus } from "./components/StatusFilter";
+import { ColumnManagementWindow } from "../../../components/ColumnManagementWindow";
 
-interface ProgramsTableProps {
-  SchoolIDs?: number[];
-}
-export default function ProgramsTable({ SchoolIDs }: ProgramsTableProps) {
+export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
   const AuthenticateActivate = useDrivePicker("Program");
-
-  const [FilterSchoolIDS, setFilterSchoolIDS] = useState(SchoolIDs)
-
-  const gridRef = useRef<AgGridReact>(null)
-  const [checkedAmount, setAmount]: any = useState(0);
-
+  const gridRef = useRef<AgGridReact>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  const [rowData, setRowData] = useState<any[]>([]);
+  const [colDefinition, setColDefs] = useState<any>(null);
+  const [colState, setColState] = useState<any>([]);
+  const [columnWindowOpen, setColumnWindowOpen] = useState(false);
   const [InTheMiddleOfAddingRows, SetInTheMiddleOfAddingRows] = useState(false);
 
-  // this is used for adding new rows. using ref to prevent re-render.
-  // dataRowCount is the current amount of rows in the database, rowCount is how many rows in the grid right now.
+  const { theme } = useContext(ThemeContext);
+  const { selectedYear } = useContext(YearContext);
+  const { defaultStatus } = useContext(StatusContext);
+
+  const [AllSchools, setAllSchools] = useState<any[]>([]);
+  const [AllContacts, setAllContacts] = useState<SchoolsContact[]>([]);
+
+  const maxIndex = useRef(0);
   const dataRowCount = useRef(0);
   const rowCount = useRef(0);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
 
-  // Row Data: The data to be displayed.
-  const [rowData, setRowData]: any = useState("");
+  const getFld = (obj: any, keys: string[]) => {
+    for (const k of keys) if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
+    return "";
+  };
 
-  // Column Definitions: Defines & controls grid columns.
-  const [colDefinition, setColDefs]: any = useState(null);
-  const [colState, setColState]: any = useState([])
-  const [columnWindowOpen, setColumnWindowOpen] = useState(false);
-  const { theme } = useContext(ThemeContext)
+  const handleAiSubmit = async () => {
+    if (!aiInput.trim()) return;
+    setAiLoading(true);
+    abortControllerRef.current = new AbortController();
 
-
-  const { selectedYear, changeYear } = useContext(YearContext)
-  // Optionally, log the selected year when it changes
-
-
-  const { defaultStatus, changeStatus } = useContext(StatusContext)
-
-  // this is used to update the column for schoolscontact.
-  const [AllSchools, setAllSchools] = useState<School[]>([])
-  const [AllContacts, setAllContacts] = useState<SchoolsContact[]>([])
-
-  // this is used to update the program details
-  const [AllPrograms, setAllPrograms] = useState<Program[]>()
-  // so 
-  const [isLoading, setLoading] = useState(false);
-  // this is used in deletions 
-  const [AllCandidates, setAllCandidates] = useState<Guides_ToAssign[]>([])
-  const [AllColorCandidates, setAllColorCandidates] = useState<ColorCandidate[]>([])
-  const [AllAssigned, setAllAssigned] = useState<Assigned_Guide[]>([])
-  // --- ADDED: State to hold all guides details for refreshing ---
-  const [AllGuides, setAllGuides] = useState<Guide[]>([]);
-
-
-  // this is for adding new rows. This is because we previously used ID for everything, this is a way
-  // to still keep deletion fast.
-  const maxIndex = useRef<number>(0)
-
-  useEffect(() => {
-    if (!(gridRef.current && gridRef.current.api)) { return }
-    getColumnStorage().then(({ colState }: ProgramsStoreColumns) => {
-      if (colState) {
-        setColState(colState)
-
-      }
-      else {
-        colState = gridRef.current.api.getColumnState();
-        setColState(colState)
-      }
-
-    })
-  }, [colDefinition]);
-
-  useEffect(() => {
-    if (colState.length > 0) {
-      if (gridRef.current && gridRef.current.api) {
-        gridRef.current.api.applyColumnState({
-          state: colState,
-          applyOrder: true,
-        });
-        colState.forEach(column => {
-          if (column.width) {
-            gridRef.current.api.setColumnWidth(column.colId, column.width);
-          }
-        });
-        updateColumnsStorage({ colState: colState })
-      }
-    }
-  }, [colState])
-
-  // --- תיקון: מנגנון רענון אוטומטי (Polling) ---
-  useEffect(() => {
-    const fetchGuidesData = () => {
-      Promise.all([getAllAssignedInstructors(), getAllGuides()]).then(([assigned_guides, guides]) => {
-         // עדכון ה-State יגרום לחישוב מחדש של העמודות
-         setAllAssigned(assigned_guides);
-         setAllGuides(guides);
+    try {
+      const res = await fetch('/api/ai-match', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: aiInput }),
+        signal: abortControllerRef.current.signal 
       });
-    };
 
-    // קריאה ראשונית + הפעלת טיימר
-    fetchGuidesData();
-    const intervalId = setInterval(fetchGuidesData, 4000); // רענון כל 4 שניות
-
-    return () => clearInterval(intervalId); // ניקוי ביציאה
-  }, []);
-
-  // --- תיקון: עדכון הגדרות העמודות ורענון הגריד ---
-  useEffect(() => {
-      if (AllAssigned.length > 0 && AllGuides.length > 0 && AllPrograms && AllSchools && AllContacts) {
-          getFromStorage().then(({ Tablemodel, Cities, ProgramsStatuses, Areas, Years, ProductTypes, Orders }: DataType) => {
-              if (Tablemodel) {
-                 let colDefs = GetDefaultDefinitions(
-                    Tablemodel, 
-                    AllSchools, 
-                    Cities.map((val) => val.CityName), 
-                    ProgramsStatuses.map((val) => val.StatusName), 
-                    Areas.map((val) => val.AreaName),
-                    Years.map((val) => val.YearName), 
-                    AllContacts, 
-                    AllAssigned, // הנתונים המעודכנים
-                    AllGuides,   // הנתונים המעודכנים
-                    ProductTypes.map((val) => val.ProductName), 
-                    Orders.map((val) => val.OrderName), 
-                    AllPrograms
-                );
-                setColDefs(colDefs);
-                
-                // רענון ויזואלי של התאים בטבלה
-                if (gridRef.current && gridRef.current.api) {
-                    gridRef.current.api.refreshCells({ force: true, columns: ['AssignedToProgram'] });
-                }
-              }
-          });
-      }
-  }, [AllAssigned, AllGuides]); 
-
-
-  const UpdateDefaultFilters = useCallback(() => {
-    if (gridRef && gridRef.current) {
-      if (selectedYear && selectedYear !== "הכל") {
-        gridRef.current.api.getColumnFilterInstance('Year').then((filterInstance) => {
-          let filter: FilterType = filterInstance as unknown as FilterType
-          let current_values = filter.getModel()?.values ?? undefined
-          if (current_values && !current_values.includes(selectedYear)) {
-            filter.setDefaultYear(selectedYear)
-            filter.setModel({ values: [...current_values, selectedYear] })
-          } else {
-            filter.setDefaultYear(selectedYear)
-            filter.setModel({ values: [selectedYear] })
-            filter.refresh()
-
-          }
-          gridRef.current.api.onFilterChanged();
-        })
-      } if (defaultStatus) {
-        gridRef.current.api.getColumnFilterInstance('Status').then(filterInstance => {
-          let filter_status: FilterTypeStatus = filterInstance as unknown as FilterTypeStatus
-          let current_values = filter_status.getModel()?.values ?? undefined
-          if (current_values && !current_values.includes(defaultStatus)) {
-            filter_status.setDefaultStatus(defaultStatus)
-            filter_status.setModel({ values: [...current_values, defaultStatus] })
-          } else {
-            filter_status.setDefaultStatus(defaultStatus)
-            filter_status.setModel({ values: [defaultStatus] })
-            filter_status.refresh()
-
-          }
-          gridRef.current.api.onFilterChanged();
-        })
-      }
-
-
-    }
-
-
-  }, [defaultStatus, selectedYear])
-
-
-  // --- תיקון חשוב: הסרת rowData מהתלויות כדי למנוע איפוס פילטר בעת הוספת שורה ---
-  useEffect(() => {
-
-    if (gridRef && gridRef.current && colDefinition) {
-      UpdateDefaultFilters()
-
-    }
-  }, [gridRef, colDefinition, UpdateDefaultFilters, selectedYear, defaultStatus])
-  // -----------------------------------------------------------------------------
-
-  const onColumnResized = useCallback((event) => {
-    if (event.finished) {
-      if (gridRef.current && gridRef.current.api) {
-        const newColState = gridRef.current.api.getColumnState();
-        setColState((prevColState) => {
-          if (JSON.stringify(prevColState) !== JSON.stringify(newColState)) {
-            return newColState;
-          }
-          return prevColState;
-        });
-      }
-    }
-  }, []);
-
-  const onColumnMoved = useCallback(() => {
-    if (gridRef.current && gridRef.current.api) {
-      const colState = gridRef.current.api.getColumnState();
-      setColState(colState);
-    }
-  }, []);
-
-  const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
-    const keyboardEvent = event.event as unknown as KeyboardEvent;
-    keyboardEvent.stopPropagation()
-    if (keyboardEvent.key === "Tab" || keyboardEvent.key === "Enter" || keyboardEvent.key === "ArrowLeft" || keyboardEvent.key === "ArrowRight") {
-      const currentNode = event.api.getDisplayedRowAtIndex(event.rowIndex);
-
-      const currentColumnIndex = event.api.getAllDisplayedColumns().findIndex(
-        col => col?.getColId() === event.column?.getColId()
-      );
-
-      let nextCell = null;
-      let prevCell = null
-      const displayedColumns = event.api.getAllDisplayedColumns();
-
-      const isColumnEditable = (colDef, node) => {
-        if (typeof colDef.editable === 'function') {
-          return colDef.editable(node);
-        }
-        return !!colDef.editable;
-      };
-
-      const triggerCellRenderer = (params, column) => {
-        const renderer = column.getColDef().cellRenderer;
-        if (renderer) {
-          params.api.refreshCells({
-            columns: [column],
-            force: true,
-          });
-        }
-      };
-
-      for (let i = currentColumnIndex + 1; i < displayedColumns.length; i++) {
-        const colDef = displayedColumns[i].getColDef();
-        if (isColumnEditable(colDef, currentNode) || colDef.cellRenderer) {
-          nextCell = { rowIndex: event.rowIndex, column: displayedColumns[i] };
-          break;
-        }
-      }
-
-      if (!nextCell && event.rowIndex + 1 < event.api.getDisplayedRowCount()) {
-        for (let i = 0; i < displayedColumns.length; i++) {
-          const colDef = displayedColumns[i].getColDef();
-          if (isColumnEditable(colDef, event.api.getDisplayedRowAtIndex(event.rowIndex + 1)) || colDef.cellRenderer) {
-            nextCell = { rowIndex: event.rowIndex + 1, column: displayedColumns[i] };
-            break;
-          }
-        }
-      }
-
-      if (nextCell && keyboardEvent.key !== "ArrowRight") {
-        event.api.stopEditing();
-        event.api.setFocusedCell(nextCell.rowIndex, nextCell.column);
-
-        const nextCellDef = nextCell.column.getColDef();
-        if (nextCellDef.cellRenderer) {
-          triggerCellRenderer(event, nextCell.column);
-        } else {
-          event.api.startEditingCell({
-            rowIndex: nextCell.rowIndex,
-            colKey: nextCell.column.getColId(),
-          });
-        }
-      } else {
-        event.api.stopEditing();
-        const displayedColumns = event.api.getAllDisplayedColumns();
-        const prevCol = displayedColumns[currentColumnIndex - 1]
-        event.api.setFocusedCell(event.rowIndex, prevCol.getColId());
-
-        const prevCellDef = prevCol.getColDef();
-        if (prevCellDef.cellRenderer) {
-          triggerCellRenderer(event, prevCell.column);
-        } else {
-          event.api.startEditingCell({
-            rowIndex: event.rowIndex,
-            colKey: prevCol.getColId(),
-          });
-        }
-      }
-      event.event.preventDefault();
-    }
-  }, []);
-
-  const onClearFilterButtonClick = useCallback(() => {
-    if (gridRef.current && gridRef.current.api) {
-      gridRef.current.api.setFilterModel(null);
-      gridRef.current.api.setQuickFilter("");
-    }
-    const filterInput = document.getElementById("filter-text-box") as HTMLInputElement;
-    if (filterInput) {
-      filterInput.value = "";
-    }
-  }, []);
-
-  const valueFormatterDate = useCallback((params) => {
-    if (!params.value) return '';
-    const date = new Date(params.value);
-    if (isNaN(date.getTime())) return '';
-    return date.toLocaleDateString('en-GB', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-  }, [])
-
-
-
-
-  const TotalValueGetter = useCallback((params) => params.data.FreeLessonNumbers + params.data.PaidLessonNumbers, [])
-  const FinalValueGetter = useCallback((params) => (params.data.PaidLessonNumbers * params.data.PricingPerPaidLesson) + params.data.AdditionalPayments, [])
-  const GetDefaultDefinitions = useCallback((model: any, Schools: any, cities: any, status: any, districts: any, years: any, contacts: any, assigned_guides: any, guides: any, products: any, orders: any, Programs: any) => {
-
-    var coldef = model[0]?.map((value: any, index: any) => {
-      if (value === "SchoolName") {
-        return {
-          field: "SchoolName",
-          headerName: "בית ספר",
-          // we are editing through cell renderer.
-          editable: false,
-          cellStyle: { padding: 0 }, // Remove padding in cell
-          cellRenderer: "SchoolChoosing",
-          cellRendererParams: {
-            AllSchools: Schools,
-          },
-          filter: "CustomFilter",
-        };
-      }
-      if (value === "EducationStage") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          editable: false,
-          cellEditor: "agTextCellEditor",
-          filter: "CustomFilter",
-        };
-      }
-      if (value === "Date") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "CustomDateCellEditor",
-          valueFormatter: valueFormatterDate,
-          filter: "CustomFilter",
-          // Removed cellDataType: 'date' to prevent conflicts
-          editable: true,
-          singleClickEdit: true,
-          // Robust Value Setter
-          valueSetter: (params) => {
-            // --- FIX: Added check for params.newValue === null
-            if (params.newValue || params.newValue === null) {
-                // Ensure value is set
-                params.data[value] = params.newValue;
-                return true;
-            }
-            return false;
-          }
-        }
-      }
-
-      if (value === "Programid") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          editable: false,
-          rowDrag: false,
-          checkboxSelection: true,
-          headerCheckboxSelection: true,
-          headerCheckboxSelectionFilteredOnly: true,
-          headerCheckboxSelectionCurrentPageOnly: true,
-          cellEditor: "agNumberCellEditor",
-          lockVisible: true,
-
-        };
-      }
-      if (value === "Status") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: CustomSelectCellEditor,
-          cellEditorParams: {
-            values: status // I am speed running... fix this later
-          },
-          editable: true,
-          filter: StatusFilter,
-          singleClickEdit: true
-        };
-      }
-      if (value === "Proposal") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellRenderer: "CustomLinkDrive",
-          cellRendererParams: "AuthenticateActivate",
-          cellEditor: "agTextCellEditor",
-          editable: true,
-          singleClickEdit: false,
-        };
-      }
-      if (value === "CityName") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: CustomSelectCellEditor,
-          cellEditorParams: {
-            values: cities // I am speed running... fix this later
-          },
-          filter: "CustomFilter",
-          editable: false,
-        };
-      }
-      if (value === "District") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: CustomSelectCellEditor,
-          cellEditorParams: {
-            values: districts
-          },
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-
-        };
-      }
-      if (value === "Days") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "CustomDayChooseEditor",
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true,
-          // --- FIX: Formatter to remove leading comma if it exists ---
-          valueFormatter: (params) => {
-            if (params.value && typeof params.value === 'string' && params.value.startsWith(',')) {
-                return params.value.substring(1);
-            }
-            return params.value;
-          }
-        };
-      }
-      if (value === "ChosenDay") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "CustomDayPlacementEditor",
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true,
-          // --- FIX: Formatter to remove leading comma if it exists ---
-          valueFormatter: (params) => {
-            if (params.value && typeof params.value === 'string' && params.value.startsWith(',')) {
-                return params.value.substring(1);
-            }
-            return params.value;
-          }
-        };
-
-      }
-      if (value === "Schoolid") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "agNumberCellEditor",
-          filter: "CustomFilter",
-          editable: false,
-        };
-      }
-      if (value === "FreeLessonNumbers") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "agNumberCellEditor",
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-
-      if (value === "PaidLessonNumbers") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "agNumberCellEditor",
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-
-      if (value === "LessonsPerDay") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: CustomSelectCellEditor,
-          cellEditorParams: {
-            values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-          },
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-
-      if (value === "PricingPerPaidLesson") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "agNumberCellEditor",
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-      if (value === "AdditionalPayments") {
-        return {
-          field: value,
-          headerName: "תשלומים נוספים",
-          cellEditor: "agNumberCellEditor",
-          cellDataType: 'number',
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-      if (value === "SchoolsContact") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          editable: false,
-          cellRenderer: RepresentiveComponent,
-          cellRendererParams: {
-            AllSchools: Schools,
-            AllContacts: contacts
-
-          },
-          filter: "CustomFilter",
-        };
-      }
-      if (value === "TotalLessonNumbers") {
-        return {
-          headerName: "כמות שיעורים",
-          valueGetter: "TotalValueGetter",
-          editable: false,
-        }
-      }
-      if (value === "FinalPrice") {
-        return {
-          field: "FinalPrice",
-          headerName: "סהכ",
-          valueGetter: "FinalValueGetter",
-          editable: false,
-        }
-      }
+      const data = await res.json();
+      const schoolPart = (data.RawSchoolName || "").trim();
+      const cityPart = (data.City || "").trim();
       
-      if (value === "Plan") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellRenderer: ProgramLinkDetailsCellRenderer,
-          cellRendererParams: {
-            AllPrograms: Programs,
-          },
-          cellEditor: ProgramLinkDetailsCellEditor,
-          // הוספת הפרמטר המאפשר לינק ריק לעורך התא
-          cellEditorParams: {
-            allowEmptyLink: true
-          },
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
+      // פונקציית נירמול להשוואת אזורים חכמה
+      const normalizeRegion = (text: any) => String(text || "").replace(/^אזור\s+/, "").trim();
+      const aiDistrict = normalizeRegion(data.District);
 
-        };
-      }
-      
-      if (value === "Year") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: CustomSelectCellEditor,
-          cellEditorParams: {
-            values: years
-          },
-          filter: YearFilter,
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-
-      if (value === "Order") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: CustomSelectCellEditor,
-          cellEditorParams: {
-            values: orders
-          },
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        }
-      }
-
-      if (value === "Product") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: CustomSelectCellEditor,
-          cellEditorParams: {
-            values: products
-          },
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-
-      if (value === "Details") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          cellEditor: "agTextCellEditor",
-          filter: "CustomFilter",
-          editable: true,
-          singleClickEdit: true
-        };
-      }
-
-      return {
-        field: value,
-        headerName: model[1][index] ? model[1][index] : '',
-        hide: model[1][index] ? false : true,
-        cellEditor: "agTextCellEditor",
-        filter: "CustomFilter",
-        editable: true,
-        singleClickEdit: true
-      };
-    });
-
-    var TotalLessonNumbers = {
-      field: "TotalLessonNumbers",
-      headerName: "כמות שיעורים",
-      valueGetter: TotalValueGetter,
-      editable: false,
-    }
-
-    var FinalPrice = {
-      field: "FinalPrice",
-      headerName: "סהכ",
-      valueGetter: FinalValueGetter,
-      editable: false,
-    }
-
-    // the field AssignedToProgram not actually exists.
-    var ProgramGuides =
-    {
-      field: "AssignedToProgram",
-      headerName: "מדריכים",
-      hide: false,
-      editable: false,
-      cellRenderer: "AssignedGuidesColumn",
-      cellRendererParams: {
-        assigned_guides: assigned_guides,
-        guides: guides
-      },
-      cellEditor: "agTextCellEditor",
-      filter: "CustomFilter",
-    };
-
-    coldef.splice(22, 0, TotalLessonNumbers)
-    coldef.splice(24, 0, FinalPrice)
-    coldef.splice(25, 0, ProgramGuides)
-
-    return coldef
-
-  }, [FinalValueGetter, TotalValueGetter, valueFormatterDate, AllAssigned, AllGuides]) // <-- חשוב: תלות ב-AllAssigned ו-AllGuides
-
-  // not edit cell editor or renderer - ag grid does not support this for some reason.
-  const other_components: any = useMemo(
-    () => ({
-      valueFormatterDate: valueFormatterDate,
-      AuthenticateActivate: { AuthenticateActivate: AuthenticateActivate, type: "Program" },
-      cellEditor: { AggridFieldName: "cellEditor", ApplyArrOrString: ["Date"], Func: CustomDateCellEditor },
-      TotalValueGetter: TotalValueGetter,
-      FinalValueGetter: FinalValueGetter,
-
-    }),
-    [AuthenticateActivate, FinalValueGetter, TotalValueGetter, valueFormatterDate]
-  );
-
-
-  const onGridReady = useCallback(async (params) => {
-    getFromStorage().then(({ Programs, Schools, Tablemodel, Cities, ProgramsStatuses, Areas, Years, schoolsContacts, ProductTypes, AssignedGuides, Guides, Orders, Candidates, ColorCandidates }: DataType) => {
-
-      if (Programs && Schools && Tablemodel && Cities && ProgramsStatuses && Areas && Years && schoolsContacts && ProductTypes && Candidates && ColorCandidates) {
-        let colDef = GetDefaultDefinitions(Tablemodel, Schools, Cities.map((val) => val.CityName),
-          ProgramsStatuses.map((val) => val.StatusName), Areas.map((val) => val.AreaName),
-          Years.map((val) => val.YearName), schoolsContacts, AssignedGuides, Guides, ProductTypes.map((val) => val.ProductName), Orders.map((val) => val.OrderName), Programs)
-        if (SchoolIDs) {
-          let filtered_programs = Programs.filter((program) => SchoolIDs.includes(program.Schoolid))
-          setRowData(filtered_programs)
-        } else {
-          setRowData(Programs)
-
-        }
-
-        setColDefs(colDef)
-        setAllSchools(Schools)
-        setAllContacts(schoolsContacts)
-        setAllPrograms(Programs)
-        setAllAssigned(AssignedGuides)
-        setAllGuides(Guides); // --- ADDED: Store Guides in state ---
-
-        params.api.hideOverlay();
-        maxIndex.current = Programs.length > 0 ? Math.max(...Programs.map((program) => program.Programid)) : 0
-
-        rowCount.current = Programs.length;
-        dataRowCount.current = Programs.length;
-      }
-      else {
-
-        Promise.all([getPrograms(), getAllSchools(), getAllCities(), getAllStatuses("Programs"), getAllDistricts(), getYears(), getAllContacts(), getProductTypes(), getAllAssignedInstructors(), getAllGuides(), getOrders(), getModelFields("Program"), getAllCandidates(), getAllColorCandidates()])
-          .then(([programs, schools, cities, statuses, districts, years, contacts, products, assigned_guides, guide_details, orders, model, candidates, colorcandidates]: [Program[], School[], Cities[], StatusPrograms[], Areas[], Years[], SchoolsContact[], ProductTypes[], Assigned_Guide[], Guide[], Orders[], any, any, any]) => {
-            let colDefs = GetDefaultDefinitions(model, schools, cities.map((val) => val.CityName), statuses.map((val) => val.StatusName), districts.map((val) => val.AreaName),
-              years.map((val) => val.YearName), contacts, assigned_guides, guide_details, products.map((val) => val.ProductName), orders.map((val) => val.OrderName), Programs)
-
-
-            rowCount.current = programs.length;
-            dataRowCount.current = programs.length;
-            if (SchoolIDs) {
-              let filtered_programs = programs.filter((program) => SchoolIDs.includes(program.Schoolid))
-              setRowData(filtered_programs)
-            } else {
-              setRowData(programs)
-            }
-
-            params.api.hideOverlay();
-
-            setColDefs(colDefs);
-            setAllSchools(schools)
-            setAllContacts(contacts)
-            setAllPrograms(programs)
-            setAllCandidates(candidates)
-            setAllColorCandidates(colorcandidates)
-            setAllAssigned(assigned_guides)
-            setAllGuides(guide_details); // --- ADDED: Store Guides in state ---
-            maxIndex.current = programs.length > 0 ? Math.max(...programs.map((program) => program.Programid)) : 0
-            updateStorage({ Programs: programs, Schools: schools, Tablemodel: model, Cities: cities, ProgramsStatuses: statuses, Areas: districts, Years: years, schoolsContacts: contacts, AssignedGuides: assigned_guides, Guides: guide_details, ProductTypes: products, Orders: orders, Candidates: candidates, ColorCandidates: colorcandidates })
-
-          })
-
-
-      }
-
-
-
-
-    })
-
-  }, [GetDefaultDefinitions, SchoolIDs]);
-
-  const onAddRowToolBarClick = useCallback(() => {
-    let yearForNewRow = selectedYear;
-    let statusForNewRow = defaultStatus; // ברירת מחדל מה-Context
-
-    // --- תיקון: לקיחת השנה והסטטוס מהשורה הראשונה שמוצגת בטבלה ---
-    if (gridRef.current && gridRef.current.api) {
-      const displayedRowCount = gridRef.current.api.getDisplayedRowCount();
-      
-      if (displayedRowCount > 0) {
-        const firstVisibleNode = gridRef.current.api.getDisplayedRowAtIndex(0);
+      let matchedSchool = AllSchools.find(s => {
+        const name = String(getFld(s, ["SchoolName", "שם בית ספר"])).trim();
+        const city = String(getFld(s, ["CityName", "City", "עיר"])).trim();
+        const schoolDistrict = normalizeRegion(getFld(s, ["AreaName", "District", "אזור"]));
         
-        if (firstVisibleNode && firstVisibleNode.data) {
-          // אם יש שורה מוצגת, ניקח ממנה את השנה והסטטוס
-          // זה מבטיח שהשורה החדשה תתאים לפילטרים הפעילים
-          if (firstVisibleNode.data.Year) yearForNewRow = firstVisibleNode.data.Year;
-          if (firstVisibleNode.data.Status) statusForNewRow = firstVisibleNode.data.Status;
+        // השוואה חכמה שכוללת שם, עיר ואזור (אם קיים מה-AI)
+        const isNameMatch = name.includes(schoolPart);
+        const isCityMatch = city.includes(cityPart);
+        const isDistrictMatch = aiDistrict ? schoolDistrict.includes(aiDistrict) : true;
+
+        return isNameMatch && isCityMatch && isDistrictMatch;
+      });
+
+      if (!matchedSchool && schoolPart) {
+        const suggestions = AllSchools.filter(s => String(getFld(s, ["SchoolName", "שם בית ספר"])).includes(schoolPart)).slice(0, 5);
+        if (suggestions.length > 0) {
+          const suggestionsText = suggestions.map((s, i) => `${i + 1}. ${getFld(s, ["SchoolName", "שם בית ספר"])}-${getFld(s, ["CityName", "City", "עיר"])}`).join("\n");
+          const userChoice = prompt(`לא נמצאה הצלבה אוטומטית. האם התכוונת ל:\n\n${suggestionsText}`, "1");
+          if (userChoice) matchedSchool = suggestions[parseInt(userChoice) - 1];
         }
       }
-    }
-    // -----------------------------------------------------
 
-    gridRef.current?.api.applyTransaction({
-      add: [
-        {
-          Programid: maxIndex.current + 1,
-          Year: yearForNewRow, 
-          Status: statusForNewRow, // <-- הוספת הסטטוס לשורה החדשה
-          Product: "תלמידים",
-          FreeLessonNumbers: 0,
-          PaidLessonNumbers: 0,
-          PricingPerPaidLesson: 0,
-          AdditionalPayments: 0
-        },
-      ],
-      addIndex: 0,
-    });
-    
-    maxIndex.current = maxIndex.current + 1
-    rowCount.current++;
-    SetInTheMiddleOfAddingRows(true);
+      const contact = matchedSchool ? AllContacts.find(c => c.Schoolid === matchedSchool.Schoolid && c.IsRepresentive) : null;
+      const newId = ++maxIndex.current;
+      
+      const sName = matchedSchool ? getFld(matchedSchool, ["SchoolName", "שם בית ספר"]) : schoolPart;
+      const sCity = matchedSchool ? getFld(matchedSchool, ["CityName", "City", "עיר"]) : cityPart;
+      const finalSchoolName = matchedSchool ? sName : (sCity ? `${sName}-${sCity}` : sName);
 
-    const element: any = document.getElementById("savechangesbutton");
-    if (element !== null) {
-      element.style.display = "block";
-    }
-    const element_2: any = document.getElementById("cancelchangesbutton");
-    if (element_2 !== null) {
-      element_2.style.display = "block";
-    }
-  }, [selectedYear, defaultStatus]); // הוספתי תלות ב-defaultStatus
+      const newRow = { 
+        Programid: newId, 
+        ProgramName: data.ProgramName || "חדש", 
+        SchoolName: finalSchoolName, 
+        Schoolid: matchedSchool ? matchedSchool.Schoolid : null, 
+        SchoolsContact: contact ? contact.ContactName : "",
+        CityName: sCity,
+        District: matchedSchool ? getFld(matchedSchool, ["AreaName", "District", "אזור"]) : data.District,
+        Date: data.Date || null,
+        Weeks: Number(data.Weeks) || 0,
+        LessonsPerDay: Number(data.LessonsPerDay) || 0,
+        PricingPerPaidLesson: Number(data.PricingPerPaidLesson) || 0,
+        Year: selectedYear !== "הכל" ? selectedYear : new Date().getFullYear().toString(), 
+        Status: defaultStatus !== "הכל" ? defaultStatus : "טיוטה"
+      };
 
+      gridRef.current?.api.applyTransaction({ add: [newRow], addIndex: 0 });
+      
+      setTimeout(() => {
+        const node = gridRef.current?.api.getRowNode(newId.toString());
+        if (node) {
+          node.setDataValue("CityName", newRow.CityName);
+          node.setDataValue("District", newRow.District);
+          node.setDataValue("LessonsPerDay", newRow.LessonsPerDay);
+          node.setDataValue("Date", newRow.Date);
+          node.setDataValue("Weeks", newRow.Weeks);
+          node.setDataValue("SchoolsContact", newRow.SchoolsContact);
+        }
+      }, 100);
 
+      rowCount.current++;
+      SetInTheMiddleOfAddingRows(true);
+      document.getElementById("savechangesbutton")!.style.display = "block";
+      document.getElementById("cancelchangesbutton")!.style.display = "block";
+    } catch (e) { alert("שגיאה בעיבוד הנתונים"); } finally { setAiLoading(false); }
+  };
+
+  const onCancelChanges = useCallback(() => {
+    const newlyAdded: any[] = [];
+    gridRef.current?.api.forEachNode((node, index) => { if (index < (rowCount.current - dataRowCount.current)) newlyAdded.push(node.data); });
+    gridRef.current?.api.applyTransaction({ remove: newlyAdded });
+    rowCount.current = dataRowCount.current;
+    SetInTheMiddleOfAddingRows(false);
+    setAiInput(""); 
+    document.getElementById("savechangesbutton")!.style.display = "none";
+    document.getElementById("cancelchangesbutton")!.style.display = "none";
+  }, [rowCount.current, dataRowCount.current]);
 
   const onSaveChangeButtonClick = useCallback(() => {
-
-
-
-
-
-    var future_data: Program[] = [];
-    var newly_added: Program[] = [];
-    var count = 0;
-    let bad_request_flag = false
-    gridRef.current.api.forEachNode((node: IRowNode<Program>) => {
-      future_data.push(node.data);
-      // only if it is a new row that is not in the database look at it.
-      if (count < rowCount.current - dataRowCount.current) {
-        if (typeof node.data?.District === 'undefined' || node.data.District === null || node.data.District === "") {
-          bad_request_flag = true
-        }
-        newly_added.push(node.data);
-      }
-
-      count++;
-    });
-
-
-    if (bad_request_flag) {
-      alert('חסר אזור')
-      return
-    }
-
-
-    gridRef.current.api.stopEditing();
-
-
+    const newly_added: any[] = [];
+    gridRef.current?.api.forEachNode((node, index) => { if (index < rowCount.current - dataRowCount.current) newly_added.push(node.data); });
     addProgramsRows(newly_added);
-    setRowData(future_data.sort((arg1, arg2) => arg1.Programid - arg2.Programid))
     dataRowCount.current = rowCount.current;
-    const element: any = document.getElementById("savechangesbutton");
-    if (element !== null) {
-      element.style.display = "none";
-    }
-    const element_2: any = document.getElementById("cancelchangesbutton");
-    if (element_2 !== null) {
-      element_2.style.display = "none";
-    }
-
     SetInTheMiddleOfAddingRows(false);
+    setAiInput("");
+    document.getElementById("savechangesbutton")!.style.display = "none";
+    document.getElementById("cancelchangesbutton")!.style.display = "none";
+  }, [rowCount.current, dataRowCount.current]);
 
-    maxIndex.current = future_data.length > 0 ? Math.max(...future_data.map((program) => program.Programid)) : 0
-    updateStorage({ Programs: future_data.sort((arg1, arg2) => arg1.Programid - arg2.Programid) })
-    gridRef.current.api.deselectAll()
-  }, []);
-
-  const onCancelChangeButtonClick = useCallback(() => {
-    const prev_data: Program[] = [];
-    var count = 0;
-    gridRef.current.api.forEachNode((node: any) => {
-      // Right now, a new row is added at the top and forEachNode goes through the order that appears in the table.
-      if (count >= rowCount.current - dataRowCount.current) {
-        prev_data.push(node.data);
-      }
-      count++;
-    });
-    maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((program) => program.Programid)) : 0
-    gridRef.current.api.setGridOption("rowData", prev_data)
-
-    // update so that there is no more rows unaccounted for in the database.
-    rowCount.current = dataRowCount.current;
-
-    // hide the buttons.
-    const element: any = document.getElementById("savechangesbutton");
-    if (element !== null) {
-      element.style.display = "none";
-    }
-    const element_2: any = document.getElementById("cancelchangesbutton");
-    if (element_2 !== null) {
-      element_2.style.display = "none";
-    }
-
-    SetInTheMiddleOfAddingRows(false);
-  }, []);
-
-
-  const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
-    if (event.oldValue === event.newValue || InTheMiddleOfAddingRows) {
-      return;
-    }
-
-    if (event.colDef.field === "Schoolid" && event.oldValue !== event.newValue) {
-
-      const RowNode = event.api.getDisplayedRowAtIndex(event.node.rowIndex);
-      const params = { columns: ['SchoolsContact'], rowNodes: [RowNode] };
-      const instances = event.api.getCellRendererInstances(params);
-      const cellRendererInstance: ContactRepresentiveRef = instances[0] as ContactRepresentiveRef
-      const school = AllSchools.find((school) => school.Schoolid == event.newValue)
-      const school_contact: SchoolsContact = AllContacts.find((contact) => contact.Schoolid === school?.Schoolid && contact.IsRepresentive)
-      if (school_contact) {
-        // example - get cell renderer for first row and column 'gold'
-
-        cellRendererInstance.updateValue(school_contact)
-      } else {
-        cellRendererInstance.updateValue(undefined)
-      }
-
-    }
-
-    updateProgramsColumn(
-      event.column.getColId(),
-      event.newValue as string,
-      event.data.Programid
-    );
-
-    if (typeof window !== "undefined") {
-      const future_data: Program[] = [];
-      gridRef.current.api.forEachNode((node: any) => {
-        future_data.push(node.data);
-      });
-      updateStorage({ Programs: future_data })
-
-    }
-  }, [InTheMiddleOfAddingRows, AllSchools, AllContacts]);
-
-  const onCellEditingStarted = (event: CellEditingStartedEvent) => { };
-
-  const onCellEditingStopped =
-    useCallback((event: CellEditingStoppedEvent) => {
-      
-      if (event.oldValue === event.newValue || InTheMiddleOfAddingRows) {
-        // אם הערך המוצג ב-AG Grid לא השתנה, או אם אנו באמצע הוספת שורה חדשה, יציאה
-        return;
-      }
-
-      if (event.column.getColId() === "Plan") {
-        // טיפול מיוחד עבור עמודת "Plan" המעדכנת שני שדות (ProgramName ו-ProgramLink)
+  const onGridReady = useCallback(async (params) => {
+    getFromStorage().then((data: DataType) => {
+      if (data && data.Tablemodel) {
+        setRowData(SchoolIDs ? (data.Programs || []).filter(p => SchoolIDs.includes(p.Schoolid)) : (data.Programs || []));
+        setAllSchools(data.Schools || []);
+        setAllContacts(data.schoolsContacts || []);
+        maxIndex.current = (data.Programs || []).length > 0 ? Math.max(...data.Programs.map(p => p.Programid)) : 0;
+        rowCount.current = (data.Programs || []).length;
+        dataRowCount.current = (data.Programs || []).length;
         
-        // ה-Cell Editor המותאם אישית (CustomProgramLinkDetailsCellEditor) כבר עדכן
-        // את ProgramName ו-ProgramLink ישירות בתוך event.data
-        const newProgramName = event.data.ProgramName;
-        const newProgramLink = event.data.ProgramLink;
-        const programId = event.data.Programid;
-
-        // 1. עדכון שני השדות ב-Database
-        updateProgramsColumn("ProgramName", newProgramName, programId);
-        updateProgramsColumn("ProgramLink", newProgramLink, programId);
-        
-        // 2. רענון ה-Renderer של התא כדי להציג את הערך החדש מיד
-        const cellRendererInstances = event.api.getCellRendererInstances({
-          rowNodes: [event.node],
-          columns: [event.column.getColId()],
-        });
-
-        if (cellRendererInstances.length > 0) {
-          const cellRendererInstance: RefFunctions = cellRendererInstances[0] as unknown as RefFunctions;
-          // קוראים לפונקציית עדכון ב-Renderer
-          cellRendererInstance.updateProgram(event.data)
-        }
-
-      } else {
-          // טיפול רגיל עבור כל שאר העמודות המעדכנות שדה יחיד
-          updateProgramsColumn(
-            event.column.getColId(),
-            event.newValue,
-            event.data.Programid
-          );
-      }
-
-
-      if (typeof window !== "undefined") {
-        const future_data: Program[] = [];
-        gridRef.current.api.forEachNode((node: any) => {
-          future_data.push(node.data);
-        });
-        updateStorage({ Programs: future_data })
-      }
-
-    }, [InTheMiddleOfAddingRows]);
-
-
-  const onFilterTextBoxChanged = useCallback(() => {
-    gridRef.current?.api.setGridOption(
-      "quickFilterText",
-      (document.getElementById("filter-text-box") as HTMLInputElement).value
-    );
-  }, []);
-
-  const onSaveDeletions = useCallback(() => {
-    const ids: number[] = gridRef.current.api
-      .getSelectedRows()
-      .map((val: Program) => val.Programid);
-
-    const updated_data: Program[] = [];
-
-    // this is to know which ids to update in the database and in which order.
-    const id_range: number[] = [];
-    for (let index = 1; index <= dataRowCount.current; index++) {
-      if (ids.includes(index)) {
-        continue
-      }
-      id_range.push(index)
-    }
-    let index = 0
-    gridRef.current.api.forEachNode((node: any) => {
-      if (!ids.includes(node.data.Programid)) {
-        updated_data.push(node.data);
-        index++
+        const colDef = data.Tablemodel[0]?.map((value: any, index: number) => {
+          if (value === "ProgramLink" || value === "Plan") return null;
+          const base: ColDef = { field: value, headerName: data.Tablemodel[1][index], filter: "CustomFilter", editable: true, width: 145 };
+          if (value === "ProgramName") return { ...base, cellRenderer: ProgramLinkDetailsCellRenderer, cellRendererParams: { AllPrograms: data.Programs }, cellEditor: ProgramLinkDetailsCellEditor, width: 200 };
+          if (value === "SchoolName") return { ...base, editable: false, cellRenderer: SchoolChoosing, cellRendererParams: { AllSchools: data.Schools }, width: 180 };
+          if (value === "SchoolsContact") return { ...base, editable: false, cellRenderer: RepresentiveComponent, cellRendererParams: { AllSchools: data.Schools, AllContacts: data.schoolsContacts }, width: 180 };
+          if (value === "Status") return { ...base, cellEditor: CustomSelectCellEditor, cellEditorParams: { values: data.ProgramsStatuses?.map(v => v.StatusName) }, filter: StatusFilter, width: 120 };
+          if (value === "Year") return { ...base, cellEditor: CustomSelectCellEditor, cellEditorParams: { values: data.Years?.map(v => v.YearName) }, filter: YearFilter, width: 110 };
+          return base;
+        }).filter((c: any) => c !== null);
+        setColDefs(colDef);
       }
     });
+  }, [SchoolIDs]);
 
-    let sorted_updated = updated_data.sort((arg1, arg2) => arg1.Programid - arg2.Programid)
-    maxIndex.current = sorted_updated.length > 0 ? Math.max(...sorted_updated.map((program) => program.Programid)) : 0
-    updateStorage({ Programs: sorted_updated })
-    // this will show loading
-    setRowData(sorted_updated)
-
-    // update the amount of rows
-    dataRowCount.current -= ids.length;
-    rowCount.current -= ids.length;
-    // update the checked amount.
-    setAmount(0);
-    SetInTheMiddleOfAddingRows(false)
-    // hide delete button.
-    const element: any = document.getElementById("savedeletions");
-    if (element !== null) {
-      element.style.display = "none";
-    }
-
-    setLoading(true)
-    const after_candidates = AllCandidates.filter((candidate) => !ids.includes(candidate.Programid))
-    const after_assign = AllAssigned.filter((candidate) => !ids.includes(candidate.Programid))
-    const after_color_candidates = AllColorCandidates.filter((candidate) => !ids.includes(candidate.Programid))
-    setAllAssigned(after_assign)
-    setAllCandidates(after_candidates)
-    setAllColorCandidates(after_color_candidates)
-    Promise.all([updateStorage({ Programs: sorted_updated, Candidates: after_candidates, AssignedGuides: after_assign, ColorCandidates: after_color_candidates }),
-    deleteProgramsCascading(ids, updated_data, id_range)]).then((_) => {
-      setLoading(false)
-
-    })
-
-
-    gridRef.current.api.deselectAll()
-
-  }, [AllAssigned, AllCandidates, AllColorCandidates]);
-
-  const onRowSelected = useCallback((event: RowSelectedEvent) => {
-    return
-  }, []);
-
-  const onSelectionChange = useCallback(
-    (event: SelectionChangedEvent) => {
-      // hide or show the delete button
-      const selectedRowsAmount: number = event.api.getSelectedRows().length
-      setAmount(selectedRowsAmount)
-      const element: any = document.getElementById("savedeletions");
-      if (element !== null) {
-        event.api.getSelectedRows().length > 0 && !InTheMiddleOfAddingRows
-          ? (element.style.display = "block")
-          : (element.style.display = "none");
-      }
-    },
-    [InTheMiddleOfAddingRows]
-  );
-
-  const isRowSelectable = useCallback((rowNode: any) => !InTheMiddleOfAddingRows, [InTheMiddleOfAddingRows]);
-
-
-
-  const components = useMemo(
-    () => ({
-      CustomLinkDrive: (props) => <CustomLinkDrive {...props} AuthenticateActivate={AuthenticateActivate} type={"Program"} />,
-      CustomMasterGrid: CustomMasterGrid,
-      CustomMultiSelectCellRenderer: CustomMultiSelectCell,
-      CustomFilter: CustomFilter,
-      CustomSelect: CustomSelect,
-      SchoolChoosing: SchoolChoosing,
-      RepresentiveComponent: RepresentiveComponent,
-      CustomProgramLinkDetailsCellEditor: ProgramLinkDetailsCellEditor,
-      CustomProgramLinkDetailsCellRenderer: ProgramLinkDetailsCellRenderer,
-      CustomDayChooseEditor: DayChooseEditor,
-      CustomDayPlacementEditor: DayPlacementEditor,
-      CustomDateCellEditor: CustomDateCellEditor,
-      AssignedGuidesColumn: AssignedGuidesColumn
-    }),
-    [AuthenticateActivate]
-  );
-  const getRowId: any = useCallback(
-    (params: GetRowIdParams<Program>) => params.data.Programid,
-    []
-  );
-
-  const CustomNoRowsOverlay = useCallback(() => {
-    const Name = "לא זוהו נתונים"
-    return (
-      <div className="ag-overlay-no-rows-center text-blue-300">
-        <span> {Name} </span>
-      </div>
-    );
-  }, [])
-
-  const LoadingOverlay = () => {
-    if (!isLoading) {
-      return <></>
-    } else {
-      return (
-
-        <Spinner
-
-          animation="border"
-          role="status"
-          className="w-[220px] h-[200px] bg-yellow-500 fill-yellow  z-[999] "
-        />
-
-      );
-    }
-
-  };
   return (
     <>
-      <Navbar
-        id="ProgramsNavBar"
-        className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%] flex-row-reverse"
-      >
-        <LoadingOverlay />
+      <Navbar id="ProgramsNavBar" className="bg-[#12242E] flex flex-row-reverse p-2 gap-2 shadow-sm items-center">
         <Redirect type={'Programs'} ScopeType={'Drive'} />
-        <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute">בטל סינון</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded mr-1 ml-1"
-            onClick={onClearFilterButtonClick}
-          >
-            <FcCancel className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
-
-        <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute">ניהול עמודות</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded mr-1 ml-1"
-            onClick={() => setColumnWindowOpen(true)}
-          >
-            <FcAddColumn className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
-
-        <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute">הוסף שורה</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded"
-            onClick={onAddRowToolBarClick}
-          >
-            <FcAddRow className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
-
-        <button
-          id="cancelchangesbutton"
-          onClick={onCancelChangeButtonClick}
-          className="hover:bg-slate-500 bg-slate-600 rounded mr-[100px] text-white border-solid hidden"
-        >
-          בטל שינויים
-        </button>
-
-        <button
-          id="savechangesbutton"
-          onClick={onSaveChangeButtonClick}
-          className="hover:bg-rose-700 bg-rose-800 rounded mr-[50px] text-white border-solid hidden"
-        >
-          שמור שינויים
-        </button>
-
-        <button
-          id="savedeletions"
-          onClick={onSaveDeletions}
-          className="hover:bg-green-700 bg-green-800 rounded mr-[50px] text-white border-solid hidden"
-        >
-          מחק {checkedAmount} שורות
-        </button>
-
-        <input
-          className={theme === "dark-theme" ? "text-right  bg-gray-900 text-white  border-solid w-[200px] h-[40px] p-2 mr-1" :
-            "text-right  bg-white text-gray-500  border-solid w-[200px] h-[40px] p-2 mr-1"}
-          type="text"
-          id="filter-text-box"
-          placeholder="חיפוש"
-          onInput={onFilterTextBoxChanged}
-        />
-      </Navbar>
-
-      <Suspense>
-        <div
-          id="grid-1"
-          className={theme === "dark-theme" ? "ag-theme-quartz-dark w-full flex-grow" : "ag-theme-quartz w-full flex-grow"}
-        >
-
-          <AgGridReact
-
-            noRowsOverlayComponent={CustomNoRowsOverlay}
-            ref={gridRef}
-            rowData={rowData}
-            columnDefs={colDefinition}
-            onCellKeyDown={onCellKeyDown}
-            enableRtl={true}
-            onGridReady={onGridReady}
-            onColumnResized={onColumnResized}
-            onCellValueChanged={onCellValueChanged}
-            onCellEditingStarted={onCellEditingStarted}
-            onCellEditingStopped={onCellEditingStopped}
-            onRowSelected={onRowSelected}
-            onSelectionChanged={onSelectionChange}
-            isRowSelectable={isRowSelectable}
-
-
-            loadingOverlayComponent={() => (
-              <Spinner
-                animation="border"
-                role="status"
-                className="ml-[50%] mt-[300px] w-[200px] h-[200px]"
-              />
-            )}
-            undoRedoCellEditing={true}
-            undoRedoCellEditingLimit={5}
-            enableCellChangeFlash={true}
-            rowSelection={"multiple"}
-            suppressRowClickSelection={true}
-            components={components}
-            getRowId={getRowId}
-            suppressRowTransform={true}
-            onColumnMoved={onColumnMoved}
-            suppressMenuHide={true}
-            stopEditingWhenCellsLoseFocus={false} 
-              pagination={true}
-            paginationPageSize={25}
-
+        <div className="flex flex-row-reverse items-center gap-2">
+          <button onClick={() => gridRef.current?.api.setFilterModel(null)}><FcCancel className="w-[37px] h-[37px]" /></button>
+          <button onClick={() => setColumnWindowOpen(true)}><FcAddColumn className="w-[37px] h-[37px]" /></button>
+          <button onClick={() => gridRef.current?.api.applyTransaction({ add: [{ Programid: maxIndex.current + 1, Year: selectedYear, Status: defaultStatus }], addIndex: 0 })}><FcAddRow className="w-[37px] h-[37px]" /></button>
+          
+          <input className="text-right bg-white text-gray-500 w-[180px] h-[35px] p-2 rounded border-none"
+            type="text" placeholder="חיפוש..." onInput={(e: any) => gridRef.current?.api.setQuickFilter(e.target.value)}
           />
+
+          <div className="flex flex-row-reverse items-center gap-2 bg-[#1b2e3a] p-1 rounded border border-gray-700 mx-2">
+            <button id="savechangesbutton" onClick={onSaveChangeButtonClick} className="hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white hidden">שמור</button>
+            <button id="cancelchangesbutton" onClick={onCancelChanges} className="hover:bg-gray-500 bg-gray-600 rounded px-3 py-1 text-white hidden">ביטול</button>
+            
+            {!aiLoading ? (
+              <Button variant="info" size="sm" onClick={handleAiSubmit} className="fw-bold">ייצר ✨</Button>
+            ) : (
+              <button onClick={() => abortControllerRef.current?.abort()} className="bg-transparent border-none p-0"><MdStopCircle className="text-danger w-[32px] h-[32px]" /></button>
+            )}
+            
+            <input type="text" className="bg-transparent text-white border-none text-right outline-none px-2" 
+              placeholder="הזנה חכמה..." value={aiInput} onChange={(e) => setAiInput(e.target.value)} 
+              onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()} 
+              style={{ direction: 'rtl', width: '660px', fontSize: '14px' }} disabled={aiLoading}
+            />
+          </div>
         </div>
-      </Suspense>
-      <ColumnManagementWindow
-        show={columnWindowOpen}
-        onHide={() => setColumnWindowOpen(false)}
-        columnDefs={colDefinition}
-        gridApi={gridRef.current?.api}
-        colState={colState}
-        setColState={setColState} />
+      </Navbar>
+      <div className={theme === "dark-theme" ? "ag-theme-quartz-dark w-full flex-grow" : "ag-theme-quartz w-full flex-grow"} style={{ height: "calc(100vh - 150px)" }}>
+        <AgGridReact ref={gridRef} rowData={rowData} columnDefs={colDefinition} enableRtl={true} onGridReady={onGridReady} rowSelection={"multiple"} pagination={true} paginationPageSize={25}
+          components={useMemo(() => ({ SchoolChoosing, RepresentiveComponent, AssignedGuidesColumn, ProgramLinkDetailsCellRenderer, ProgramLinkDetailsCellEditor, CustomLinkDrive: (props) => <CustomLinkDrive {...props} AuthenticateActivate={AuthenticateActivate} type={"Program"} /> }), [AuthenticateActivate])} 
+          getRowId={(p) => p.data.Programid.toString()}
+        />
+      </div>
+      <ColumnManagementWindow show={columnWindowOpen} onHide={() => setColumnWindowOpen(false)} columnDefs={colDefinition} gridApi={gridRef.current?.api} colState={colState} setColState={setColState} />
     </>
   );
 }

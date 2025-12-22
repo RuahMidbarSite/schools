@@ -10,20 +10,26 @@ export interface FilterType {
   setDefaultYear: (year: string) => void;
   refresh: () => void;
 }
+
 export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
   const [filterValues, setFilterValues] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectAllChecked, setSelectAllChecked] = useState(false);
 
-  const defaultYear = useRef(undefined)
-  const filteredValues = useMemo(() => filterValues.filter(value =>
-    value != null && value.toLowerCase().includes(searchTerm.toLowerCase())
-  ), [filterValues, searchTerm]);
+  const defaultYear = useRef<string | undefined>(undefined);
+
+  const filteredValues = useMemo(() => {
+    // הגנה מפני מערך ריק או לא מוגדר
+    if (!filterValues) return [];
+    return filterValues.filter(value =>
+      value != null && value.toString().toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [filterValues, searchTerm]);
+
   const formatValue = useCallback((params: any, props: any) => {
     let value = params.data[props.colDef.field];
 
-    // Check for boolean values and return custom strings
     if (typeof value === 'boolean') {
       return value ? "נציג" : "לא נציג";
     }
@@ -37,24 +43,28 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
 
   const getUniqueValuesFromGridData = useCallback((props: any) => {
     const uniqueValues = new Set<string>();
-    props.api.forEachNode((node: any) => {
-      const formattedValue = formatValue({ data: node.data }, props);
+    if (props.api) {
+      props.api.forEachNode((node: any) => {
+        const formattedValue = formatValue({ data: node.data }, props);
 
-      // Convert true/false to the desired strings
-      if (formattedValue === true) {
-        uniqueValues.add("נציג");
-      } else if (formattedValue === false) {
-        uniqueValues.add("לא נציג");
-      } else {
-        uniqueValues.add(formattedValue);
-      }
-    });
-    let array = Array.from(uniqueValues)
-    if (defaultYear.current && array && !array.includes(defaultYear.current)) {
-      array = [defaultYear.current, ...array]
+        if (formattedValue === true) {
+          uniqueValues.add("נציג");
+        } else if (formattedValue === false) {
+          uniqueValues.add("לא נציג");
+        } else if (formattedValue != null) {
+          uniqueValues.add(formattedValue);
+        }
+      });
+    }
+
+    let array = Array.from(uniqueValues);
+    // וידוא שהשנה המוגדרת כברירת מחדל תופיע ברשימת הפילטר גם אם אין שורות עבורה
+    if (defaultYear.current && !array.includes(defaultYear.current)) {
+      array = [defaultYear.current, ...array];
     }
     return array;
   }, [formatValue]);
+
   useEffect(() => {
     const uniqueValues = getUniqueValuesFromGridData(props);
     setFilterValues(uniqueValues);
@@ -67,12 +77,11 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
     props.api.addEventListener('cellValueChanged', onCellValueChanged);
 
     return () => {
-      props.api.removeEventListener('cellValueChanged', onCellValueChanged);
+      if (props.api) {
+        props.api.removeEventListener('cellValueChanged', onCellValueChanged);
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-
+  }, [getUniqueValuesFromGridData, props]);
 
   useEffect(() => {
     props.filterChangedCallback();
@@ -81,23 +90,17 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
   const onSelectAllChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const checked = event.target.checked;
     setSelectAllChecked(checked);
-
-    if (checked) {
-      setSelectedValues(filterValues);
-    } else {
-      setSelectedValues([]);
-    }
+    setSelectedValues(checked ? filterValues : []);
   }, [filterValues]);
 
   const onValueChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
     const newSelectedValues = event.target.checked
-      ? [...selectedValues, value]
-      : selectedValues.filter((v) => v !== value);
+      ? [...(selectedValues || []), value]
+      : (selectedValues || []).filter((v) => v !== value);
 
     setSelectedValues(newSelectedValues);
 
-    // Uncheck "Select All" if any checkbox is deselected
     if (!event.target.checked && selectAllChecked) {
       setSelectAllChecked(false);
     }
@@ -105,30 +108,30 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
 
   useImperativeHandle(ref, (): FilterType => ({
     isFilterActive() {
-      return selectedValues.length > 0;
+      return (selectedValues?.length || 0) > 0;
     },
     doesFilterPass(params: any) {
       const value = params.data[props.colDef.field];
       let formattedValue;
 
-      // Convert the cell value to match the filter values
       if (typeof value === 'boolean') {
         formattedValue = value ? "משובץ" : "לא משובץ";
       } else {
         formattedValue = formatValue(params, props);
       }
 
-      return selectedValues.includes(formattedValue);
+      // תיקון קריטי: הגנה מפני selectedValues לא מוגדר
+      return selectedValues?.includes(formattedValue) || false;
     },
     getModel() {
-      return !selectedValues.length ? null : { values: selectedValues };
+      return !(selectedValues?.length) ? null : { values: selectedValues };
     },
     setModel(model: any) {
       setSelectedValues(model ? model.values : []);
       setSelectAllChecked(model && model.values && model.values.length === filterValues.length);
     },
     setDefaultYear(year: string) {
-      defaultYear.current = year
+      defaultYear.current = year;
     },
     refresh() {
       const uniqueValues = getUniqueValuesFromGridData(props);
@@ -139,9 +142,6 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
   const onSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
   }, []);
-
-
-
 
   return (
     <div className="p-2 bg-gray-800 shadow-md rounded-md">
@@ -154,7 +154,7 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
       />
 
       <div className="flex items-center mb-2">
-        <label className="flex items-center space-x-2 text-white text-lg">
+        <label className="flex items-center space-x-2 text-white text-lg cursor-pointer">
           <input
             type="checkbox"
             onChange={onSelectAllChange}
@@ -165,25 +165,26 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
         </label>
       </div>
 
-      {filteredValues.map((value) => (
-        <div key={value} className="flex items-center mb-1">
-          <label className="flex items-center space-x-2 text-white text-lg">
-            <input
-              type="checkbox"
-              value={value}
-              onChange={onValueChange}
-              checked={selectedValues.includes(value)}
-              className="form-checkbox h-6 w-6 text-blue-600 ml-1"
-            />
-            <span>{value}</span>
-          </label>
-        </div>
-      ))}
+      <div className="max-h-60 overflow-y-auto">
+        {filteredValues.map((value) => (
+          <div key={value} className="flex items-center mb-1">
+            <label className="flex items-center space-x-2 text-white text-lg cursor-pointer">
+              <input
+                type="checkbox"
+                value={value}
+                onChange={onValueChange}
+                // תיקון: הגנה בשורה 175
+                checked={selectedValues?.includes(value) || false}
+                className="form-checkbox h-6 w-6 text-blue-600 ml-1"
+              />
+              <span>{value}</span>
+            </label>
+          </div>
+        ))}
+      </div>
     </div>
   );
 });
-
-
 
 YearFilter.displayName = "CustomFilter";
 export default YearFilter;
