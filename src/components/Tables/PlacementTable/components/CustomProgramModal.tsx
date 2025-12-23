@@ -37,6 +37,7 @@ const TableNames: { [index: string]: any } = {
   SchoolGrade: "שכבה",
   Contact: "איש קשר",
   City: "יישוב",
+  Area: "אזור", // הוספת שדה אזור
   Weeks: "שבועות",
   Days: "ימים",
   ProgramName: "תוכנית",
@@ -65,6 +66,7 @@ const CustomProgramModal = ({
   const [SchoolName, setSchoolName] = useState("");
   const [SchoolGrade, setSchoolGrade] = useState("");
   const [CityName, setCityName] = useState("");
+  const [District, setDistrict] = useState(""); // State לאזור
   const [ContactList, setContact] = useState<SchoolsContact[]>([]);
   const [Weeks, setWeeks] = useState(0);
   const [Details, setDetails] = useState("");
@@ -85,31 +87,15 @@ const CustomProgramModal = ({
 
   const GuideMap = useCallback(() => {
     var map = new Map<number, React.Dispatch<React.SetStateAction<Guide>>>();
-    map[1] = setGuide_1;
-    map[2] = setGuide_2;
-    map[3] = setGuide_3;
-    map[4] = setGuide_4;
-    map[5] = setGuide_5;
-    map[6] = setGuide_6;
-    map[7] = setGuide_7;
-    map[8] = setGuide_8;
-    map[9] = setGuide_9;
-    map[10] = setGuide_10;
+    map[1] = setGuide_1; map[2] = setGuide_2; map[3] = setGuide_3; map[4] = setGuide_4; map[5] = setGuide_5;
+    map[6] = setGuide_6; map[7] = setGuide_7; map[8] = setGuide_8; map[9] = setGuide_9; map[10] = setGuide_10;
     return map;
   }, []);
 
   const getGuidesMap = useCallback(() => {
     var map = new Map<number, Guide>();
-    map[1] = Guide_1;
-    map[2] = Guide_2;
-    map[3] = Guide_3;
-    map[4] = Guide_4;
-    map[5] = Guide_5;
-    map[6] = Guide_6;
-    map[7] = Guide_7;
-    map[8] = Guide_8;
-    map[9] = Guide_9;
-    map[10] = Guide_10;
+    map[1] = Guide_1; map[2] = Guide_2; map[3] = Guide_3; map[4] = Guide_4; map[5] = Guide_5;
+    map[6] = Guide_6; map[7] = Guide_7; map[8] = Guide_8; map[9] = Guide_9; map[10] = Guide_10;
     return map;
   }, [Guide_1, Guide_2, Guide_3, Guide_4, Guide_5, Guide_6, Guide_7, Guide_8, Guide_9, Guide_10]);
 
@@ -125,7 +111,7 @@ const CustomProgramModal = ({
       
       for (const index of all_numbers) {
         const current_guide: Guide | null = map[index];
-        if (current_guide && ChosenCandidate && ChosenCandidate.guide && current_guide.Objectid === ChosenCandidate.guide.Objectid) {
+        if (current_guide && ChosenCandidate && ChosenCandidate.guide && current_guide.Guideid === ChosenCandidate.guide.Guideid) {
           searchFlag = true;
           LeftGridApi.deselectAll();
           break;
@@ -146,9 +132,7 @@ const CustomProgramModal = ({
           var new_guide: Partial<Assigned_Guide> = { Guideid: row.Guideid, Programid: CurrentProgram.value };
 
           addAssignedInstructors(CurrentProgram.value, row.Guideid, new_guide).then((guide: Assigned_Guide) => {
-            setAllAssignedGuides((arr: Assigned_Guide[]) => {
-              return [...arr, guide];
-            });
+            setAllAssignedGuides((arr: Assigned_Guide[]) => [...arr, guide]);
             setAllAssignedGuides_Details((arr: Guide[]) => [...arr, row]);
             updateStorage({ AssignedGuides: [...All_Assigned_Guides, guide] });
 
@@ -157,12 +141,9 @@ const CustomProgramModal = ({
 
             setAllColorCandidates((prevColors: ColorCandidate[]) => {
               const exists = prevColors.find(c => c.Guideid === row.Guideid && c.Programid === CurrentProgram.value);
-              let newColors;
-              if (exists) {
-                newColors = prevColors.map(c => c.Guideid === row.Guideid && c.Programid === CurrentProgram.value ? { ...c, ColorHexCode: GRAY_HEX } : c);
-              } else {
-                newColors = [...prevColors, { Guideid: row.Guideid, Programid: CurrentProgram.value, ColorHexCode: GRAY_HEX, id: -1 }];
-              }
+              let newColors = exists 
+                ? prevColors.map(c => c.Guideid === row.Guideid && c.Programid === CurrentProgram.value ? { ...c, ColorHexCode: GRAY_HEX } : c) 
+                : [...prevColors, { Guideid: row.Guideid, Programid: CurrentProgram.value, ColorHexCode: GRAY_HEX, id: -1 }];
               updateStorage({ ColorCandidates: newColors });
               return newColors;
             });
@@ -170,28 +151,21 @@ const CustomProgramModal = ({
 
           updateInstructorsColumn("isAssigned", true, row.Guideid);
           const rowNode = LeftGridApi.getRowNode(row.Guideid.toString());
-          if (rowNode) {
-              rowNode.setDataValue("isAssigned", true);
-          }
+          if (rowNode) rowNode.setDataValue("isAssigned", true);
+          
           LeftGridApi.deselectAll();
           break;
         }
       }
     };
 
-    if (ChosenCandidate) {
-      updateGuides();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (ChosenCandidate) updateGuides();
   }, [ChosenCandidate]);
 
   const resetGuides = useCallback(() => {
     const rn: number[] = getRange(1, 10);
     const map = GuideMap();
-    for (const number of rn) {
-      const method: React.Dispatch<React.SetStateAction<Guide>> = map[number];
-      method(undefined);
-    }
+    for (const number of rn) { map[number](undefined); }
   }, [getRange, GuideMap]);
 
   const onClick = useCallback((event, key: number) => {
@@ -200,17 +174,8 @@ const CustomProgramModal = ({
 
     deleteAssignedInstructor(CurrentProgram.value, current_guide.Guideid);
 
-    let new_list_assigned_guides: Assigned_Guide[] = [];
-    let new_list_assigned_guides_details: Guide[] = [];
-    
-    for (let guide_s of All_Assigned_Guides) {
-      if (guide_s.Guideid === current_guide.Guideid) continue;
-      new_list_assigned_guides.push(guide_s);
-    }
-    for (let guide_s of All_Assigned_Guides_Details) {
-      if (guide_s.Guideid === current_guide.Guideid) continue;
-      new_list_assigned_guides_details.push(guide_s);
-    }
+    let new_list_assigned_guides = All_Assigned_Guides.filter(g => g.Guideid !== current_guide.Guideid);
+    let new_list_assigned_guides_details = All_Assigned_Guides_Details.filter(g => g.Guideid !== current_guide.Guideid);
 
     setAllAssignedGuides(new_list_assigned_guides ?? []);
     setAllAssignedGuides_Details(new_list_assigned_guides_details ?? []);
@@ -221,75 +186,45 @@ const CustomProgramModal = ({
 
     setAllColorCandidates((prevColors: ColorCandidate[]) => {
       const exists = prevColors.find(c => c.Guideid === current_guide.Guideid && c.Programid === CurrentProgram.value);
-      let newColors;
-      if (exists) {
-        newColors = prevColors.map(c => c.Guideid === current_guide.Guideid && c.Programid === CurrentProgram.value ? { ...c, ColorHexCode: RED_HEX } : c);
-      } else {
-        newColors = [...prevColors, { Guideid: current_guide.Guideid, Programid: CurrentProgram.value, ColorHexCode: RED_HEX, id: -1 }];
-      }
+      let newColors = exists 
+        ? prevColors.map(c => c.Guideid === current_guide.Guideid && c.Programid === CurrentProgram.value ? { ...c, ColorHexCode: RED_HEX } : c) 
+        : [...prevColors, { Guideid: current_guide.Guideid, Programid: CurrentProgram.value, ColorHexCode: RED_HEX, id: -1 }];
       updateStorage({ ColorCandidates: newColors });
       return newColors;
     });
 
-    resetGuides();
+    const map = GuideMap();
+    map[key](undefined);
     
     const rowNode = LeftGridApi.getRowNode(current_guide.Guideid.toString());
-    if (rowNode) {
-        rowNode.setDataValue("isAssigned", false);
-    }
+    if (rowNode) rowNode.setDataValue("isAssigned", false);
+    
     updateInstructorsColumn("isAssigned", false, current_guide.Guideid);
-
     LeftGridApi.onFilterChanged();
     LeftGridApi.deselectAll();
 
-  }, [getGuidesMap, CurrentProgram.value, LeftGridApi, setAllAssignedGuides, setAllAssignedGuides_Details, resetGuides, All_Assigned_Guides, All_Assigned_Guides_Details, setAllColorCandidates]);
+  }, [getGuidesMap, CurrentProgram.value, LeftGridApi, setAllAssignedGuides, setAllAssignedGuides_Details, All_Assigned_Guides, All_Assigned_Guides_Details, setAllColorCandidates, GuideMap]);
 
   const getGuides = useCallback(() => {
     const map: Map<number, Guide> = getGuidesMap();
     const rn: number[] = getRange(1, 10);
     return (
       <Container className="p-0">
-        {/* שיניתי כאן ל-flex-row-reverse כדי שהמספור יתחיל מימין לשמאל */}
         <Row className="g-2 flex-row-reverse"> 
           {rn.map((val) => {
             const guide: Guide = map[val];
-            
-            let displayName = "";
-            if (guide) {
-                const fName = guide.FirstName?.trim() || "";
-                const lName = guide.LastName?.trim() || "";
-                if (lName.startsWith(fName)) {
-                    displayName = lName;
-                } else {
-                    displayName = `${fName} ${lName}`;
-                }
-            }
-
+            if (!guide) return null;
             return (
-              <Col md="auto" key={val} hidden={!guide}>
+              <Col md="auto" key={val}>
                 <Card style={{ width: 'fit-content' }}>
                   <Card.Body className="p-2 d-flex flex-row-reverse align-items-center gap-2"> 
-                    
-                    <span className="font-weight-bold" style={{color: 'black'}}>
-                        {val}.
-                    </span>
-
-                    <a 
-                        className="font-medium text-blue-600 no-underline hover:underline" 
-                        href={`whatsapp://send/?phone=972${guide?.CellPhone}`} 
-                        target="_blank"
-                        style={{ whiteSpace: 'nowrap' }}
-                    >
-                        {displayName}
+                    <span className="font-weight-bold" style={{color: 'black'}}>{val}.</span>
+                    <a className="font-medium text-blue-600 no-underline" href={`whatsapp://send/?phone=972${guide?.CellPhone}`} target="_blank">
+                        {guide.FirstName} {guide.LastName}
                     </a>
-
-                    <button 
-                        onClick={(event) => onClick(event, val)} 
-                        style={{ lineHeight: 0, padding: 0, border: 'none', background: 'transparent' }}
-                    > 
+                    <button onClick={(event) => onClick(event, val)} style={{ border: 'none', background: 'transparent' }}>
                          <TiDelete size={20} color="#dc3545" /> 
                     </button>
-
                   </Card.Body>
                 </Card>
               </Col>
@@ -310,112 +245,59 @@ const CustomProgramModal = ({
         const contacts_list: SchoolsContact[] = AllContacts.filter((contact) => contact.Schoolid === school.Schoolid);
 
         const Candidates = All_Assigned_Guides.filter((res) => res.Programid === new_program.Programid);
-        const new_Candidates_ids = Candidates.map((res) => res.Guideid);
-
-        const Candidates_Details: Guide[] = new_Candidates_ids.map((guideId) => {
-            let foundGuide = All_Assigned_Guides_Details.find(g => g.Guideid === guideId);
-            if (!foundGuide) {
-                foundGuide = AllCandidates_Details.find(g => g.Guideid === guideId);
-            }
-            return foundGuide;
+        const Candidates_Details: Guide[] = Candidates.map((c) => {
+            let found = All_Assigned_Guides_Details.find(g => g.Guideid === c.Guideid);
+            return found || AllCandidates_Details.find(g => g.Guideid === c.Guideid);
         }).filter((item): item is Guide => item !== undefined);
 
         setSchoolName(school.SchoolName);
         setSchoolGrade(school.EducationStage);
         setCityName(school.City);
+        setDistrict(new_program.District || ""); // שליפת האזור
         setDetails(new_program.Details);
         setWeeks(new_program.Weeks);
         setContact(contacts_list);
         setLinkProgram(new_program.ProgramLink);
         setDays(new_program.ChosenDay);
 
-        var guide_list = [];
-        var index = 1;
-
-        for (const guide_detail of Candidates_Details) {
-          const method: React.Dispatch<React.SetStateAction<Guide>> = GuideMap()[index];
-          if (method) {
-             guide_list.push({ guide: guide_detail, key: index });
-             method(guide_detail);
-             index += 1;
-          }
-        }
-        for (let l = index; index <= 10; index++) {
-          const method: React.Dispatch<React.SetStateAction<Guide>> = GuideMap()[index];
-          if (method) {
-             guide_list.push({ guide: undefined, key: index });
-             method(undefined);
-          }
-        }
-        setLoadData(guide_list);
+        resetGuides();
+        Candidates_Details.forEach((guide, i) => {
+          if (i < 10) GuideMap()[i+1](guide);
+        });
       }
     };
-    if (CurrentProgram.value !== -1) {
-      getData();
-    }
-  }, [GuideMap, CurrentProgram, AllPrograms, AllSchools, AllContacts, AllCandidates, AllCandidates_Details, All_Assigned_Guides, All_Assigned_Guides_Details]);
-
-  const getContacts = useCallback(() => {
-    return ContactList.map((val: SchoolsContact) => (
-      <div className="w-[200px]" key={val.Contactid}>
-        <a href={`whatsapp://send/?phone=972${val?.Cellphone}`}>{val.FirstName.concat(" ", val.Role, " ")}</a>
-      </div>
-    ));
-  }, [ContactList]);
+    if (CurrentProgram.value !== -1) getData();
+  }, [CurrentProgram.value, AllPrograms, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, resetGuides, GuideMap]);
 
   return (
-    <Card border="light" className="text-right w-[36rem]">
-      <Card.Header>{TableNames["Title"]}</Card.Header>
-      <Row className="mt-4">
+    <Card border="light" className="text-right w-[36rem] shadow-sm">
+      <Card.Header className="font-bold text-success border-bottom bg-white">{TableNames["Title"]}</Card.Header>
+      <Row className="mt-4 px-3">
         <Col xs={{ order: 3 }}>
-          <Card.Subtitle>
-            <div className="font-bold">{TableNames["SchoolName"]} </div>
-            <Card.Body>{SchoolName} </Card.Body>
-          </Card.Subtitle>
-          <Card.Subtitle>
-            <div className="font-bold"> {TableNames["SchoolGrade"]} </div>
-            <Card.Body> {SchoolGrade} </Card.Body>
-          </Card.Subtitle>
+          <Card.Subtitle className="mb-2"><div className="font-bold">{TableNames["SchoolName"]}</div><div>{SchoolName}</div></Card.Subtitle>
+          <Card.Subtitle><div className="font-bold">{TableNames["SchoolGrade"]}</div><div>{SchoolGrade}</div></Card.Subtitle>
         </Col>
 
         <Col xs={{ order: 2 }}>
-          <Card.Subtitle>
-            <div className="font-bold">{TableNames["City"]} </div>
-            <Card.Body>{CityName} </Card.Body>
-          </Card.Subtitle>
-          <Card.Subtitle>
-            <div className="font-bold w-100"> {TableNames["Contact"]} </div>
-            {getContacts()}
+          <Card.Subtitle className="mb-2"><div className="font-bold">{TableNames["City"]}</div><div>{CityName}</div></Card.Subtitle>
+          {/* תצוגת שדה אזור חדש */}
+          <Card.Subtitle className="mb-2">
+            <div className="font-bold text-danger">{TableNames["Area"]}</div>
+            <div>{District || "---"}</div>
           </Card.Subtitle>
         </Col>
 
         <Col xs={{ order: 1 }}>
-          <Card.Subtitle>
-            <div className="font-bold">{TableNames["ProgramName"]} </div>
-            <Card.Body> <a href={LinkProgram}> {CurrentProgram.label} </a></Card.Body>
+          <Card.Subtitle className="mb-2">
+            <div className="font-bold">{TableNames["ProgramName"]}</div>
+            {/* ניקוי שם התוכנית: לקיחת החלק שלפני המקף */}
+            <div><a href={LinkProgram}>{CurrentProgram.label.split('-')[0].trim()}</a></div>
           </Card.Subtitle>
-          <Card.Subtitle>
-            <div className="font-bold"> {TableNames["Weeks"]} </div>
-            <Card.Body> {Weeks} </Card.Body>
-          </Card.Subtitle>
-        </Col>
-
-        <Col>
-          <Card.Subtitle>
-            <div className="font-bold">{TableNames["Days"]} </div>
-            <Card.Body> {DaysChosen}</Card.Body>
-          </Card.Subtitle>
+          <Card.Subtitle><div className="font-bold">{TableNames["Weeks"]}</div><div>{Weeks}</div></Card.Subtitle>
         </Col>
       </Row>
-      <Card.Subtitle>
-        <div className="font-bold">{TableNames["Guides"]} </div>
-        <Card.Body>{getGuides()} </Card.Body>
-      </Card.Subtitle>
-      <Row></Row>
-      <Card.Subtitle>
-        <div className="font-bold">{TableNames["AdditionalDetails"]} </div>
-        <Card.Body> {Details} </Card.Body>
-      </Card.Subtitle>
+      <Card.Subtitle className="px-3 mt-3"><div className="font-bold">{TableNames["Guides"]}</div><Card.Body className="p-1">{getGuides()}</Card.Body></Card.Subtitle>
+      <Card.Subtitle className="px-3 py-3 border-top mt-2 bg-light"><div className="font-bold">{TableNames["AdditionalDetails"]}</div><div>{Details}</div></Card.Subtitle>
     </Card>
   );
 };
