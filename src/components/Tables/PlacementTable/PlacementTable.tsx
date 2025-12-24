@@ -61,75 +61,29 @@ import { useStatus } from "@/context/StatusContext";
 // ------------------------------------------
 
 const rightDefaultCol: any = [
-  {
-    field: "Guideid",
-    headerName: "מספר מדריך",
-    rowDrag: true,
-  },
-  {
-    field: "FirstName",
-    headerName: "שם פרטי",
-  },
-  {
-    field: "LastName",
-    headerName: "שם משפחה",
-  },
-  {
-    field: "CellPhone",
-    headerName: "טלפון",
-  },
-  {
-    field: "CV",
-    headerName: "קורות חיים",
-  },
-  {
-    field: "City",
-    headerName: "עיר",
-  },
-  {
-    field: "Area",
-    headerName: "אזור",
-  },
-  {
-    field: "ReligiousSector",
-    headerName: "מגזר דתי",
-  },
-  {
-    field: "PriceRequirement",
-    headerName: "מחיר שעתי",
-  },
-  {
-    field: "Status",
-    headerName: "סטטוס",
-  },
-  {
-    field: "Notes",
-    headerName: "הערות",
-  },
-  {
-    field: "Documents",
-    headerName: "מסמכים",
-  },
-  {
-    field: "PoliceApproval",
-    headerName: "אישור משטרה",
-  },
-  {
-    field: "Aggrement",
-    headerName: "הסכם",
-  },
-  {
-    field: "Insurance",
-    headerName: "ביטוח",
-  },
+  { field: "Guideid", headerName: "מספר מדריך", rowDrag: true },
+  { field: "FirstName", headerName: "שם פרטי" },
+  { field: "LastName", headerName: "שם משפחה" },
+  { field: "CellPhone", headerName: "טלפון" },
+  { field: "CV", headerName: "קורות חיים" },
+  { field: "City", headerName: "עיר" },
+  { field: "Area", headerName: "אזור" },
+  { field: "ReligiousSector", headerName: "מגזר דתי" },
+  { field: "PriceRequirement", headerName: "מחיר שעתי" },
+  { field: "Status", headerName: "סטטוס" },
+  { field: "Notes", headerName: "הערות" },
+  { field: "Documents", headerName: "מסמכים" },
+  { field: "PoliceApproval", headerName: "אישור משטרה" },
+  { field: "Aggrement", headerName: "הסכם" },
+  { field: "Insurance", headerName: "ביטוח" },
 ];
 const leftDefaultCol: any = rightDefaultCol
 
 const releventFieldsRight: string[] = ["Guideid", "FirstName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
-const releventFieldsLeft: string[] = ["Guideid", "FirstName", , "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
+const releventFieldsLeft: string[] = ["Guideid", "FirstName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
 
 export default function PlacementTable() {
-  console.log("PlacementTable");
+  console.log("PlacementTable Loaded");
 
   const [leftApi, setLeftApi] = useState<GridApi | null>(null);
   const [rightApi, setRightApi] = useState<GridApi | null>(null);
@@ -156,6 +110,11 @@ export default function PlacementTable() {
   // --- States עבור שדות הסינון החדשים ---
   const [leftSearchText, setLeftSearchText] = useState("");
   const [rightSearchText, setRightSearchText] = useState("");
+  
+  // --- State עבור כפתור ה-AI והגדרות הסינון ---
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiRadius, setAiRadius] = useState(10); // ברירת מחדל 10 ק"מ
+  const [aiCount, setAiCount] = useState(1);   // ברירת מחדל מועמד 1
   // --------------------------------------
 
   // --- States שהועברו מ-ProgramModule ---
@@ -168,6 +127,11 @@ export default function PlacementTable() {
 
   // this is a lazy hack for onDragStop not detecting changes. Later will fix it probably.
   const ProgramID = useRef(-1)
+  
+  // עדכון ה-Ref כשהתוכנית משתנה (חשוב ל-AI)
+  useEffect(() => {
+      ProgramID.current = CurrentProgram.value;
+  }, [CurrentProgram.value]);
 
   // these are used for filters...
   const [FilterProf, setFilterProf]: [{ eng_value: string, value: string, active: boolean }[], any] = useState([])
@@ -583,14 +547,14 @@ export default function PlacementTable() {
       }
 
       setAllColorCandidates(prevColors => {
-          const safePrev = prevColors || [];
-          const cleanList = safePrev.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current));
-          
-          const newEntry = { Guideid: data.Guideid, Programid: ProgramID.current, ColorHexCode: GRAY_HEX, id: -1 };
-          const newList = [...cleanList, newEntry];
-          
-          updateStorage({ ColorCandidates: newList });
-          return newList;
+        const safePrev = prevColors || [];
+        const cleanList = safePrev.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current));
+        
+        const newEntry = { Guideid: data.Guideid, Programid: ProgramID.current, ColorHexCode: GRAY_HEX, id: -1 };
+        const newList = [...cleanList, newEntry];
+        
+        updateStorage({ ColorCandidates: newList });
+        return newList;
       });
 
       const new_candidate_to_assign: Partial<Guides_ToAssign> = { Guideid: data.Guideid, Programid: ProgramID.current };
@@ -614,14 +578,14 @@ export default function PlacementTable() {
       const RED_HEX = "#FF0000";
 
       setAllColorCandidates(prevColors => {
-          const safePrev = prevColors || [];
-          const cleanList = safePrev.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current));
-          
-          const newEntry = { Guideid: data.Guideid, Programid: ProgramID.current, ColorHexCode: RED_HEX, id: -1 };
-          const newList = [...cleanList, newEntry];
-          
-          updateStorage({ ColorCandidates: newList });
-          return newList;
+        const safePrev = prevColors || [];
+        const cleanList = safePrev.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current));
+        
+        const newEntry = { Guideid: data.Guideid, Programid: ProgramID.current, ColorHexCode: RED_HEX, id: -1 };
+        const newList = [...cleanList, newEntry];
+        
+        updateStorage({ ColorCandidates: newList });
+        return newList;
       });
 
       const updated_candidates = AllCandidates ? AllCandidates.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current)) : [];
@@ -636,6 +600,138 @@ export default function PlacementTable() {
 
   }, [AllCandidates, AllCandidates_Details]);
 
+  // ------------------------------------------------
+
+  // --- פונקציית AI משודרגת עם הגנה מפני קריסה ---
+  const handleAISearch = async () => {
+    if (CurrentProgram.value === -1) {
+        alert("⚠️ אנא בחר תוכנית מהרשימה לפני הפעלת ה-AI");
+        return;
+    }
+    
+    // בדיקת תקינות נתוני תוכנית למניעת שגיאת שרת
+    const prog = AllPrograms.find(p => p.Programid === CurrentProgram.value);
+    if (!prog?.CityName || !prog?.ProgramName) {
+        alert("⚠️ לתוכנית שנבחרה חסר שם עיר או שם תוכנית. לא ניתן לבצע התאמה.");
+        return;
+    }
+
+    if (!AllGuides || AllGuides.length === 0) {
+        alert("לא נטענו מדריכים למערכת");
+        return;
+    }
+
+    setIsAiLoading(true);
+    
+    const cleanProfession = prog.ProgramName.split('-')[0].trim();
+    const progCityName = prog.CityName;
+    const progCityObj = AllCities.find(c => c.CityName === progCityName);
+
+    // 1. קודם כל, נחשב את המרחק לכולם ונכין את האובייקטים
+    let potentialCandidates = AllGuides.filter(g => 
+      !AllCandidates?.some(c => c.Guideid === g.Guideid && c.Programid === CurrentProgram.value)
+    ).map(guide => {
+        let distance = -1; // -1 = אין מידע בטבלה
+        
+        if (guide.City === progCityName) {
+            distance = 0; 
+        } else if (progCityObj) {
+            const guideCityObj = AllCities.find(c => c.CityName === guide.City);
+            if (guideCityObj) {
+                const distRecord = AllDistances.find(d => 
+                    (d.city1id === progCityObj.Cityid && d.city2id === guideCityObj.Cityid) ||
+                    (d.city1id === guideCityObj.Cityid && d.city2id === progCityObj.Cityid)
+                );
+                if (distRecord) distance = distRecord.distance;
+            }
+        }
+        
+        return {
+            id: guide.Guideid,
+            name: `${guide.FirstName} ${guide.LastName}`,
+            city: guide.City || "לא צוין",
+            area: guide.Area || "לא צוין",
+            professions: guide.Professions,
+            hasCV: !!guide.CV,
+            dbDistance: distance
+        };
+    });
+
+    // 2. סינון קריטי לפי בחירת המשתמש (aiRadius)
+    if (aiRadius > 0) {
+       potentialCandidates = potentialCandidates.filter(c => {
+          if (c.dbDistance === -1) return false; 
+          return c.dbDistance <= aiRadius;
+       });
+    }
+
+    // 3. מיון לפי מרחק (מהקרוב לרחוק) לפני החיתוך - קריטי לאיכות התוצאות
+    potentialCandidates.sort((a, b) => {
+        if (a.dbDistance === -1) return 1;
+        if (b.dbDistance === -1) return -1;
+        return a.dbDistance - b.dbDistance;
+    });
+
+    if (potentialCandidates.length === 0) {
+        alert(`לא נמצאו מועמדים בטווח של ${aiRadius} ק"מ העונים לקריטריונים.`);
+        setIsAiLoading(false);
+        return;
+    }
+
+    // 4. חיתוך ל-60 מועמדים בלבד (במקום 150) כדי למנוע קריסת שרת (500 Error)
+    const finalPayload = potentialCandidates.slice(0, 60);
+    console.log(`Sending ${finalPayload.length} best candidates to AI...`);
+
+    try {
+      const response = await fetch("/api/route-placement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidates: finalPayload,
+          programDetails: { city: progCityName, area: prog?.District, profession: cleanProfession },
+          count: aiCount 
+        }),
+      });
+
+      if (!response.ok) {
+          throw new Error(`Server Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("🤖 [AI Response Data]:", data);
+      
+      if (data.matches && Array.isArray(data.matches) && data.matches.length > 0) {
+         let addedCount = 0;
+         let names = [];
+
+         data.matches.forEach(match => {
+             const guide = AllGuides.find(g => g.Guideid === Number(match.id));
+             if (guide) {
+                 handleAssignCandidate(guide);
+                 rightApi?.applyTransaction({ remove: [guide] });
+                 leftApi?.applyTransaction({ add: [guide] });
+                 names.push(guide.FirstName + " " + guide.LastName);
+                 addedCount++;
+             }
+         });
+
+         if (addedCount > 0) {
+             alert(`✅ ה-AI שיבץ ${addedCount} מועמדים:\n${names.join(", ")}\n\nהסבר: ${data.matches[0].explanation}`);
+         } else {
+             alert("ה-AI מצא התאמה, אך המדריכים לא נמצאו בטבלה.");
+         }
+
+      } else {
+        alert("ה-AI לא מצא התאמה מתאימה בטווח ובנתונים שנשלחו.");
+      }
+
+    } catch (e) {
+        console.error("❌ [AI Error]:", e);
+        alert(`שגיאה בתקשורת עם השרת: ${e.message}`);
+    } finally { 
+        setIsAiLoading(false); 
+    }
+  };
   // ------------------------------------------------
 
 
@@ -723,8 +819,8 @@ export default function PlacementTable() {
           filter: CustomFilter,
           width: 105, 
           minWidth: 105, 
-          maxWidth: 105,
-          suppressSizeToFit: true,
+          maxWidth: 105, 
+          suppressSizeToFit: true, 
           resizable: false
       }
       const color_col_right = { 
@@ -848,12 +944,12 @@ export default function PlacementTable() {
           
           {/* 1. כפתורי מקצועות */}
           <Row>
-             <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+              <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </Row>
 
           {/* 2. כפתורי אזורים - הוספנו מרווח עליון */}
           <div className="mt-4">
-             <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+              <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </div>
 
           {/* 3. שלושת התפריטים (תוכנית, סטטוס, שנה) - בשורה חדשה עם מרווח */}
@@ -980,7 +1076,7 @@ export default function PlacementTable() {
       } else {
         /**
         Moving from left to right:
-       */
+        */
         handleUnassignCandidate(data);
         rightApi!.applyTransaction({ add: [data] })
       }
@@ -1118,7 +1214,53 @@ export default function PlacementTable() {
           {/* שינוי כאן: הצמדה לימין עם flex-end ורווח gap-3 */}
           <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
             
-             {/* שדה החיפוש מופיע ראשון כדי להיות משמאל לכותרת */}
+            {/* 1. תפריט טווח (משמאל) */}
+            <select
+                className="form-select form-select-sm"
+                style={{ width: '100px', direction: 'rtl' }}
+                value={aiRadius}
+                onChange={(e) => setAiRadius(Number(e.target.value))}
+                disabled={isAiLoading}
+                title="טווח סינון בקילומטרים"
+            >
+                <option value={10}>10 ק"מ</option>
+                <option value={20}>20 ק"מ</option>
+                <option value={30}>30 ק"מ</option>
+                <option value={40}>40 ק"מ</option>
+                <option value={50}>50 ק"מ</option>
+                <option value={0}>ללא הגבלה</option>
+            </select>
+
+            {/* 2. תפריט כמות (משמאל) */}
+            <select
+                className="form-select form-select-sm"
+                style={{ width: '70px', direction: 'rtl' }}
+                value={aiCount}
+                onChange={(e) => setAiCount(Number(e.target.value))}
+                disabled={isAiLoading}
+                title="מספר מועמדים לשיבוץ"
+            >
+                {[...Array(10)].map((_, i) => (
+                    <option key={i+1} value={i+1}>{i+1}</option>
+                ))}
+            </select>
+
+
+            {/* --- הוספת כפתור AI בטוח (בכותרת) --- */}
+            <Button 
+                variant="success" 
+                size="sm" 
+                onClick={handleAISearch}
+                disabled={isAiLoading}
+                className="d-flex align-items-center gap-1 shadow-sm"
+                title="שיבוץ אוטומטי עפ'י נתוני התוכנית"
+                style={{ zIndex: 10, position: 'relative' }} // ווידוא לחיצות
+            >
+                {isAiLoading ? <Spinner size="sm" animation="border" /> : <span>✨ AI</span>}
+            </Button>
+            {/* --------------------------- */}
+
+            {/* שדה החיפוש מופיע ראשון כדי להיות משמאל לכותרת */}
             <input
               type="text"
               className="form-control"

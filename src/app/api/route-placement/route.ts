@@ -1,53 +1,81 @@
 import { NextResponse } from "next/server";
 
-export async function POST(req: Request) {
+export async function POST(req) {
   try {
-    const { prompt, candidates, programDetails } = await req.json();
+    const { candidates, programDetails, count } = await req.json();
     const apiKey = process.env.GROQ_API_KEY;
+    const candidatesToSelect = count || 1;
 
-    if (!apiKey) return NextResponse.json({ error: "API Key Missing" }, { status: 500 });
+    console.log(`🚀 [Server] Processing request for: ${programDetails?.city}, Candidates: ${candidates?.length}`);
+
+    if (!candidates || candidates.length === 0) {
+      return NextResponse.json({ matches: [], explanation: "No candidates provided" });
+    }
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",
-            content: `You are a placement expert for educational programs.
+            content: `You are an expert Israeli HR recruiter.
             
-            GOAL: Find the BEST instructor for "${programDetails?.label}".
-            
-            GEOGRAPHIC HIERARCHY (Priority):
-            1. Exact City Match: "${programDetails?.city}".
-            2. Area/District Match: "${programDetails?.area}".
-            3. Proximity: If no match in city/area, find the closest candidate based on logic.
-            
-            PROFESSIONAL MATCH:
-            - Candidate MUST have "${programDetails?.profession}" within their "professions" string.
-            
-            INSTRUCTIONS:
-            - You MUST return a "selectedId". Do not return null if there are candidates.
-            - If you have multiple candidates, pick the one who matches BOTH profession and city. 
-            - If no one matches the city, pick the one in the same area with the right profession.
-            - Incorporate user note: "${prompt}".
+            **Mission:** Select the TOP ${candidatesToSelect} best instructors for a program in: "${programDetails.city}" (${programDetails.area}).
+            **Required Profession:** "${programDetails.profession}".
 
-            Return ONLY JSON: {"selectedId": number, "explanation": "Hebrew explanation of why this candidate was chosen (mentioning city/area/profession)"}`
+            **Rules:**
+            1. **Profession Match (Critical):** Must have "${programDetails.profession}" (or very similar).
+            2. **Location:** Prioritize low 'dbDistance'. If missing, use geographic knowledge (e.g., Rehovot is close to Ness Ziona).
+            
+            **Output:**
+            Strict JSON only. No markdown code blocks. No extra text.
+            Structure: { "matches": [ { "id": 123, "explanation": "..." } ] }
+            If no match, return { "matches": [] }`
           },
           {
             role: "user",
-            content: `Candidates List: ${JSON.stringify(candidates)}`
+            content: `Candidates: ${JSON.stringify(candidates)}`
           }
         ],
-        response_format: { type: "json_object" },
-        temperature: 0.1 
+        // ביטול response_format קשיח לפעמים עוזר במודלים מסוימים, אבל נשאיר אם זה עובד לרוב
+        response_format: { type: "json_object" }, 
+        temperature: 0.1 // הורדת יצירתיות כדי לקבל JSON יציב
       }),
     });
 
+    if (!response.ok) {
+        const errText = await response.text();
+        console.error("Groq API Error:", errText);
+        throw new Error(`Groq API returned ${response.status}`);
+    }
+
     const data = await response.json();
-    return NextResponse.json(JSON.parse(data.choices[0].message.content));
-  } catch (error: any) {
+    const aiContent = data.choices[0].message.content;
+
+    // --- הגנה מפני קריסת JSON ---
+    let result;
+    try {
+        result = JSON.parse(aiContent);
+    } catch (parseError) {
+        console.error("JSON Parse Failed. Raw content:", aiContent);
+        // ניסיון לנקות Markdown אם קיים
+        const cleanJson = aiContent.replace(/```json|```/g, '').trim();
+        try {
+            result = JSON.parse(cleanJson);
+        } catch (retryError) {
+             return NextResponse.json({ error: "Invalid JSON from AI", raw: aiContent }, { status: 500 });
+        }
+    }
+
+    return NextResponse.json(result);
+
+  } catch (error) {
+    console.error("🔥 [Server Logic Error]:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
