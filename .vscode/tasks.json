@@ -1,0 +1,52 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Django Server",
+      "type": "shell",
+      "command": "./venv/Scripts/python manage.py runserver",
+      "options": {
+        "cwd": "${workspaceFolder}/ruach_midbar_backend"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Start React Client",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Open Browser",
+      "type": "shell",
+      "command": "explorer \"http://localhost:3666\"",
+      "windows": {
+        "command": "explorer \"http://localhost:3666\""
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Run Full Project",
+      "dependsOn": ["Start Django Server", "Start React Client", "Open Browser"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}
