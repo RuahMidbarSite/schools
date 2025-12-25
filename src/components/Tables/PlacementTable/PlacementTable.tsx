@@ -683,15 +683,37 @@ export default function PlacementTable() {
     console.log(`Sending ${finalPayload.length} best candidates to AI...`);
 
     try {
+        // --- תחילת התיקון: בניית Prompt עבור השרת ---
+        const aiPrompt = `
+        תפקידך לשמש כעוזר לשיבוץ מדריכים.
+        עליך לבחור את ${aiCount} המועמדים המתאימים ביותר.
+
+        פרטי התוכנית הדורשת שיבוץ:
+        - עיר: ${progCityName}
+        - תחום: ${cleanProfession}
+        - אזור: ${prog?.District || "לא צוין"}
+
+        רשימת המועמדים לבחירה (JSON):
+        ${JSON.stringify(finalPayload)}
+
+        הנחיות להחזרת תשובה:
+        החזר אך ורק תשובת JSON (ללא טקסט נוסף) במבנה הבא:
+        {
+            "matches": [
+                { "id": "מזהה המדריך", "explanation": "הסבר קצר בעברית למה הוא נבחר" }
+            ]
+        }
+        `;
+
       const response = await fetch("/api/route-placement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // ✅ התיקון: שליחת הנתונים בתוך שדה 'prompt' כפי שה-API מצפה
         body: JSON.stringify({
-          candidates: finalPayload,
-          programDetails: { city: progCityName, area: prog?.District, profession: cleanProfession },
-          count: aiCount 
+          prompt: aiPrompt 
         }),
       });
+      // --- סוף התיקון ---
 
       if (!response.ok) {
           throw new Error(`Server Error: ${response.status}`);

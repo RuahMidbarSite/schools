@@ -13,6 +13,9 @@ import { getAllDistances } from '@/db/instructorsrequest';
 import { SelectDeleteCities } from '@/components/SettingsPage/components/SelectDeleteCities';
 import { StatusContext } from '@/context/StatusContext';
 
+// ייבוא הפונקציות מהנתיב המתוקן
+import { updateInstructorsCreds, updatePeopleCreds, updateProposalCreds } from '@/util/localServerRequests'; 
+
 type OptionsPage = {
   cities: false;
   areas?: false;
@@ -94,6 +97,14 @@ const turquoiseTheme = {
   formBg: 'bg-teal-50/50'      
 };
 
+// --- משתני עיצוב לכפתורי הגוגל ---
+const googleTheme = {
+    bg: 'bg-orange-50',
+    text: 'text-orange-900',
+    border: 'border-orange-200',
+    hover: 'hover:bg-orange-100',
+};
+
 const SettingsPage = () => {
 
   // --- States ---
@@ -121,6 +132,9 @@ const SettingsPage = () => {
   const [selectedStatusOption, setSelectedStatusOption] = useState({ label: "הכל", value: undefined })
 
   const [formUpdate, setFormUpdate] = useState(false);
+  
+  // סטייט לניהול מצב טעינה מול גוגל
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
 
   const [showForms, setShowForms] = useState<OptionsPage>({
     cities: false,
@@ -254,6 +268,57 @@ const SettingsPage = () => {
     closeAllForms();
   };
 
+  // --- פונקציות טיפול בעדכון גוגל (חדש) ---
+  const handleUpdateContacts = async () => {
+      setIsLoadingGoogle(true);
+      // @ts-ignore - במקרה שהקובץ TS לא עודכן עדיין, אנו מתעלמים משגיאת טייפסקריפט זמנית
+      const result = await updatePeopleCreds();
+      setIsLoadingGoogle(false);
+      
+      // תמיכה לאחור: אם עדיין מחזיר בוליאני
+      const success = typeof result === 'object' ? result.success : result;
+      const message = typeof result === 'object' ? result.message : '';
+
+      if (success) {
+          alert(`העדכון הצליח!${message ? `\nחשבון מחובר: ${message}` : ''}`);
+      } else {
+          alert(`העדכון נכשל.${message ? `\nפרטי שגיאה: ${message}` : '\nבדוק את החיבור לשרת.'}`);
+      }
+  };
+
+  const handleUpdateInstructors = async () => {
+      setIsLoadingGoogle(true);
+      // @ts-ignore
+      const result = await updateInstructorsCreds();
+      setIsLoadingGoogle(false);
+
+      const success = typeof result === 'object' ? result.success : result;
+      const message = typeof result === 'object' ? result.message : '';
+
+      if (success) {
+          alert(`העדכון הצליח!${message ? `\nחשבון מחובר: ${message}` : ''}`);
+      } else {
+          alert(`העדכון נכשל.${message ? `\nפרטי שגיאה: ${message}` : '\nבדוק את החיבור לשרת.'}`);
+      }
+  };
+
+  const handleUpdateProposal = async () => {
+      setIsLoadingGoogle(true);
+      // @ts-ignore
+      const result = await updateProposalCreds();
+      setIsLoadingGoogle(false);
+
+      const success = typeof result === 'object' ? result.success : result;
+      const message = typeof result === 'object' ? result.message : '';
+
+      if (success) {
+          alert(`העדכון הצליח!${message ? `\nחשבון מחובר: ${message}` : ''}`);
+      } else {
+          alert(`העדכון נכשל.${message ? `\nפרטי שגיאה: ${message}` : '\nבדוק את החיבור לשרת.'}`);
+      }
+  };
+  // -----------------------------------------
+
   const closeAllForms = () => {
     Object.keys(showForms).forEach((formName: OptionsNamed) => {
       if (showForms[formName]) toggleForm(formName);
@@ -289,15 +354,13 @@ const SettingsPage = () => {
         <Container fluid>
 
           <header className="mb-6">
-             {/* כותרת מוגדלת משמעותית - text-3xl */}
              <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-l from-violet-600 to-teal-600 tracking-tight drop-shadow-sm pb-1">
                 הגדרות מערכת
              </h1>
           </header>
 
-          {/* כרטיסייה 1 */}
+          {/* כרטיסייה 1: הגדרות ברירת מחדל */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-3 relative z-20">
-            {/* כותרת מוגדלת - text-xl */}
             <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 justify-start">
               <span className="w-1.5 h-6 bg-violet-400 rounded-full"></span>
               הגדרות ברירת מחדל
@@ -345,15 +408,44 @@ const SettingsPage = () => {
             </div>
           </div>
 
-          {/* כרטיסייה 2 */}
+          {/* כרטיסייה 2: עדכון חשבון גוגל (חדש) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 mb-3 relative z-10">
+            <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 justify-start">
+                <span className="w-1.5 h-6 bg-orange-400 rounded-full"></span>
+                עדכון חשבון גוגל
+            </h2>
+            <div className="flex flex-wrap gap-3">
+                <button
+                    onClick={handleUpdateContacts}
+                    disabled={isLoadingGoogle}
+                    className={`${googleTheme.bg} ${googleTheme.text} ${googleTheme.border} ${googleTheme.hover} border font-bold py-2 px-4 rounded-xl text-sm transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                    {isLoadingGoogle ? 'מעדכן...' : 'עדכון אנשי קשר'}
+                </button>
+                <button
+                    onClick={handleUpdateInstructors}
+                    disabled={isLoadingGoogle}
+                    className={`${googleTheme.bg} ${googleTheme.text} ${googleTheme.border} ${googleTheme.hover} border font-bold py-2 px-4 rounded-xl text-sm transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                    {isLoadingGoogle ? 'מעדכן...' : 'עדכון מדריכים'}
+                </button>
+                <button
+                    onClick={handleUpdateProposal}
+                    disabled={isLoadingGoogle}
+                    className={`${googleTheme.bg} ${googleTheme.text} ${googleTheme.border} ${googleTheme.hover} border font-bold py-2 px-4 rounded-xl text-sm transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                    {isLoadingGoogle ? 'מעדכן...' : 'עדכון הצעות מחיר'}
+                </button>
+            </div>
+          </div>
+
+          {/* כרטיסייה 3: ניהול טבלאות נתונים */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 relative z-10">
-            {/* כותרת מוגדלת - text-xl */}
             <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-2 justify-start">
                 <span className="w-1.5 h-6 bg-teal-400 rounded-full"></span>
                 עדכון וניהול טבלאות נתונים
             </h2>
 
-            {/* מקסימום 4 עמודות */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
 
               {settingsButtons.map((btn) => {

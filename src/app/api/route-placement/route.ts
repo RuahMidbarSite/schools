@@ -1,81 +1,71 @@
 import { NextResponse } from "next/server";
 
-export async function POST(req) {
+export async function POST(req: Request) {
   try {
-    const { candidates, programDetails, count } = await req.json();
+    // קריאת הנתונים שנשלחו מהלקוח
+    const body = await req.json();
+    const { prompt } = body;
+    
+    // שליפת מפתח ה-API משתני הסביבה
     const apiKey = process.env.GROQ_API_KEY;
-    const candidatesToSelect = count || 1;
 
-    console.log(`🚀 [Server] Processing request for: ${programDetails?.city}, Candidates: ${candidates?.length}`);
-
-    if (!candidates || candidates.length === 0) {
-      return NextResponse.json({ matches: [], explanation: "No candidates provided" });
+    // בדיקות תקינות
+    if (!apiKey) {
+      console.error("❌ Missing GROQ_API_KEY in environment variables");
+      return NextResponse.json({ error: "Configuration Error: Missing API Key" }, { status: 500 });
     }
 
+    if (!prompt) {
+      console.error("❌ Received request without 'prompt' field");
+      return NextResponse.json({ error: "Bad Request: Field 'prompt' is required" }, { status: 400 });
+    }
+
+    // שליחה ל-Groq API
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",
-            content: `You are an expert Israeli HR recruiter.
-            
-            **Mission:** Select the TOP ${candidatesToSelect} best instructors for a program in: "${programDetails.city}" (${programDetails.area}).
-            **Required Profession:** "${programDetails.profession}".
-
-            **Rules:**
-            1. **Profession Match (Critical):** Must have "${programDetails.profession}" (or very similar).
-            2. **Location:** Prioritize low 'dbDistance'. If missing, use geographic knowledge (e.g., Rehovot is close to Ness Ziona).
-            
-            **Output:**
-            Strict JSON only. No markdown code blocks. No extra text.
-            Structure: { "matches": [ { "id": 123, "explanation": "..." } ] }
-            If no match, return { "matches": [] }`
+            // הנחיה קריטית: המערכת מחזירה אך ורק JSON תקני
+            content: "You are a helpful assistant designed to output valid JSON only. Do not include any explanation, markdown formatting, or conversational text outside the JSON object."
           },
           {
             role: "user",
-            content: `Candidates: ${JSON.stringify(candidates)}`
-          }
+            content: prompt // ההנחיה המלאה (כולל רשימת המועמדים ודרישות ה-JSON)
+          },
         ],
-        // ביטול response_format קשיח לפעמים עוזר במודלים מסוימים, אבל נשאיר אם זה עובד לרוב
-        response_format: { type: "json_object" }, 
-        temperature: 0.1 // הורדת יצירתיות כדי לקבל JSON יציב
+        response_format: { type: "json_object" },
+        temperature: 0.1, // יצירתיות נמוכה לדיוק בפורמט ובעובדות
       }),
     });
 
     if (!response.ok) {
-        const errText = await response.text();
-        console.error("Groq API Error:", errText);
-        throw new Error(`Groq API returned ${response.status}`);
+        const errorData = await response.json();
+        console.error("❌ Groq API Error:", errorData);
+        return NextResponse.json({ error: "External API Error", details: errorData }, { status: response.status });
     }
 
-    const data = await response.json();
-    const aiContent = data.choices[0].message.content;
+    // פענוח התשובה
+    const aiData = await response.json();
+    const content = aiData.choices[0].message.content;
 
-    // --- הגנה מפני קריסת JSON ---
-    let result;
+    // המרה ל-JSON לפני השליחה ללקוח
     try {
-        result = JSON.parse(aiContent);
+        const jsonContent = JSON.parse(content);
+        return NextResponse.json(jsonContent);
     } catch (parseError) {
-        console.error("JSON Parse Failed. Raw content:", aiContent);
-        // ניסיון לנקות Markdown אם קיים
-        const cleanJson = aiContent.replace(/```json|```/g, '').trim();
-        try {
-            result = JSON.parse(cleanJson);
-        } catch (retryError) {
-             return NextResponse.json({ error: "Invalid JSON from AI", raw: aiContent }, { status: 500 });
-        }
+        console.error("❌ Failed to parse AI response as JSON:", content);
+        return NextResponse.json({ error: "Invalid JSON response from AI", raw: content }, { status: 500 });
     }
 
-    return NextResponse.json(result);
-
-  } catch (error) {
-    console.error("🔥 [Server Logic Error]:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: any) {
+    console.error("❌ Server Error in route-placement:", error);
+    return NextResponse.json({ error: "Internal Server Error", message: error.message }, { status: 500 });
   }
 }
