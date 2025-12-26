@@ -2,86 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
+/* --- הגדרות ליבה --- */
 .ag-cell {
   overflow: visible !important;
 }
 
-
-.ag-theme-quartz-dark .ag-root-wrapper, 
-  .ag-theme-quartz-dark .ag-root-wrapper-body, 
-  .ag-theme-quartz-dark .ag-header,
-  .ag-theme-quartz-dark .ag-root {
-      border-radius: 0 !important;
-  }
-  .ag-theme-quartz-dark .ag-header-cell {
-      padding: 0 !important;
-      margin: 0 !important;
-  }
-  .ag-theme-quartz-dark .ag-header-cell-label {
-    padding-left: 1px !important;
-    padding-right: 1px !important;
-    margin: 0 !important;
-  }
-
-
-.ag-theme-quartz-dark {
- 
-    /* then add back a border between rows */
-    --ag-row-border-style:ridge  !important;
-    --ag-row-border-width: 1px !important;
-    --ag-row-border-color: rgb(4, 1, 23) !important;
-    /* and between columns */
-    --ag-cell-horizontal-border: solid rgb(4, 1, 23) !important;
-
-
-     --ag-header-column-separator-display: block !important;
-    --ag-header-column-separator-height: 100% !important;
-    --ag-header-column-separator-width: 1px !important;
-    --ag-header-column-separator-color: rgb(4, 1, 23) !important;
-
-}
-
-.ag-theme-quartz {
-    /* disable all borders */
-
-    /* then add back a border between rows */
-    --ag-row-border-style:ridge  !important;
-    --ag-row-border-width: 1px !important;
-    --ag-row-border-color: rgb(226, 225, 236) !important;
-    /* and between columns */
-    --ag-cell-horizontal-border: solid rgb(226, 225, 236) !important;
-
-
-     --ag-header-column-separator-display: block !important;
+/* החזרת גבולות העמודות (קווים אנכיים) */
+.ag-theme-quartz-dark, .ag-theme-quartz {
+    /* גבולות אנכיים בין התאים בגוף הטבלה */
+    --ag-cell-horizontal-border: solid 1px rgb(226, 225, 236) !important;
+    /* מפרידים אנכיים בין הכותרות */
+    --ag-header-column-separator-display: block !important;
     --ag-header-column-separator-height: 100% !important;
     --ag-header-column-separator-width: 1px !important;
     --ag-header-column-separator-color: rgb(226, 225, 236) !important;
-
 }
 
-.ag-header-cell-comp-wrapper{
-position:absolute;
-flex:auto;
-
+/* התאמת צבע הגבולות לערכת הנושא הכהה */
+.ag-theme-quartz-dark {
+    --ag-cell-horizontal-border: solid 1px rgb(4, 1, 23) !important;
+    --ag-header-column-separator-color: rgb(4, 1, 23) !important;
 }
-[ref="eMenu"] {
-   left:80%; 
-   bottom:1.5vh;
-   margin-right:0%;
-   position:relative;
 
-} 
+/* --- הפתרון המנצח לכותרת: אייקון מעל הטקסט --- */
+
+.ag-header-cell-comp-wrapper {
+    display: flex !important;
+    flex-direction: column !important; 
+    align-items: center !important;    
+    justify-content: flex-end !important;
+    height: 100% !important;
+    padding-bottom: 4px !important;    
+    position: relative !important;
+}
+
+/* כפתור התפריט/סינון צף */
+[ref="eMenu"], 
+.ag-header-cell-menu-button {
+    position: absolute !important;
+    top: 6px !important;              
+    left: 50% !important;
+    transform: translateX(-50%) !important; 
+    display: flex !important;
+    justify-content: center !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 !important;
+    z-index: 2 !important;
+}
+
+/* לייבל הטקסט עם מרווח מהאייקון */
+.ag-header-cell-label {
+    display: block !important;
+    width: 100% !important;
+    text-align: center !important;     
+    white-space: normal !important;    
+    word-break: break-word !important;
+    line-height: 1.1 !important;
+    margin-top: 22px !important;       /* מונע חפיפה עם האייקון */
+    padding: 0 4px !important;
+}
+
+.ag-header-cell-label > .ag-header-cell-text {
+    display: inline-block !important;
+    width: 100% !important;
+}
+
+/* החזרת הקו המפריד האנכי בכותרת עצמה */
+.ag-header-cell {
+    border-left: 1px solid var(--ag-header-column-separator-color) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* ביטול גבול כפול בעמודה הראשונה */
+.ag-rtl .ag-header-cell:last-child {
+    border-left: none !important;
+}
+
+.ag-header-cell, .ag-header-row {
+    height: auto !important;
+    min-height: 70px !important; 
+}

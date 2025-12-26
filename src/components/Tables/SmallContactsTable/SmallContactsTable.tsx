@@ -101,7 +101,8 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts }: { Sch
 
   const { onGridReady } = useGridFunctions(valueFormatCellPhone, AuthenticateActivate, ValueFormatSchool, valueFormatCellPhone, setRowData, setColumnDefs, dataRowCount, rowCount, SchoolID, setAllContacts, allContactsCount,maxIndex)
 
-  const { onColumnResized, onColumnMoved } = useColumnHook(gridRef, setColState)
+  // הוספנו את "SmallContacts" כדי שזה יהיה המפתח בזיכרון
+  const { onColumnResized, onColumnMoved } = useColumnHook(gridRef, setColState, "SmallContacts")
 
   const { WindowManager } = useColumnComponent(columnWindowOpen, setColumnWindowOpen, colDefinition, gridRef, colState, setColState)
 
@@ -243,6 +244,13 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts }: { Sch
           }}
         >
           <AgGridReact
+          // ... שאר ההגדרות שלך ...
+            autoHeaderHeight={true} // גורם לכותרת לחשב את הגובה שלה לבד
+            defaultColDef={{
+            wrapHeaderText: true, // מאפשר שבירת טקסט כברירת מחדל לכל העמודות
+            resizable: true,      // מוודא שאפשר להזיז את הרוחב כדי לראות את השבירה
+        }}
+    // ...
             noRowsOverlayComponent={CustomNoRowsOverlay}
             ref={gridRef}
             onGridReady={onGridReady}
