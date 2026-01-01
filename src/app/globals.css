@@ -7,6 +7,14 @@
   overflow: visible !important;
 }
 
+/* === ביטול ריפוד בתאים לאפשרות כיווץ מקסימלי === */
+/* הקטנת הריווח הפנימי מ-20px (ברירת מחדל) ל-2px כדי לאפשר לעמודה להיות צרה מאוד */
+.ag-theme-quartz .ag-cell, 
+.ag-theme-quartz-dark .ag-cell {
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+}
+
 /* החזרת גבולות העמודות (קווים אנכיים) */
 .ag-theme-quartz-dark, .ag-theme-quartz {
     /* גבולות אנכיים בין התאים בגוף הטבלה */
@@ -83,4 +91,10 @@
 .ag-header-cell, .ag-header-row {
     height: auto !important;
     min-height: 70px !important; 
+}
+
+/* === חדש: הסתרת אייקונים (קווים תחתונים) בכותרות ליצירת גובה אחיד === */
+/* מעלים את האייקון שנדחף למטה בכותרות כמו 'שנה' ו'סטטוס' */
+.ag-header-cell .ag-header-icon {
+    display: none !important;
 }

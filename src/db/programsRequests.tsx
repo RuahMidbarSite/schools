@@ -1,9 +1,8 @@
 "use server";
 import prisma from "@/db/prisma";
-import { Program, Program_Schedule } from "@prisma/client";
+import { Program } from "@prisma/client";
 
-// --- פונקציית המחיקה הקריטית ---
-// וודא שפונקציה זו קיימת בקובץ!
+// --- פונקציית המחיקה ---
 export const deletePrograms = async (ids: number[]) => {
   "use server";
   console.log("🚀 Server attempting to delete programs with IDs:", ids);
@@ -11,7 +10,6 @@ export const deletePrograms = async (ids: number[]) => {
   if (!ids || ids.length === 0) return;
 
   try {
-    // מחיקה לפי Programid
     const result = await prisma.program.deleteMany({
       where: { 
         Programid: { 
@@ -27,26 +25,67 @@ export const deletePrograms = async (ids: number[]) => {
   }
 };
 
-// --- עדכון עמודה (כולל תמיכה בבחירה מרובה) ---
+// --- עדכון עמודה (מתוקן: המרה למספרים ומיפוי שמות) ---
 export const updateProgramsColumn = async (ColumnName: string, newValue: any, key: number): Promise<any> => {
   "use server";
   
+  console.log(`📝 Update Request -> ID: ${key}, Col: ${ColumnName}, Val: ${newValue}`);
+
+  // 1. מיפוי שמות עמודות (Area -> District)
+  let dbColumnName = ColumnName;
+  if (ColumnName === "Area") {
+      dbColumnName = "District";
+  }
+
   let valueToSave = newValue;
-  // המרת מערך למחרוזת
+
+  // 2. טיפול במערכים (הופך למחרוזת)
   if (Array.isArray(newValue)) {
     valueToSave = newValue.join(", ");
   }
 
+  // 3. טיפול בשדות מספריים (String -> Int)
+  // רשימת כל השדות שמוגדרים כ-Int ב-Schema
+  const intFields = [
+      "Weeks", 
+      "LessonsPerDay", 
+      "PaidLessonNumbers", 
+      "PricingPerPaidLesson", 
+      "FreeLessonNumbers", 
+      "AdditionalPayments"
+  ];
+
+  if (intFields.includes(dbColumnName)) {
+      if (valueToSave === "" || valueToSave === null || valueToSave === undefined) {
+          valueToSave = null; // אם ריק, נשמור כ-null
+      } else {
+          // המרה למספר שלם
+          valueToSave = parseInt(valueToSave);
+          
+          // בדיקת תקינות (למנוע קריסה אם המשתמש הזין טקסט לא חוקי)
+          if (isNaN(valueToSave)) {
+              valueToSave = null; 
+          }
+      }
+  }
+
+  // יצירת אובייקט העדכון
   var data: any = {};
-  data[ColumnName] = valueToSave;
+  data[dbColumnName] = valueToSave;
   
-  await prisma.program.updateMany({
-    where: { Programid: key },
-    data: data,
-  });
+  try {
+      await prisma.program.updateMany({
+        where: { Programid: key },
+        data: data,
+      });
+      console.log(`✅ Update Success: Field '${dbColumnName}' updated to`, valueToSave);
+  } catch (error) {
+      console.error(`❌ Update Failed for field '${dbColumnName}':`, error);
+      throw error; 
+  }
 };
 
-// --- שאר הפונקציות (ללא שינוי, נדרשות לפעילות תקינה) ---
+// --- שליפת נתונים ---
 
 export const getPrograms = async (): Promise<Program[]> => {
   "use server";
