@@ -2,7 +2,7 @@ import { Guide } from "@prisma/client";
 import { ICellRendererParams } from "ag-grid-community";
 import { ChangeEvent, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Form, OverlayTrigger, Tooltip } from "react-bootstrap";
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
+import "ag-grid-community/styles/ag-theme-quartz.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { IoMdCloudUpload } from "react-icons/io";
@@ -16,6 +16,7 @@ import { TokenResponse } from "@react-oauth/google";
 import { updateProgramsColumn } from "@/db/programsRequests";
 import { ThemeContext } from "@/context/Theme/Theme";
 import { OAuthTokenResponseGoogle } from "@/app/googleCallback/page";
+
 export interface ExtendedLinkCell extends ICellRendererParams {
   AuthenticateActivate: (config: 'open' | 'delete') => (args) => {};
   type: "Program" | "Guide"
@@ -23,89 +24,35 @@ export interface ExtendedLinkCell extends ICellRendererParams {
 
 export const CustomLinkDrive = (props: ExtendedLinkCell) => {
   const [ListenerActivated, setListenerActivated] = useState(false);
+  // משתנה למניעת טעינה אוטומטית של הפיקר - פותר את בעיית ה-SEO
+  const [showPicker, setShowPicker] = useState(false); 
+  
   const deleteFunction = props.AuthenticateActivate('delete')
   const { theme } = useContext(ThemeContext)
+  
   const getValue = useCallback(() => {
-    // we update the value from inside the google drive picker.
     const value: string | undefined = props.colDef!.field;
     return props.data[value as string];
   }, [props.colDef, props.data]);
 
   const [Value, setValue] = useState(getValue())
 
-
-
-
-
   const getTextInstructors = useCallback(() => {
     const value: string | undefined = props.colDef!.field;
-    if (value === "Proposal") {
+    if (value === "Proposal") return !Boolean(props.data.Proposal) ? "" : "הצעה";
+    if (value === "Documents") return !Boolean(props.data.Documents) ? "" : "מסמכים";
+    if (value === "PoliceApproval") return !Boolean(props.data.PoliceApproval) ? "" : "משטרה";
+    if (value === "Insurance") return !Boolean(props.data.Insurance) ? "" : "ביטוח";
+    if (value === "Aggrement") return !Boolean(props.data.Aggrement) ? "" : "הסכם";
+    if (value === "CV") return !Boolean(props.data.CV) ? "" : "קוח";
+    if (value === "Other_Documents") return !Boolean(props.data.Other_Documents) ? "" : "תעודה";
+  }, [props.colDef, props.data]);
 
-      if (!Boolean(props.data.Proposal)) {
-
-        return "";
-      }
-      return "הצעה";
-    }
-
-    if (value === "Documents") {
-
-      if (!Boolean(props.data.Documents)) {
-
-        return "";
-      }
-      return "מסמכים";
-    }
-    if (value === "PoliceApproval") {
-      if (!Boolean(props.data.PoliceApproval)) {
-        return "";
-      }
-      return "משטרה";
-    }
-    if (value === "Insurance") {
-
-      if (!Boolean(props.data.Insurance)) {
-
-        return "";
-      }
-      return "ביטוח";
-    }
-    if (value === "Aggrement") {
-      if (!Boolean(props.data.Aggrement)) {
-        return "";
-      }
-      return "הסכם";
-    }
-    if (value === "CV") {
-      if (!Boolean(props.data.CV)) {
-
-        return "";
-      }
-      return "קוח";
-    }
-    if (value === "Other_Documents") {
-
-      if (!Boolean(props.data.Other_Documents)) {
-        return ""
-      }
-      else {
-        return "תעודה"
-      }
-
-    }
-
-  }, [props.colDef, props.data.Proposal, props.data.Documents, props.data.PoliceApproval, props.data.Insurance, props.data.Aggrement, props.data.CV, props.data.Other_Documents]);
-
-  function onChange(event: ChangeEvent<HTMLInputElement>): void {
-
-  }
+  function onChange(event: ChangeEvent<HTMLInputElement>): void {}
 
   const deleteFile = useCallback((event: React.MouseEvent<HTMLButtonElement>, val, index) => {
-
     Promise.all([getProgramAuth(), getGuidesAuth()]).then(async ([res_1, res_2]) => {
-
       const Res: OAuthTokenResponseGoogle | undefined = props.type === "Program" ? res_1.authResult : res_2.authResult
-
       const info: any = await getInfo();
       const env = await getEnv()
       var args = {
@@ -118,34 +65,26 @@ export const CustomLinkDrive = (props: ExtendedLinkCell) => {
           if (data.result === "Success") {
             const field: string | undefined = props.colDef.field;
             let value: string[] = getValue().split(',')
-
             value.splice(index, 1)
-
             let result = value.length > 0 ? value.join(',') : ""
-
             props.node.setDataValue(field as string, result);
             if (props.type === 'Program') {
               updateProgramsColumn(field as string, result, props.data.Programid);
             } else {
               updateInstructorsColumn(field as string, result, props.data.Guideid);
             }
-
           }
         }
-
       }
       deleteFunction(args)
-
-
     })
-
   }, [deleteFunction, getValue, props.colDef.field, props.data.Guideid, props.data.Programid, props.node, props.type])
-
 
   const getLinks = useCallback(() => {
     const text = getTextInstructors()
-    if (text === "") { return "" }
+    if (!text) { return "" }
     const value = getValue().split(',')
+    
     if (value.length == 1) {
       return (<div key={1} >
         <div className=" float-right">
@@ -153,11 +92,8 @@ export const CustomLinkDrive = (props: ExtendedLinkCell) => {
         </div>
         <a className="" key={1} href={value[0]} target='_blank'>{text} </a>
       </div>)
-
-    }
-    else {
+    } else {
       return (
-        // z-1 so that it overlaps other rows below.
         <div className="z-1 flex flex-row absolute overflow-x-clip hover:overflow-x-scroll w-[90%] h-[52px] mr-0 hover:bg-orange-300">
           {value.map((val, index: number) => {
             return (
@@ -168,24 +104,29 @@ export const CustomLinkDrive = (props: ExtendedLinkCell) => {
                 <a className="ml-1" key={index} href={val} target='_blank'>{text.concat('-', index.toString())} </a>
               </div>
             )
-
-          }
-          )}
+          })}
         </div>
       )
-
     }
-
   }, [deleteFile, getTextInstructors, getValue, theme])
-
-
 
   return (
     <div>
       {getLinks() !== "" ? (
         getLinks()
       ) : (
-        <GoogleDriverPicker {...props} />
+        // אם הפיקר לא פתוח, מציגים רק אייקון
+        !showPicker ? (
+           <div 
+             className="flex items-center justify-center h-full cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+             onClick={() => setShowPicker(true)}
+             title="העלה קובץ"
+           >
+             <IoMdCloudUpload size={24} className={theme === "dark-theme" ? "fill-slate-200" : "fill-gray-600"} />
+           </div>
+        ) : (
+          <GoogleDriverPicker {...props} />
+        )
       )}
     </div>
   );

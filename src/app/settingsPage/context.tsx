@@ -1,3 +1,4 @@
 import { createContext } from 'react';
 
-export const CustomContext = createContext(null);
+// יצירת הקונטקסט עם ערך התחלתי ריק אך תקין למניעת שגיאות
+export const CustomContext = createContext<any>({});

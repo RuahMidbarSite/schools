@@ -3,6 +3,7 @@ import { useContext, useEffect, useState } from "react";
 import { ThemeContext } from "@/context/Theme/Theme";
 export default function Home() {
   const { theme } = useContext(ThemeContext)
+
   return (
 
     <div className={theme === "dark-theme" ? "bg-[#1f2936] h-screen w-screen" : "bg-white h-screen w-screen"}>

@@ -36,6 +36,7 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
 
   const [tokenClient, setClient] = useState(null)
   const expiresInSeconds = useRef(0)
+  
   // get the apis from googleapis
   useEffect(() => {
     if (!pickerApiLoaded && loaded && loadedGsi) {
@@ -49,7 +50,8 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
   const AuthAndActivate = useCallback(async (config: PickerConfiguration, callBack: (args) => {}) => {
 
     const client = google.accounts.oauth2.initTokenClient({
-      client_id: config.clientId,
+      // תיקון: שימוש ב-NEXT_PUBLIC אם לא קיים בקונפיג
+      client_id: config.clientId || process.env.NEXT_PUBLIC_CLIENT_ID,
       scope: (config.customScopes
         ? [...defaultScopes, ...config.customScopes]
         : defaultScopes
@@ -85,11 +87,12 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
   const gapiInted = useCallback(async () => {
 
     await gapi.client.init({
-      apiKey: process.env.developerKey,
-      clientId: process.env.clientId,
+      // תיקון: שימוש במשתני סביבה ציבוריים כדי שיהיו זמינים בדפדפן
+      apiKey: process.env.NEXT_PUBLIC_DEVELOPER_KEY,
+      clientId: process.env.NEXT_PUBLIC_CLIENT_ID,
       discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
     }).then(() => {
-  
+      console.log("Gapi initialized successfully");
     })
 
   }, [])
@@ -172,11 +175,12 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
   }: PickerConfiguration) => {
     if (disabled) return false;
 
-
+    // Use passed developerKey or fallback to env var
+    const apiKeyToUse = developerKey || process.env.NEXT_PUBLIC_DEVELOPER_KEY;
 
 
     // We want it to return the parentID at the end
-    createFolderStructure({ token: token, developerKey: developerKey, folderStructure: folderStructure }).then((lastParentID) => {
+    createFolderStructure({ token: token, developerKey: apiKeyToUse, folderStructure: folderStructure }).then((lastParentID) => {
       const view = new google.picker.DocsView(google.picker.ViewId[viewId]);
       if (viewMimeTypes) view.setMimeTypes(viewMimeTypes);
       if (setIncludeFolders) view.setIncludeFolders(true);
@@ -188,12 +192,10 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
       if (showUploadFolders) uploadView.setIncludeFolders(true);
 
 
-
-
       picker.current = new google.picker.PickerBuilder()
         .setAppId(appId)
         .setOAuthToken(token)
-        .setDeveloperKey(developerKey)
+        .setDeveloperKey(apiKeyToUse)
         .setLocale(locale)
         .setCallback(callbackFunction);
 
@@ -234,7 +236,10 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
     callbackFunction = (res: {result:"Success",data:any}|{result:"Error",data:any}) => { },
   }) => {
    gapi.client.setToken({ access_token: token });
-    gapi.client.setApiKey(developerKey);
+   // תיקון: fallback גם כאן
+    const apiKeyToUse = developerKey || process.env.NEXT_PUBLIC_DEVELOPER_KEY;
+    gapi.client.setApiKey(apiKeyToUse);
+    
     // https://drive.google.com/file/d/FILE_ID/view?usp=sharing is the general form of drive file
     // [0] is for the /d/ part, [1] is for FILE_ID until / not included(what we need)
     const fileID: string = (data.match(/\/d\/([a-zA-Z0-9_-]+)/))[1];
@@ -245,7 +250,7 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
     gapi.client.drive.files.delete({
       fileId: fileID,
       access_token:token,
-      key: developerKey
+      key: apiKeyToUse
     }).then(
       (response) => { 
         callbackFunction({result:"Success",data:response.result})

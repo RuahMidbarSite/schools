@@ -19,23 +19,27 @@ export const SchoolChoosing = React.forwardRef(({ AllSchools, ...props }: Custom
     const label = Name?.concat(`-${City ? City : 'ללא עיר'}`)
     return label
   }, [])
+
   /** We need this useEffect in case we change the school details in school table to update the other fields  */
   useEffect(() => {
+    // בדיקה שהפרופס קיימים לפני שרצים
+    if (!AllSchools || !props.data) return;
+
     const school: School = AllSchools.find((val) => val.SchoolName === props.data.SchoolName && getLabel(val.SchoolName, val.City) === getLabel(props.data.SchoolName, props.data.CityName));
     const data: Program = props.data;
 
-
-    if (
+    if (school && (
       data?.CityName !== school?.City ||
       data?.Schoolid !== school?.Schoolid ||
       data?.EducationStage !== school?.EducationStage
-
-    ) {
-      props.node.setDataValue("CityName" as string, school?.City);
-      props.node.setDataValue("Schoolid" as string, school?.Schoolid);
-      props.node.setDataValue("EducationStage" as string, school?.EducationStage);
+    )) {
+      // === כאן בוצע התיקון: CityName -> City ===
+      props.node.setDataValue("City", school?.City);
+      props.node.setDataValue("Schoolid", school?.Schoolid);
+      props.node.setDataValue("EducationStage", school?.EducationStage);
+      
       props.api.refreshCells({
-        force: true, // optional, forces a refresh regardless of internal checks
+        force: true, 
         columns: ['SchoolsContact']
       });
     }
@@ -51,16 +55,32 @@ export const SchoolChoosing = React.forwardRef(({ AllSchools, ...props }: Custom
 
   const onChange = (newValue: OnChangeValue<any, false>, actionMeta: ActionMeta<any>) => {
     if (newValue.value !== props.data.SchoolName || newValue.label !== getLabel(props.data.SchoolName, props.data.CityName)) {
-      const school: School =  AllSchools.find((val) => newValue.value === val.SchoolName && newValue.label===getLabel(val.SchoolName,val.City));
-      props.node.setDataValue("CityName" as string, school.City);
-      props.node.setDataValue("District" as string, "");
-      props.node.setDataValue("SchoolName" as string, school.SchoolName);
-      props.node.setDataValue("Schoolid" as string, school.Schoolid);
-      props.node.setDataValue("EducationStage" as string, school.EducationStage);
-      props.api.refreshCells({
-        force: true, // optional, forces a refresh regardless of internal checks
-        columns: ['SchoolsContact']
-      });
+      
+      const school: School = AllSchools.find((val) => newValue.value === val.SchoolName && newValue.label===getLabel(val.SchoolName,val.City));
+      
+      if (school) {
+        // === כאן בוצע התיקון: CityName -> City ===
+        props.node.setDataValue("City", school.City);
+        
+        // הסרתי את עדכון ה-District כי הוא לא קיים בטבלה ויגרום לקריסה
+        // props.node.setDataValue("District", ""); 
+
+        props.node.setDataValue("SchoolName", school.SchoolName);
+        props.node.setDataValue("Schoolid", school.Schoolid);
+        props.node.setDataValue("EducationStage", school.EducationStage);
+        
+        // אופציונלי: עדכון איש קשר אם קיים אצל בית הספר
+        if (school.ContactName) {
+            props.node.setDataValue("SchoolsContact", school.ContactName);
+        }
+
+        props.api.refreshCells({
+          force: true, 
+          columns: ['SchoolsContact'] // מרענן גם את עמודת אנשי הקשר
+        });
+        // רענון השורה הנוכחית כדי לראות את השינויים בעיר ובמזהה
+        props.api.refreshCells({ rowNodes: [props.node] });
+      }
     }
   };
 

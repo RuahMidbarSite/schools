@@ -6,16 +6,17 @@ const isPublicRoute = createRouteMatcher([
   '/join', 
   '/sign-in(.*)', 
   '/sign-up(.*)', 
-  '/api/ai-match(.*)' // הוספת נתיב ה-AI לכאן
+  '/api/ai-match(.*)', 
+  // נשאיר רק את זה פתוח ליתר ביטחון, אבל נסגור את שאר ה-API
+  '/api/google(.*)',
+  '/api/drive(.*)' 
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
-  // אם הנתיב ציבורי, תן לו לעבור בלי לבדוק userId
   if (isPublicRoute(request)) {
     return NextResponse.next();
   }
 
-  // הגנה על כל שאר הנתיבים
   const { userId } = await auth();
   if (!userId) {
     await auth.protect();
