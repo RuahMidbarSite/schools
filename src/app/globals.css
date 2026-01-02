@@ -8,7 +8,6 @@
 }
 
 /* === ביטול ריפוד בתאים לאפשרות כיווץ מקסימלי === */
-/* הקטנת הריווח הפנימי מ-20px (ברירת מחדל) ל-2px כדי לאפשר לעמודה להיות צרה מאוד */
 .ag-theme-quartz .ag-cell, 
 .ag-theme-quartz-dark .ag-cell {
     padding-left: 2px !important;
@@ -32,7 +31,7 @@
     --ag-header-column-separator-color: rgb(4, 1, 23) !important;
 }
 
-/* --- הפתרון המנצח לכותרת: אייקון מעל הטקסט --- */
+/* --- עיצוב הכותרת: אייקון מעל טקסט --- */
 
 .ag-header-cell-comp-wrapper {
     display: flex !important;
@@ -44,22 +43,7 @@
     position: relative !important;
 }
 
-/* כפתור התפריט/סינון צף */
-[ref="eMenu"], 
-.ag-header-cell-menu-button {
-    position: absolute !important;
-    top: 6px !important;              
-    left: 50% !important;
-    transform: translateX(-50%) !important; 
-    display: flex !important;
-    justify-content: center !important;
-    width: 20px !important;
-    height: 20px !important;
-    margin: 0 !important;
-    z-index: 2 !important;
-}
-
-/* לייבל הטקסט עם מרווח מהאייקון */
+/* לייבל הטקסט עם מרווח מהאייקון העליון */
 .ag-header-cell-label {
     display: block !important;
     width: 100% !important;
@@ -67,7 +51,7 @@
     white-space: normal !important;    
     word-break: break-word !important;
     line-height: 1.1 !important;
-    margin-top: 22px !important;       /* מונע חפיפה עם האייקון */
+    margin-top: 22px !important;       /* מרווח קבוע מלמעלה עבור כפתור התפריט */
     padding: 0 4px !important;
 }
 
@@ -93,8 +77,43 @@
     min-height: 70px !important; 
 }
 
-/* === חדש: הסתרת אייקונים (קווים תחתונים) בכותרות ליצירת גובה אחיד === */
-/* מעלים את האייקון שנדחף למטה בכותרות כמו 'שנה' ו'סטטוס' */
-.ag-header-cell .ag-header-icon {
+/* === תיקון סופי: החזרת 3 הקווים (Menu Button) === */
+
+/* 1. הסתרת אייקונים של מיון בלבד כדי לשמור על גובה אחיד */
+.ag-header-cell .ag-sort-order,
+.ag-header-cell .ag-sort-ascending-icon,
+.ag-header-cell .ag-sort-descending-icon,
+.ag-header-cell .ag-filter-icon {
     display: none !important;
+}
+
+/* 2. עיצוב כפתור התפריט (3 הקווים) - ממורכז למעלה */
+.ag-header-cell-menu-button {
+    position: absolute !important;
+    top: 4px !important;              
+    left: 50% !important;
+    transform: translateX(-50%) !important; 
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 20px !important;
+    height: 20px !important;
+    z-index: 10 !important;
+    
+    /* ברירת מחדל: מוסתר (שקוף) */
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+/* 3. הצגת הכפתור כאשר העכבר מרחף מעל הכותרת */
+.ag-header-cell:hover .ag-header-cell-menu-button {
+    opacity: 1 !important;
+}
+
+/* 4. וידוא שהאייקון בתוך הכפתור גלוי וצבוע */
+.ag-header-cell-menu-button .ag-icon {
+    display: block !important;
+    font-size: 14px !important;
+    color: #0d6efd !important; /* כחול בולט */
 }

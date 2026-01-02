@@ -1,5 +1,4 @@
 "use client";
-// ייבוא ה-Hook הקיים אצלך
 import useColumnHook from "../SmallContactsTable/hooks/ColumnHooks";
 import useColumnEffects from "../SmallContactsTable/hooks/ColumnEffects"; 
 import useColumnComponent from "../SmallContactsTable/hooks/ColumnComponent"; 
@@ -18,6 +17,7 @@ import { ColDef, ColumnResizedEvent } from "ag-grid-community";
 import { Button, Navbar } from "react-bootstrap";
 import { FcAddColumn, FcAddRow, FcCancel, FcFullTrash } from "react-icons/fc";
 import { MdStopCircle } from "react-icons/md";
+import { FaExternalLinkAlt } from "react-icons/fa"; 
 
 import { CustomLinkDrive } from ".././GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
@@ -38,14 +38,13 @@ import YearFilter from "./components/YearFilter";
 import StatusFilter from "./components/StatusFilter";
 import Redirect from "@/components/Auth/Components/Redirect";
 
-// === סגנונות צבע לעמודות (מעודכן עם צבעי פסטל) ===
 const STYLES = {
-    FINANCE_COL: { backgroundColor: '#ecfdf5', textAlign: 'center' as const }, // ירוק מנטה פסטלי בהיר
-    BALANCE_COL: { backgroundColor: '#eff6ff', textAlign: 'center' as const, fontWeight: 'bold' }, // תכלת פסטלי שונה
+    FINANCE_COL: { backgroundColor: '#ecfdf5', textAlign: 'center' as const }, 
+    BALANCE_COL: { backgroundColor: '#eff6ff', textAlign: 'center' as const, fontWeight: 'bold' }, 
+    GEO_COL: { backgroundColor: '#fff7ed', textAlign: 'center' as const }, 
     CENTER: { textAlign: 'center' as const }
 };
 
-// === פורמט תאריך עם שנה מקוצרת ===
 const dateFormatter = (params: any) => {
   if (!params.value) return "";
   const date = new Date(params.value);
@@ -63,7 +62,6 @@ const arrayToStringFormatter = (params: any) => {
     return params.value;
 };
 
-// --- רכיב תצוגה (Renderer): מציג את הקישור אם קיים ---
 const ProgramLinkRenderer = (params: any) => {
     const name = params.value;
     const link = params.data.ProgramLink;
@@ -90,7 +88,6 @@ const ProgramLinkRenderer = (params: any) => {
     return <span>{name}</span>;
 };
 
-// --- רכיב עריכה (Editor): שומר שם וקישור ---
 const ProgramDetailsEditor = forwardRef((props: any, ref) => {
     const [name, setName] = useState(props.value || "");
     const [link, setLink] = useState(props.data.ProgramLink || "");
@@ -137,7 +134,6 @@ const ProgramDetailsEditor = forwardRef((props: any, ref) => {
     );
 });
 
-// --- רכיב עריכה לאזורים ---
 const RegionSelectEditor = forwardRef((props: any, ref) => {
     const options = props.values ? props.values.map((v: string) => ({ value: v, label: v })) : [];
     const getInitialValue = () => {
@@ -290,7 +286,7 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
         const manualColumns = [
             { 
                 field: "select", 
-                headerName: "", // א' - כותרת ריקה
+                headerName: "", 
                 checkboxSelection: true, 
                 headerCheckboxSelection: true, 
                 width: 50, 
@@ -303,8 +299,8 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             { field: "Programid", header: "מזהה", width: 90, editable: false, cellStyle: STYLES.CENTER },
             { field: "ProgramName", header: "שם תוכנית", width: 200, special: "link" },
             { field: "SchoolName", header: "שם בית ספר", width: 180, special: "school" },
-            { field: "Area", header: "אזור", width: 160, editable: true, cellEditor: RegionSelectEditor, cellEditorParams: { values: areaValues }, singleClickEdit: true, filterParams: { values: areaValues } },
-            { field: "CityName", colId: "City", header: "עיר", width: 120, filterParams: { values: getUniqueValues("CityName") } },
+            { field: "Area", header: "אזור", width: 160, editable: true, cellStyle: STYLES.GEO_COL, cellEditor: RegionSelectEditor, cellEditorParams: { values: areaValues }, singleClickEdit: true, filterParams: { values: areaValues } },
+            { field: "CityName", colId: "City", header: "עיר", width: 120, cellStyle: STYLES.GEO_COL, filterParams: { values: getUniqueValues("CityName") } },
             { field: "Year", header: "שנה", width: 110, special: "year" },
             { field: "ChosenDay", header: "יום נבחר", width: 150, special: "days" },
             { field: "Status", header: "סטטוס", width: 130, special: "status" },
@@ -314,8 +310,6 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             { field: "Days", header: "ימים", width: 120, cellStyle: STYLES.CENTER },
             { field: "Weeks", header: "מספר שבועות", width: 110, cellStyle: STYLES.CENTER },
             { field: "Product", header: "מוצר", width: 150 },
-            
-            // ב' - צבעי פסטל לעמודות מחיר ושיעורים
             { field: "PricingPerPaidLesson", header: "מחיר לשיעור", width: 130, cellStyle: STYLES.FINANCE_COL },
             { field: "PaidLessonNumbers", header: "שיעורים לתשלום", width: 150, cellStyle: STYLES.FINANCE_COL },
             { 
@@ -333,16 +327,12 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             },
             { field: "FinalPrice", header: "מחיר לאחר הוצאות", width: 150 },
             { field: "EstimatedExpenses", header: "הוצאות משוערות", width: 130 },
-            
-            // ב' - יתרה לגבייה בצבע מאותה משפחה אך בולט
             { field: "PendingMoney", header: "יתרה לגבייה", width: 130, cellStyle: STYLES.BALANCE_COL },
-            
             { field: "FreeLessonNumbers", header: "שיעורי בונוס", width: 130, cellStyle: STYLES.FINANCE_COL },
             { field: "AdditionalPayments", header: "תשלומים נוספים", width: 130, cellStyle: STYLES.FINANCE_COL },
-
             { field: "Notes", header: "הערות", width: 200 },
             { field: "Details", header: "פרטים נוספים", width: 150, hide: true },
-            { field: "Order", header: "הצעה", width: 120, special: "drive" },
+            { field: "Order", header: "הצעה", width: 90, special: "drive" },
             { field: "EstablishmentNumber", header: "סמל מוסד", width: 100 },
             { field: "Date", header: "תאריך", width: 120, special: "date" },
             { field: "Schoolid", header: "מזהה ביס", hide: true }, 
@@ -354,7 +344,7 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
                 field: col.field, 
                 colId: col.colId || col.field, 
                 headerName: col.header || col.headerName, 
-                filter: "CustomFilter", 
+                filter: col.filter !== undefined ? col.filter : true, 
                 editable: col.editable !== undefined ? col.editable : true, 
                 width: col.width, 
                 hide: col.hide || false,
@@ -373,8 +363,9 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             };
 
             if (col.special === "drive") {
-                return { ...base, cellRenderer: "CustomLinkDrive", editable: false, 
-                    cellRendererParams: { targetEmail: "ruahmidbar.customers@gmail.com",
+                return { ...base, cellRenderer: "OrderFileRenderer", editable: false, 
+                    cellRendererParams: { 
+                        targetEmail: "ruahmidbar.customers@gmail.com",
                         folderPath: (params: any) => {
                             const data = params.data;
                             return ["מחלקת שיווק ומכירות", data.Year, data.Area || "אזור כללי", data.CityName, data.SchoolName];
@@ -425,13 +416,25 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
       const { colDef, data, oldValue, newValue } = event;
       if (oldValue === newValue) return;
       if (colDef.field === "ProgramName") return;
+      
       try {
           let valueToSave = newValue;
+
+          if (valueToSave instanceof Date) {
+              valueToSave = valueToSave.toISOString();
+          } 
+          else if (typeof valueToSave === 'object' && valueToSave !== null) {
+              valueToSave = valueToSave.value || valueToSave.label || "";
+          }
+
           if (valueToSave === undefined || valueToSave === null) valueToSave = "";
           if (Array.isArray(valueToSave)) valueToSave = valueToSave.join(", "); 
-          if (typeof valueToSave === 'object' && valueToSave !== null) valueToSave = valueToSave.value || valueToSave.label || "";
+
           await updateProgramsColumn(colDef.field === "Area" ? "District" : colDef.field, valueToSave, data.Programid);
-      } catch (error) { event.node.setDataValue(colDef.field, oldValue); }
+      } catch (error) { 
+          event.node.setDataValue(colDef.field, oldValue); 
+          console.error("Update failed:", error);
+      }
   }, []);
 
   return (
@@ -476,6 +479,65 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
           components={useMemo(() => ({ 
               SchoolChoosing, RepresentiveComponent, AssignedGuidesColumn, ProgramLinkDetailsCellRenderer: ProgramLinkRenderer, ProgramLinkDetailsCellEditor: ProgramDetailsEditor, 
               MultiSelectCellEditor, CustomSelectCellEditor, RegionSelectEditor, 
+              
+              // רכיב חדש לניהול הצעה: ניהול "הכל או כלום" עם מחיקה אוטומטית דרך ה-Hook
+              OrderFileRenderer: (props: any) => {
+                 const { value, data, node } = props;
+                 
+                 // פונקציית המחיקה דרך ההוק המתוקן שיודע לזכור טוקנים
+                 const deleteDriveFile = AuthenticateActivate("delete");
+
+                 const handleDelete = async (e: any) => {
+                     e.stopPropagation();
+                     
+                     if (!window.confirm("האם למחוק את קובץ ההצעה לצמיתות?")) return;
+                     
+                     if (value && typeof value === 'string' && value.includes('/d/')) {
+                         // מחיקה חכמה דרך ה-Hook
+                         deleteDriveFile({
+                             data: value,
+                             callbackFunction: async (res: any) => {
+                                 if (res.result === "Success" || (res.data && res.data.status === 404)) {
+                                     try {
+                                         await updateProgramsColumn("Order", null, data.Programid);
+                                         node.setDataValue("Order", null); 
+                                     } catch (err) {
+                                         console.error(err);
+                                         alert("שגיאה במחיקת הקישור מהמערכת (אבל הקובץ נמחק מגוגל)");
+                                     }
+                                 } else {
+                                     // נכשל בגוגל - לא מוחקים מהטבלה
+                                     alert("שגיאה במחיקה מגוגל דרייב. הקובץ לא נמחק מהטבלה.");
+                                 }
+                             }
+                         });
+                     } else {
+                         // מחיקה רגילה לקבצים שאינם גוגל דרייב
+                         try {
+                             await updateProgramsColumn("Order", null, data.Programid);
+                             node.setDataValue("Order", null); 
+                         } catch (err) {
+                             console.error(err);
+                             alert("שגיאה במחיקת הקישור");
+                         }
+                     }
+                 };
+
+                 if (value && typeof value === 'string' && value.startsWith('http')) {
+                     return (
+                         <div className="d-flex justify-content-between align-items-center w-100 px-1">
+                             <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary text-decoration-underline" style={{fontSize: '12px'}}>
+                                 הצעה <FaExternalLinkAlt size={10} className="ms-1" />
+                             </a>
+                             <button onClick={handleDelete} className="btn btn-link p-0 text-danger" title="מחק קובץ לצמיתות">
+                                 <FcFullTrash size={16} />
+                             </button>
+                         </div>
+                     );
+                 }
+                 return <CustomLinkDrive {...props} AuthenticateActivate={AuthenticateActivate} type={"Program"} />;
+              },
+
               CustomLinkDrive: (props: any) => <CustomLinkDrive {...props} AuthenticateActivate={AuthenticateActivate} type={"Program"} /> 
           }), [AuthenticateActivate])} 
           getRowId={(p) => p.data.Programid.toString()}
