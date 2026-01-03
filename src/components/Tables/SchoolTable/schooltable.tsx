@@ -8,7 +8,7 @@ import {
   useContext,
   useEffect,
 } from "react";
-// ... (שאר האימפורטים נשארים זהים)
+import { createPortal } from "react-dom"; // <--- הוספה
 import { AgGridReact } from "ag-grid-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
@@ -29,7 +29,7 @@ import useGridEvents from "./Hooks/GridEvents";
 import useToolBarFunctions from "./Hooks/ToolBarFunctions";
 import ToolBar from "./Hooks/ToolBarComponent";
 import { ThemeContext } from "@/context/Theme/Theme";
-import { CellKeyDownEvent, GetRowIdParams, IsFullWidthRowParams, RowHeightParams, RowNode, SelectionChangedEvent } from "ag-grid-community"; // הוספתי SelectionChangedEvent לטייפ
+import { CellKeyDownEvent, GetRowIdParams, IsFullWidthRowParams, RowHeightParams, SelectionChangedEvent } from "ag-grid-community";
 import { Program, School, SchoolsContact, } from "@prisma/client";
 import RepresentiveComponent from "../GeneralFiles/GoogleContacts/ContactsRepComponent";
 
@@ -54,6 +54,7 @@ export default function SchoolsTable() {
   const [AllContacts, setAllContacts] = useState<SchoolsContact[]>([])
   const [AllPrograms, setAllPrograms] = useState<Program[]>([])
   const maxIndex = useRef(0)
+  const [mounted, setMounted] = useState(false); // <--- הוספה לטיפול ב-Portal
 
   const { updateColStateFromCache, updateColState } = useColumnEffects(gridRef, colState, setColState)
 
@@ -78,20 +79,18 @@ export default function SchoolsTable() {
 
   const { theme } = useContext(ThemeContext)
 
-  // --- תיקון: פונקציה עוטפת לטיפול בבחירת שורות בזמן סינון ---
+  // וודא שהקומפוננטה נטענה בצד לקוח לפני השימוש בפורטל
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleSelectionChanged = useCallback((event: SelectionChangedEvent) => {
-    // 1. קריאה לפונקציה המקורית מההוק (כדי לשמר לוגיקה קיימת אם יש)
     if (onSelectionChange) {
        onSelectionChange(event);
     }
-    
-    // 2. עדכון הכרחי: שליפת כמות השורות המסומנות ישירות מה-API
-    // זה פותר את הבעיה שבה סינון גורם לחישוב שגוי של השורות
     const selectedRowsCount = event.api.getSelectedRows().length;
     setAmount(selectedRowsCount);
-    
   }, [onSelectionChange, setAmount]);
-  // -----------------------------------------------------------
 
   const LoadingOverlay = () => {
     if (!isLoading) {
@@ -124,12 +123,9 @@ export default function SchoolsTable() {
   );
 
   const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
-      // ... (הקוד המקורי שלך נשאר ללא שינוי כאן)
       const keyboardEvent = event.event as unknown as KeyboardEvent;
       keyboardEvent.stopPropagation()
       if (keyboardEvent.key === "Tab" || keyboardEvent.key === "Enter" || keyboardEvent.key === "ArrowLeft" || keyboardEvent.key === "ArrowRight") {
-        // ... (קיצרתי לצורך הבהירות, הקוד המקורי שלך כאן תקין)
-        // ...
         event.event.preventDefault();
       }
   }, []);
@@ -171,11 +167,20 @@ export default function SchoolsTable() {
 
   return (
     <>
-      {ToolBar(onClearFilterButtonClick, setColumnWindowOpen, onAddRowToolBarClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, checkedAmount, onFilterTextBoxChanged, onDisplayProgramsClicked, LoadingOverlay)}
+      {/* כאן השינוי: העברת הטולבר לפורטל בנאב-בר */}
+      {mounted && document.getElementById("navbar-actions") 
+        ? createPortal(
+            ToolBar(onClearFilterButtonClick, setColumnWindowOpen, onAddRowToolBarClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, checkedAmount, onFilterTextBoxChanged, onDisplayProgramsClicked, LoadingOverlay),
+            document.getElementById("navbar-actions") as HTMLElement
+          )
+        : null
+      }
+
       <Suspense>
         <div
           id="grid-1"
           className={theme === "dark-theme" ? "ag-theme-quartz-dark w-full flex-grow overflow-x-hidden" : "ag-theme-quartz w-full flex-grow overflow-x-hidden"}
+          // הסרתי גובה קבוע כדי שיתפוס את הגובה הזמין, או שתשאיר 1000px לפי הצורך שלך
           style={{ width: "100%", height: "1000px" }}
         >
           <AgGridReact
@@ -192,11 +197,7 @@ export default function SchoolsTable() {
             onCellValueChanged={onCellValueChanged}
             onCellEditingStarted={onCellEditingStarted}
             onRowSelected={onRowSelected}
-            
-            // --- שינוי כאן: שימוש בפונקציה העוטפת החדשה ---
             onSelectionChanged={handleSelectionChanged}
-            // ---------------------------------------------
-            
             isRowSelectable={isRowSelectable}
             singleClickEdit={true}
             loadingOverlayComponent={() => (

@@ -1,21 +1,16 @@
-'use client' // for now, react bootstrap does not support next js server-side .. need to wait for update
+'use client'
 import 'bootstrap/dist/css/bootstrap.css'
-import { Nav, Navbar, Row } from 'react-bootstrap'
-import clsx from 'clsx' // this library is for conditional css
+import { Nav, Navbar } from 'react-bootstrap'
+import clsx from 'clsx'
 import styles from '@/app/ui/navbar.module.css'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ModeToggle } from '@/context/Theme/ChangeTheme'
 import { SignedIn, UserButton } from '@clerk/nextjs'
 
-/** In regards to the auth: What is inside <SignedIn> will be available only if the user is indeed signed in.
-  the same goes to the <SignedOut>
-  */
-
 export default function NavBarClient() {
 
   const Url: string = usePathname()
-  const homePage = "בית"
   const names = {
     schoolsPage: "בתי ספר",
     messagesForm: "שליחת הודעות",
@@ -30,37 +25,27 @@ export default function NavBarClient() {
   const page = Url.substring(1)
   const reg = (key: string) => { return "/" + key }
 
-  // conditional css, only when we are at the page we want to highlight it
   const stylecheck = (key: string): string => clsx({ [styles.navbarSelectedOption]: (page === key), ['']: !(page === key) })
   const Mapping = Object.entries(names)
     .map(([key, value]) => <Link className="text-gray-400 no-underline margin ml-7 hover:text-gray-200" href={reg(key)} key={key}>   <div className={stylecheck(key)}> {value}</div>  </Link>)
 
   return (
-
     <Navbar bg="dark" variant="dark" sticky='top'>
-
-      <Navbar.Collapse  >
-
+      <Navbar.Collapse>
         <Nav className="mx-auto d-flex justify-content-center align-items-center flex-row-reverse">
-
           {Mapping}
-
         </Nav>
       </Navbar.Collapse>
+
+      {/* --- כאן התיקון: שינוי ה-ID ל-navbar-actions כדי שיתאים ל-Portal --- */}
+      <div id="navbar-actions" className="d-flex align-items-center mx-3 gap-2"></div> 
+      {/* ------------------------------------------------------------------- */}
+
       <SignedIn>
         <UserButton />
       </SignedIn>
       <Navbar.Brand>{title}</Navbar.Brand>
       <ModeToggle />
-
     </Navbar>
-
-
   )
-
-
-
-
 }
-
-
