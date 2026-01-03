@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "install": "npm config set install-strategy nested",
-    "dev": "next dev -p 3666",
+    "dev": "next dev --turbo -p 3666",
     "build": "next build",
     "start": "next start -p 3666",
     "dev-and-open": "start http://localhost:3666 && npm run start",

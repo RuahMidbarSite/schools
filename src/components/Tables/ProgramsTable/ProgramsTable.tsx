@@ -19,9 +19,11 @@ import { FcAddColumn, FcAddRow, FcCancel, FcFullTrash } from "react-icons/fc";
 import { MdStopCircle } from "react-icons/md";
 import { FaExternalLinkAlt } from "react-icons/fa"; 
 
-import { CustomLinkDrive } from ".././GeneralFiles/GoogleDrive/CustomLinkDrive";
+import { CustomLinkDrive } from "../GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
-import { deletePrograms, updateProgramsColumn, getAllProgramsData } from "@/db/programsRequests";
+
+// הוספנו את saveNewPrograms כאן בייבוא
+import { deletePrograms, updateProgramsColumn, getAllProgramsData, createProgram, saveNewPrograms } from "@/db/programsRequests";
 import { getAllDistricts } from "@/db/generalrequests"; 
 
 import { ThemeContext } from "@/context/Theme/Theme";
@@ -37,6 +39,8 @@ import { MultiSelectCellEditor } from "@/components/CustomSelect/MultiSelectCell
 import YearFilter from "./components/YearFilter";
 import StatusFilter from "./components/StatusFilter";
 import Redirect from "@/components/Auth/Components/Redirect";
+
+// --- Styles & Formatters ---
 
 const STYLES = {
     FINANCE_COL: { backgroundColor: '#ecfdf5', textAlign: 'center' as const }, 
@@ -61,6 +65,8 @@ const arrayToStringFormatter = (params: any) => {
     }
     return params.value;
 };
+
+// --- Custom Renderers & Editors ---
 
 const ProgramLinkRenderer = (params: any) => {
     const name = params.value;
@@ -99,6 +105,14 @@ const ProgramDetailsEditor = forwardRef((props: any, ref) => {
     }));
 
     const handleSave = async () => {
+        // אם זו שורה חדשה, רק נעדכן את הערך בגריד (השמירה תתבצע בכפתור הראשי)
+        if (props.data.isNew) {
+            props.node.setDataValue("ProgramName", name);
+            props.node.setDataValue("ProgramLink", link);
+            props.stopEditing();
+            return;
+        }
+
         setSaving(true);
         try {
             await Promise.all([
@@ -124,11 +138,11 @@ const ProgramDetailsEditor = forwardRef((props: any, ref) => {
         <div className="p-3 bg-white border rounded shadow-lg" style={{width: '320px', direction: 'rtl'}}>
             <h6 className="mb-3 border-bottom pb-2">עריכת פרטי תוכנית</h6>
             <label className="form-label text-sm fw-bold">שם התוכנית</label>
-            <input className="form-control mb-3" value={name} onChange={e => setName(e.target.value)} autoFocus disabled={saving} />
+            <input className="form-control mb-3" value={name} onChange={e => setName(e.target.value)} autoFocus disabled={saving && !props.data.isNew} />
             <label className="form-label text-sm fw-bold">קישור (Drive/Web)</label>
-            <input className="form-control mb-3" value={link} onChange={e => setLink(e.target.value)} placeholder="הדבק קישור כאן..." disabled={saving} />
+            <input className="form-control mb-3" value={link} onChange={e => setLink(e.target.value)} placeholder="הדבק קישור כאן..." disabled={saving && !props.data.isNew} />
             <div className="d-flex justify-content-end gap-2">
-                 <button className="btn btn-success btn-sm" onClick={handleSave} disabled={saving}>{saving ? "שומר..." : "שמור וסגור"}</button>
+                 <button className="btn btn-success btn-sm" onClick={handleSave} disabled={saving && !props.data.isNew}>{saving ? "שומר..." : "שמור וסגור"}</button>
             </div>
         </div>
     );
@@ -167,6 +181,8 @@ const RegionSelectEditor = forwardRef((props: any, ref) => {
 });
 
 
+// --- Main Component ---
+
 export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
   const AuthenticateActivate = useDrivePicker("Program");
   const gridRef = useRef<AgGridReact>(null);
@@ -175,6 +191,9 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
   const [rowData, setRowData] = useState<any[]>([]);       
   const [isGridReady, setIsGridReady] = useState(false);   
   const [ignoreContextFilters, setIgnoreContextFilters] = useState(false);
+  
+  // מצב חדש לניהול כפתור השמירה
+  const [hasNewRows, setHasNewRows] = useState(false);
 
   const [colDefinition, setColDefs] = useState<ColDef[] | any>([]);
   const [colState, setColState] = useState<any>([]);
@@ -253,6 +272,7 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
 
   const onGridReady = useCallback(async (params: any) => {
     setIsGridReady(true);
+    setHasNewRows(false); // איפוס מצב שמירה בטעינה מחדש
     try {
         const [storageData, areasData] = await Promise.all([ getAllProgramsData(), getAllDistricts() ]);
         if (!storageData) return;
@@ -298,7 +318,7 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             },
             { field: "Programid", header: "מזהה", width: 90, editable: false, cellStyle: STYLES.CENTER },
             { field: "ProgramName", header: "שם תוכנית", width: 200, special: "link" },
-            { field: "SchoolName", header: "שם בית ספר", width: 180, special: "school" },
+            { field: "SchoolName", header: "שם בית ספר", width: 180, special: "school", editable: true },
             { field: "Area", header: "אזור", width: 160, editable: true, cellStyle: STYLES.GEO_COL, cellEditor: RegionSelectEditor, cellEditorParams: { values: areaValues }, singleClickEdit: true, filterParams: { values: areaValues } },
             { field: "CityName", colId: "City", header: "עיר", width: 120, cellStyle: STYLES.GEO_COL, filterParams: { values: getUniqueValues("CityName") } },
             { field: "Year", header: "שנה", width: 110, special: "year" },
@@ -363,7 +383,10 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             };
 
             if (col.special === "drive") {
-                return { ...base, cellRenderer: "OrderFileRenderer", editable: false, 
+                return { 
+                    ...base, 
+                    cellRenderer: "OrderFileRenderer", 
+                    editable: false,
                     cellRendererParams: { 
                         targetEmail: "ruahmidbar.customers@gmail.com",
                         folderPath: (params: any) => {
@@ -374,7 +397,13 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
                 };
             }
             if (col.special === "link") return { ...base, cellRenderer: ProgramLinkRenderer, cellEditor: ProgramDetailsEditor, cellEditorPopup: true };
-            if (col.special === "school") return { ...base, cellRenderer: SchoolChoosing, cellRendererParams: { AllSchools: storageData.Schools } };
+            
+            if (col.special === "school") return { 
+                ...base, 
+                cellRenderer: SchoolChoosing, 
+                cellRendererParams: { AllSchools: storageData.Schools },
+            };
+            
             if (col.special === "contact") return { ...base, cellRenderer: RepresentiveComponent, cellRendererParams: { AllSchools: storageData.Schools, AllContacts: storageData.schoolsContacts } };
             if (col.special === "status") {
                 const statusValues = storageData.ProgramsStatuses?.map((v:any) => v.StatusName);
@@ -394,19 +423,99 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
     } catch (error) { console.error("Failed to load data:", error); }
   }, [SchoolIDs]);
 
+  // --- הוספת שורה חדשה: לוקאלית בלבד ---
+  const handleAddRow = useCallback(() => {
+    // 1. עדכון ידני של המונה כדי למנוע את הבעיה של 614
+    const nextId = (maxIndex.current || 0) + 1;
+    maxIndex.current = nextId; // עדכון מיידי של המונה
+
+    // 2. יצירת האובייקט המקומי עם דגל isNew
+    const newRowData = { 
+        Programid: nextId, 
+        Year: selectedYear || "תשפד", 
+        Status: defaultStatus || "חדש",
+        CityName: null, 
+        Area: null,
+        isNew: true // דגל שמסמן שזו שורה חדשה שטרם נשמרה ב-DB
+    };
+
+    // 3. הוספה לגריד
+    gridRef.current?.api.applyTransaction({ 
+        add: [newRowData], 
+        addIndex: 0 
+    });
+    
+    // 4. הצגת כפתור שמירה
+    setHasNewRows(true);
+
+    // 5. פוקוס ועריכה
+    setTimeout(() => {
+        gridRef.current?.api.ensureIndexVisible(0);
+        gridRef.current?.api.setFocusedCell(0, 'SchoolName');
+        gridRef.current?.api.startEditingCell({
+            rowIndex: 0,
+            colKey: 'SchoolName'
+        });
+    }, 100);
+
+  }, [selectedYear, defaultStatus]);
+
+  // --- שמירת השינויים (חדש) ---
+  const onSaveChangeButtonClick = useCallback(async () => {
+      // איסוף כל השורות החדשות מהגריד
+      const newRows: any[] = [];
+      gridRef.current?.api.forEachNode((node) => {
+          if (node.data.isNew) {
+              newRows.push(node.data);
+          }
+      });
+
+      if (newRows.length === 0) {
+          console.log("No new rows to save.");
+          return;
+      }
+
+      console.log("Saving new rows...", newRows);
+      
+      try {
+          await saveNewPrograms(newRows);
+          alert("נשמר בהצלחה!");
+          
+          // רענון הנתונים מהשרת כדי לקבל את המצב העדכני והנקי
+          onGridReady({});
+      } catch (error) {
+          console.error("Save failed:", error);
+          alert("שגיאה בשמירה.");
+      }
+  }, [onGridReady]);
+
   const handleAiSubmit = async () => {};
   const onCancelChanges = useCallback(() => { if (gridRef.current) onGridReady({}); }, [onGridReady]);
-  const onSaveChangeButtonClick = useCallback(() => { console.log("Saving changes..."); }, []);
 
   const onDeleteRows = useCallback(async () => {
     const selectedData = gridRef.current?.api.getSelectedRows();
     if (selectedData && selectedData.length > 0) {
         if(window.confirm(`האם למחוק ${selectedData.length} תוכניות?`)) {
             try {
-                const idsToDelete = selectedData.map(row => Number(row.Programid)).filter(id => !isNaN(id));
-                await deletePrograms(idsToDelete);
+                // מחיקה של שורות שקיימות בדאטה בייס
+                const idsToDelete = selectedData
+                    .filter(row => !row.isNew) // רק שורות שאינן חדשות
+                    .map(row => Number(row.Programid))
+                    .filter(id => !isNaN(id));
+                
+                if (idsToDelete.length > 0) {
+                    await deletePrograms(idsToDelete);
+                }
+                
+                // הסרה מהגריד (כולל שורות חדשות שעדיין לא נשמרו)
                 gridRef.current?.api.applyTransaction({ remove: selectedData });
-                setRowData(prev => prev.filter(p => !idsToDelete.includes(p.Programid)));
+                setRowData(prev => prev.filter(p => !selectedData.some(s => s.Programid === p.Programid)));
+                
+                // בדיקה אם נשארו שורות חדשות כדי לעדכן את כפתור השמירה
+                let remainingNew = false;
+                gridRef.current?.api.forEachNode(n => { if (n.data.isNew) remainingNew = true; });
+                setHasNewRows(remainingNew);
+
             } catch (error) { alert("שגיאה במחיקה"); }
         }
     } else alert("לא נבחרו שורות למחיקה");
@@ -415,6 +524,12 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
   const onCellValueChanged = useCallback(async (event: any) => {
       const { colDef, data, oldValue, newValue } = event;
       if (oldValue === newValue) return;
+      
+      // --- תיקון: אם השורה חדשה, לא לשמור לדאטה בייס עדיין ---
+      if (data.isNew) {
+          return;
+      }
+
       if (colDef.field === "ProgramName") return;
       
       try {
@@ -450,10 +565,20 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
           <button onClick={clearAllFilters} title="נקה את כל הסינונים"><FcCancel className="w-[37px] h-[37px]" /></button>
           <button onClick={onDeleteRows}><FcFullTrash className="w-[37px] h-[37px]" /></button>
           <button onClick={() => setColumnWindowOpen(true)}><FcAddColumn className="w-[37px] h-[37px]" /></button>
-          <button onClick={() => gridRef.current?.api.applyTransaction({ add: [{ Programid: maxIndex.current + 1, Year: selectedYear, Status: defaultStatus }], addIndex: 0 })}><FcAddRow className="w-[37px] h-[37px]" /></button>
+          <button onClick={handleAddRow} title="הוסף שורה חדשה"><FcAddRow className="w-[37px] h-[37px]" /></button>
+          
           <input className="text-right bg-white text-gray-500 w-[180px] h-[35px] p-2 rounded border-none" type="text" placeholder="חיפוש..." onInput={(e: any) => gridRef.current?.api.setQuickFilter(e.target.value)} />
           <div className="flex flex-row-reverse items-center gap-2 bg-[#1b2e3a] p-1 rounded border border-gray-700 mx-2">
-            <button id="savechangesbutton" onClick={onSaveChangeButtonClick} className="hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white hidden">שמור</button>
+            
+            {/* כפתור שמירה: מופיע רק אם יש שורות חדשות */}
+            <button 
+                id="savechangesbutton" 
+                onClick={onSaveChangeButtonClick} 
+                className={`hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white ${hasNewRows ? '' : 'hidden'}`}
+            >
+                שמור ({hasNewRows ? 'שינויים' : ''})
+            </button>
+
             <button id="cancelchangesbutton" onClick={onCancelChanges} className="hover:bg-gray-500 bg-gray-600 rounded px-3 py-1 text-white hidden">ביטול</button>
             {!aiLoading ? ( <Button variant="info" size="sm" onClick={handleAiSubmit} className="fw-bold">ייצר ✨</Button> ) : ( 
                 <button onClick={() => abortControllerRef.current?.abort()} className="bg-transparent border-none p-0"><MdStopCircle className="text-danger w-[32px] h-[32px]" /></button> 
@@ -479,12 +604,8 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
           components={useMemo(() => ({ 
               SchoolChoosing, RepresentiveComponent, AssignedGuidesColumn, ProgramLinkDetailsCellRenderer: ProgramLinkRenderer, ProgramLinkDetailsCellEditor: ProgramDetailsEditor, 
               MultiSelectCellEditor, CustomSelectCellEditor, RegionSelectEditor, 
-              
-              // רכיב חדש לניהול הצעה: ניהול "הכל או כלום" עם מחיקה אוטומטית דרך ה-Hook
               OrderFileRenderer: (props: any) => {
                  const { value, data, node } = props;
-                 
-                 // פונקציית המחיקה דרך ההוק המתוקן שיודע לזכור טוקנים
                  const deleteDriveFile = AuthenticateActivate("delete");
 
                  const handleDelete = async (e: any) => {
@@ -493,7 +614,6 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
                      if (!window.confirm("האם למחוק את קובץ ההצעה לצמיתות?")) return;
                      
                      if (value && typeof value === 'string' && value.includes('/d/')) {
-                         // מחיקה חכמה דרך ה-Hook
                          deleteDriveFile({
                              data: value,
                              callbackFunction: async (res: any) => {
@@ -503,16 +623,14 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
                                          node.setDataValue("Order", null); 
                                      } catch (err) {
                                          console.error(err);
-                                         alert("שגיאה במחיקת הקישור מהמערכת (אבל הקובץ נמחק מגוגל)");
+                                         alert("שגיאה במחיקת הקישור מהמסד נתונים");
                                      }
                                  } else {
-                                     // נכשל בגוגל - לא מוחקים מהטבלה
-                                     alert("שגיאה במחיקה מגוגל דרייב. הקובץ לא נמחק מהטבלה.");
+                                     alert("שגיאה במחיקה מגוגל דרייב");
                                  }
                              }
                          });
                      } else {
-                         // מחיקה רגילה לקבצים שאינם גוגל דרייב
                          try {
                              await updateProgramsColumn("Order", null, data.Programid);
                              node.setDataValue("Order", null); 
