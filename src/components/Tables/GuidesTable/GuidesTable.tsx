@@ -205,12 +205,27 @@ export default function GuidesTable({
   }, []);
 
 
-
+  // --- UPDATED FUNCTION START ---
   const onAddRowToolBarClick = useCallback(() => {
+    // 1. ניקוי פילטרים
+    onClearFilterButtonClick();
+
+    // 2. כפיית מיון יורד לפי Guideid
+    // זה מבטיח שהשורה החדשה (ID הכי גבוה) תהיה בראש הטבלה
+    gridRef.current?.api.applyColumnState({
+      state: [
+        { colId: 'Guideid', sort: 'desc' }
+      ],
+      defaultState: { sort: null } 
+    });
+
+    const newId = maxIndex.current + 1;
+
+    // 3. הוספת השורה
     gridRef.current?.api.applyTransaction({
       add: [
         {
-          Guideid: maxIndex.current + 1,
+          Guideid: newId,
           ReligiousSector: "יהודי",
           Documents: "",
           PoliceApproval: "",
@@ -219,10 +234,12 @@ export default function GuidesTable({
       ],
       addIndex: 0
     });
-    maxIndex.current = maxIndex.current+1
-    rowCount.current++
+    
+    maxIndex.current = newId;
+    rowCount.current++;
     SetInTheMiddleOfAddingRows(true);
-    // activate( and therfore show) the update button and cancel button
+    
+    // activate buttons
     const element: any = document.getElementById("savechangesbutton");
     if (element !== null) {
       element.style.display = "block";
@@ -231,7 +248,17 @@ export default function GuidesTable({
     if (element_2 !== null) {
       element_2.style.display = "block";
     }
-  }, []);
+
+    // 4. מעבר לעמוד הראשון (שם נמצאת השורה החדשה בגלל המיון היורד)
+    setTimeout(() => {
+       gridRef.current?.api.paginationGoToFirstPage();
+       // אופציונלי: לוודא שהשורה הראשונה גלויה
+       gridRef.current?.api.ensureIndexVisible(0);
+    }, 100);
+
+  }, [onClearFilterButtonClick]);
+  // --- UPDATED FUNCTION END ---
+
   const ValueFormatWhatsApp = useCallback((params) => {
     const { FirstName } = params.data;
     return `${FirstName}`;
