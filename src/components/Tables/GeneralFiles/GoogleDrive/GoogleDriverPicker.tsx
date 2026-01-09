@@ -21,7 +21,14 @@ interface ExtendedGuideUpload extends ICellRendererParams<Guide> {
   type: "Program" | "Guide"
 }
 
-const Translation: Record<string, string> = { "CV": "קוח", "PoliceApproval": "אישור משטרה", "Insurance": "ביטוח", "Documents": "מסמכים", "Agreement": "הסכם", "Other_Documents": "מסמכים" }
+const Translation: Record<string, string> = { 
+  "CV": "קורות חיים", 
+  "PoliceApproval": "אישור משטרה", 
+  "Insurance": "ביטוח", 
+  "Documents": "מסמכים", 
+  "Agreement": "הסכם", 
+  "Other_Documents": "מסמכים" 
+}
 
 const GoogleDriverPicker = (props: ExtendedLinkCell) => {
 
@@ -63,7 +70,6 @@ const GoogleDriverPicker = (props: ExtendedLinkCell) => {
       multiselect: true,
       customScopes: ["https://www.googleapis.com/auth/drive"],
       
-      // *** THE FIX IS HERE: Origin must be base URL only ***
       setOrigin: env === 'production' 
         ? "https://ruahmidbarproject.vercel.app" 
         : "http://localhost:3666",
@@ -71,7 +77,6 @@ const GoogleDriverPicker = (props: ExtendedLinkCell) => {
       callbackFunction: (data: any) => {
         if (data.action === "picked") {
           const value: string | undefined = props.colDef.field;
-          // data.docs : {id,serviceId,mimeType,name}[]
           const docs = data.docs.filter((val: any) => val.uploadState === "success")
           const doc_list = docs.length > 1 ? docs.map((doc: any) => doc.url).join(',') : docs[0]?.url
           
@@ -108,25 +113,19 @@ const GoogleDriverPicker = (props: ExtendedLinkCell) => {
   }, [props])
 
   const handleOpenPicker = useCallback(async () => {
-    // each page will have different token - this will handle the case
-    // with multiple google accounts.
-    Promise.all([getProgramAuth(), getGuidesAuth()]).then(async ([res_1, res_2]) => {
-
-      const Res: any = props.type === "Program" ? res_1.authResult : res_2.authResult
-      const openPicker = props.AuthenticateActivate('open');
-      const info: any = await getInfo();
-      const env = await getEnv()
-      
-      if (!Res) {
-        openPicker(getObject(info, env))
-      } else {
-        const AuthObject: authResult = Res;
-        const token = AuthObject.access_token;
-        var object = { ...getObject(info, env), token: token }
-        openPicker(object);
-      }
-    })
-
+    const [res_1, res_2] = await Promise.all([getProgramAuth(), getGuidesAuth()]);
+    const Res: any = props.type === "Program" ? res_1.authResult : res_2.authResult
+    const openPicker = props.AuthenticateActivate('open');
+    const info: any = await getInfo();
+    const env = await getEnv()
+    
+    if (!Res) {
+      openPicker(getObject(info, env))
+    } else {
+      const token = Res.access_token;
+      var object = { ...getObject(info, env), token: token }
+      openPicker(object);
+    }
   }, [getObject, props]);
 
   return (

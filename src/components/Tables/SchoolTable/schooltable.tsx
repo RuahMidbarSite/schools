@@ -8,7 +8,7 @@ import {
   useContext,
   useEffect,
 } from "react";
-import { createPortal } from "react-dom"; // <--- הוספה
+import { createPortal } from "react-dom"; 
 import { AgGridReact } from "ag-grid-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
@@ -32,10 +32,16 @@ import { ThemeContext } from "@/context/Theme/Theme";
 import { CellKeyDownEvent, GetRowIdParams, IsFullWidthRowParams, RowHeightParams, SelectionChangedEvent } from "ag-grid-community";
 import { Program, School, SchoolsContact, } from "@prisma/client";
 import RepresentiveComponent from "../GeneralFiles/GoogleContacts/ContactsRepComponent";
+import { useContactComponent } from "@/util/Google/GoogleContacts/ContactComponent";
 
 export default function SchoolsTable() {
+  // קריטי: useContext חייב להיות בהתחלה לפני כל ה-hooks!
+  const { theme } = useContext(ThemeContext);
 
   const gridRef = useRef<AgGridReact>(null);
+  
+  const [AuthenticateActivate] = useContactComponent();
+
   const [checkedAmount, setAmount]: any = useState(0);
 
   const [InTheMiddleOfAddingRows, SetInTheMiddleOfAddingRows] = useState(false);
@@ -54,7 +60,7 @@ export default function SchoolsTable() {
   const [AllContacts, setAllContacts] = useState<SchoolsContact[]>([])
   const [AllPrograms, setAllPrograms] = useState<Program[]>([])
   const maxIndex = useRef(0)
-  const [mounted, setMounted] = useState(false); // <--- הוספה לטיפול ב-Portal
+  const [mounted, setMounted] = useState(false); 
 
   const { updateColStateFromCache, updateColState } = useColumnEffects(gridRef, colState, setColState)
 
@@ -76,10 +82,6 @@ export default function SchoolsTable() {
 
   const { onCellValueChanged, onCellEditingStarted, onRowSelected, onSelectionChange, isRowSelectable } = useGridEvents(gridRef, InTheMiddleOfAddingRows, checkedAmount, setAmount)
 
-
-  const { theme } = useContext(ThemeContext)
-
-  // וודא שהקומפוננטה נטענה בצד לקוח לפני השימוש בפורטל
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -92,7 +94,7 @@ export default function SchoolsTable() {
     setAmount(selectedRowsCount);
   }, [onSelectionChange, setAmount]);
 
-  const LoadingOverlay = () => {
+  const LoadingOverlay = useCallback(() => {
     if (!isLoading) {
       return <></>
     } else {
@@ -101,11 +103,11 @@ export default function SchoolsTable() {
           id="1"
           animation="border"
           role="status"
-          className="w-[220px] h-[200px] bg-yellow-500 fill-yellow  z-[999] "
+          className="w-[220px] h-[200px] bg-yellow-500 fill-yellow z-[999]"
         />
       );
     }
-  };
+  }, [isLoading]);
 
   const components = useMemo(
     () => ({
@@ -153,6 +155,12 @@ export default function SchoolsTable() {
   const UpdateContactComponent = useCallback((Data) => {
     if (Data.length > 0) {
       if (gridRef && gridRef.current?.api) {
+        // בדיקה אם באמת השתנה משהו לפני עדכון
+        const currentContacts = AllContacts.length;
+        if (currentContacts === Data.length) return;
+        
+        setAllContacts(Data);
+        
         const coldefs = gridRef.current.api.getColumnDefs().map((column) => {
           if (column["field"] === "Representive") {
             return { ...column, cellRenderer: RepresentiveComponent, cellRendererParams: { AllContacts: [...Data] } }
@@ -162,12 +170,15 @@ export default function SchoolsTable() {
         setColDefs(coldefs)
       }
     }
-  }, [])
+  }, [AllContacts])
 
+  const masterGridParams = useMemo(() => ({
+    UpdateContactComponent: UpdateContactComponent,
+    GoogleFunctions: AuthenticateActivate
+  }), [UpdateContactComponent, AuthenticateActivate]);
 
   return (
     <>
-      {/* כאן השינוי: העברת הטולבר לפורטל בנאב-בר */}
       {mounted && document.getElementById("navbar-actions") 
         ? createPortal(
             ToolBar(onClearFilterButtonClick, setColumnWindowOpen, onAddRowToolBarClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, checkedAmount, onFilterTextBoxChanged, onDisplayProgramsClicked, LoadingOverlay),
@@ -180,7 +191,6 @@ export default function SchoolsTable() {
         <div
           id="grid-1"
           className={theme === "dark-theme" ? "ag-theme-quartz-dark w-full flex-grow overflow-x-hidden" : "ag-theme-quartz w-full flex-grow overflow-x-hidden"}
-          // הסרתי גובה קבוע כדי שיתפוס את הגובה הזמין, או שתשאיר 1000px לפי הצורך שלך
           style={{ width: "100%", height: "1000px" }}
         >
           <AgGridReact
@@ -218,7 +228,7 @@ export default function SchoolsTable() {
             suppressRowTransform={true}
             suppressMenuHide={true}
             fullWidthCellRenderer={CustomMasterGrid}
-            fullWidthCellRendererParams={{ UpdateContactComponent: UpdateContactComponent }}
+            fullWidthCellRendererParams={masterGridParams}
             getRowHeight={getRowHeight}
             isFullWidthRow={isFullWidthRow}
             embedFullWidthRows={true}

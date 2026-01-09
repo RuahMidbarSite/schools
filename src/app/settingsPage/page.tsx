@@ -3,7 +3,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import AddNamesForm from '../../components/AddNamesForm/AddNamesForm';
 import Select, { StylesConfig } from 'react-select'
 import { YearContext } from '@/context/YearContext';
-// הוספנו את updateStorage ואת פונקציות השרת החסרות
 import { DataType, getFromStorage, updateStorage } from '@/components/SettingsPage/Storage/Storage/SettingsDataStorage';
 import { getAllCities, getAllDistricts, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getAllYears, getEducationStages, getOrders, getProductTypes, getRoles } from '@/db/generalrequests';
 import { getAllDistances } from '@/db/instructorsrequest'; 
@@ -12,6 +11,7 @@ import { CustomContext } from './context';
 import { SelectNewCities } from '@/components/SettingsPage/components/SelectNewCities';
 import { SelectDeleteCities } from '@/components/SettingsPage/components/SelectDeleteCities';
 import { StatusContext } from '@/context/StatusContext';
+import { useSettingsAuth } from '@/hooks/useSettingsAuth'; // ← Hook חדש
 
 type OptionsPage = {
   cities: false; areas?: false; religionSectors: false; educationStages: false;
@@ -35,6 +35,16 @@ const purpleSelectStyles: StylesConfig = {
 };
 
 const SettingsPage = () => {
+  // ← שימוש ב-Hook החדש
+  const { isReady, requestToken, error: authError } = useSettingsAuth();
+  
+  // הצגת שגיאה אם יש
+  useEffect(() => {
+    if (authError) {
+      console.error('🔴 Auth Error:', authError);
+    }
+  }, [authError]);
+  
   const [Roles, setRoles] = useState<Role[]>();
   const [Years, setYears] = useState<Years[]>();
   const [ProductTypes, setProductTypes] = useState<ProductTypes[]>();
@@ -62,15 +72,13 @@ const SettingsPage = () => {
   });
 
   const [loadingType, setLoadingType] = useState<string | null>(null);
+  const [googleAccounts, setGoogleAccounts] = useState<{[key: string]: string}>({});
 
-  // --- התיקון המרכזי בלוגיקה ---
   useEffect(() => {
     const fetchData = async () => {
         try {
-            // קודם כל מנסים לקחת מהזיכרון
             const data: DataType = await getFromStorage();
 
-            // אם יש מידע בזיכרון, נשתמש בו
             if (data && data.Role && data.Years) {
                 console.log("Loading from storage...");
                 setRoles(data.Role); setYears(data.Years); setProductTypes(data.ProductTypes);
@@ -83,7 +91,6 @@ const SettingsPage = () => {
                 if (data.ProgramsStatuses) setStatusOptions([...data.ProgramsStatuses.map(s => ({ label: s.StatusName, value: s.StatusName })), { label: "הכל", value: undefined }]);
             } 
             else {
-                // אחרת (התיקון): מושכים מהשרת
                 console.log("Storage empty, fetching from Server...");
                 const [
                     fetchedRoles, fetchedYears, fetchedProducts, fetchedTypes, fetchedStages, 
@@ -112,13 +119,11 @@ const SettingsPage = () => {
                  setDistances(fetchedDistances);
                  setOrders(fetchedOrders);
 
-                 // עדכון הסלקטים
                  const yOpts = [...fetchedYears.map(y => ({ label: y.YearName, value: y.YearName })), { label: "הכל", value: undefined }];
                  setYearOptions(yOpts);
                  const sOpts = [...(fetchedProgramStatus as StatusPrograms[]).map(s => ({ label: s.StatusName, value: s.StatusName })), { label: "הכל", value: undefined }];
                  setStatusOptions(sOpts);
 
-                 // שמירה בזיכרון לפעם הבאה
                  updateStorage({
                     Role: fetchedRoles, Years: fetchedYears, ProductTypes: fetchedProducts, SchoolTypes: fetchedTypes, 
                     Stages: fetchedStages, Religion: fetchedReligion, Areas: fetchedAreas, Cities: fetchedCities,
@@ -132,33 +137,78 @@ const SettingsPage = () => {
         }
     };
     fetchData();
+    
+    loadGoogleAccounts();
   }, []);
+
+  const loadGoogleAccounts = () => {
+    if (typeof window === "undefined") return;
+    
+    const accounts: {[key: string]: string} = {};
+    ['Guide', 'Program', 'School'].forEach(type => {
+      const email = localStorage.getItem(`google_email_${type}`);
+      if (email) accounts[type] = email;
+    });
+    setGoogleAccounts(accounts);
+  };
 
   const isConnected = (type: string) => (typeof window !== "undefined") ? !!localStorage.getItem(`google_token_${type}`) : false;
 
   const handleDisconnect = (type: string) => {
     localStorage.removeItem(`google_token_${type}`);
-    window.location.reload();
+    localStorage.removeItem(`google_email_${type}`);
+    setGoogleAccounts(prev => {
+      const updated = { ...prev };
+      delete updated[type];
+      return updated;
+    });
   };
 
-  // פונקציית פתיחת חלון גוגל כ-Pop-up (חלון צף)
+  // ← פונקציה מעודכנת להשתמש ב-Hook
   const triggerGoogleAuth = (type: string) => {
+    console.log('🟡 triggerGoogleAuth called, isReady:', isReady, 'authError:', authError);
+    
+    if (authError) {
+      alert(`שגיאה: ${authError}`);
+      return;
+    }
+    
+    if (!isReady) {
+      alert('Google SDK עדיין נטען, אנא המתן רגע ונסה שוב');
+      return;
+    }
+
     setLoadingType(type);
-    const baseUrl = window.location.origin;
-    const state = encodeURIComponent(JSON.stringify({ page_redirect: window.location.href, redirecttype: type }));
-    const clientID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-    
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientID}&redirect_uri=${baseUrl}/api/GoogleAuth&response_type=code&scope=https://www.googleapis.com/auth/drive.file&state=${state}&prompt=select_account`;
-    
-    // הגדרות מימדים ומיקום למרכז המסך
-    const width = 500;
-    const height = 650;
-    const left = (window.screen.width / 2) - (width / 2);
-    const top = (window.screen.height / 2) - (height / 2);
-    
-    window.open(authUrl, 'GoogleAuth', `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes`);
-    
-    setTimeout(() => setLoadingType(null), 2000);
+    console.log('🟢 Requesting token for type:', type);
+
+    requestToken(
+      type,
+      // onSuccess
+      (tokenData) => {
+        console.log('✅ Success callback triggered');
+        setLoadingType(null);
+        
+        // עדכון חשבונות
+        if (tokenData.id_token) {
+          try {
+            const payload = JSON.parse(atob(tokenData.id_token.split('.')[1]));
+            if (payload.email) {
+              setGoogleAccounts(prev => ({ ...prev, [type]: payload.email }));
+            }
+          } catch (e) {
+            console.error('Failed to parse token:', e);
+          }
+        }
+        
+        alert('✅ חשבון Google חובר בהצלחה!');
+      },
+      // onError
+      (error) => {
+        console.error('❌ Error callback triggered:', error);
+        setLoadingType(null);
+        alert(`❌ שגיאה באימות: ${error.message || 'שגיאה לא ידועה'}`);
+      }
+    );
   };
 
   const toggleForm = (formName: OptionsNamed) => {
@@ -168,7 +218,6 @@ const SettingsPage = () => {
     });
   };
 
-  // הוספתי "|| []" כדי למנוע קריסה כשהמידע עוד לא נטען
   const settingsButtons = [
     { key: 'cities', label: 'ערים', component: <><SelectNewCities Cities={Cities || []}  setCities={setCities} /><SelectDeleteCities Cities={Cities || []} Distances={Distances || []} setCities={setCities} /></> },
     { key: 'areas', label: 'אזורים', formProps: { collectionName: "Areas", idFieldName: "Areaid", nameFieldName: "AreaName", placeHolder: 'הוסף...' } },
@@ -190,7 +239,6 @@ const SettingsPage = () => {
       <div className="bg-slate-50 min-h-screen p-4 w-full flex flex-col gap-6" dir="rtl">
           
           <div className="w-full flex gap-6 items-start">
-              {/* טור ימני: כותרת + הגדרות ברירת מחדל */}
               <aside className="flex flex-col gap-6 min-w-[220px]">
                   <div className="text-right pr-2">
                       <h1 className="text-3xl font-black text-teal-800 tracking-tight mb-1">הגדרות מערכת</h1>
@@ -216,7 +264,6 @@ const SettingsPage = () => {
               </aside>
 
               <div className="flex-1 flex flex-col gap-8">
-                  {/* ניהול טבלאות נתונים - כפתורים צמודים לימין */}
                   <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 relative z-[100]">
                       <h2 className="text-lg font-bold text-slate-700 mb-6 flex items-center gap-2">
                           <span className="w-1.5 h-6 bg-teal-400 rounded-full"></span>ניהול טבלאות נתונים
@@ -224,7 +271,7 @@ const SettingsPage = () => {
                       <div className="flex flex-wrap justify-start items-start gap-2 max-w-full">
                         {settingsButtons.map((btn, index) => {
                           const isOpen = showForms[btn.key as OptionsNamed];
-                          const isLeftSide = (index + 1) % 5 === 0 || (index + 1) % 5 === 4; // פתיחה חכמה למניעת חיתוך
+                          const isLeftSide = (index + 1) % 5 === 0 || (index + 1) % 5 === 4;
                           
                           return (
                               <div key={btn.key} className="w-fit">
@@ -250,22 +297,53 @@ const SettingsPage = () => {
                       </div>
                   </section>
 
-                  {/* עדכון חשבון גוגל - מיושר וגדול */}
                   <section className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 w-fit font-sans">
                       <h2 className="text-lg font-bold text-slate-700 mb-6 flex items-center gap-2">
                           <span className="w-1.5 h-6 bg-orange-400 rounded-full"></span>עדכון חשבון גוגל
                       </h2>
                       <div className="flex justify-start gap-4">
                           {[
-                            { label: 'אנשי קשר', type: 'Guide' },
-                            { label: 'מדריכים', type: 'Program' },
-                            { label: 'הצעות מחיר', type: 'School' }
+                            { label: 'אנשי קשר', type: 'Guide', description: 'עבור דף אנשי קשר ובתי ספר' },
+                            { label: 'מדריכים', type: 'Program', description: 'עבור דף מדריכים' },
+                            { label: 'הצעות מחיר', type: 'School', description: 'עבור הצעות מחיר' }
                           ].map((item) => (
-                              <div key={item.type} className="text-center text-nowrap">
-                                  <button onClick={() => triggerGoogleAuth(item.type)} className={`min-w-[150px] font-bold py-3.5 px-6 rounded-2xl text-sm transition-all border shadow-sm ${loadingType === item.type ? 'bg-slate-100 text-slate-400 cursor-wait' : isConnected(item.type) ? 'bg-green-50 text-green-700 border-green-200 shadow-inner' : 'bg-orange-50 text-orange-900 border-orange-100 hover:bg-orange-100 active:scale-95'}`}>
-                                          {loadingType === item.type ? 'טוען...' : isConnected(item.type) ? `✅ ${item.label.split(' ').pop()}` : item.label}
+                              <div key={item.type} className="flex flex-col items-center">
+                                  <button 
+                                      onClick={() => triggerGoogleAuth(item.type)} 
+                                      className={`min-w-[170px] font-bold py-3.5 px-6 rounded-2xl text-sm transition-all border shadow-sm ${
+                                        loadingType === item.type 
+                                          ? 'bg-slate-100 text-slate-400 cursor-wait' 
+                                          : isConnected(item.type) 
+                                            ? 'bg-green-50 text-green-700 border-green-200 shadow-inner' 
+                                            : 'bg-orange-50 text-orange-900 border-orange-100 hover:bg-orange-100 active:scale-95'
+                                      }`}
+                                      disabled={loadingType === item.type || !isReady}
+                                  >
+                                      {loadingType === item.type ? 'טוען...' : isConnected(item.type) ? `✅ מחובר` : `🔗 ${item.label}`}
                                   </button>
-                                  {isConnected(item.type) && <button onClick={() => handleDisconnect(item.type)} className="text-red-500 text-[10px] underline mt-2 block w-full font-medium tracking-tight font-sans">נתק חשבון</button>}
+                                  
+                                  <div className="mt-2 text-xs text-center min-h-[40px]">
+                                      {isConnected(item.type) && googleAccounts[item.type] && (
+                                          <div className="flex flex-col gap-1">
+                                              <span className="text-green-600 font-semibold truncate max-w-[170px]" title={googleAccounts[item.type]}>
+                                                  {googleAccounts[item.type]}
+                                              </span>
+                                              <span className="text-slate-400 text-[10px]">{item.description}</span>
+                                          </div>
+                                      )}
+                                      {!isConnected(item.type) && (
+                                          <span className="text-slate-400 text-[10px]">{item.description}</span>
+                                      )}
+                                  </div>
+                                  
+                                  {isConnected(item.type) && (
+                                      <button 
+                                          onClick={() => handleDisconnect(item.type)} 
+                                          className="text-red-500 text-[10px] underline mt-1 font-medium tracking-tight hover:text-red-700"
+                                      >
+                                          נתק חשבון
+                                      </button>
+                                  )}
                               </div>
                           ))}
                       </div>

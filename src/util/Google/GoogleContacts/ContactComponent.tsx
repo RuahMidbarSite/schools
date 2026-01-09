@@ -1,364 +1,286 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react";
-import useInjectScript from "../useInjectScript";
 import { authResult } from "../typeDefs";
 import {
-  Connection,
-  ContactData,
-  DeleteContactConfiguration,
-  People,
   UpdateContactConfiguration,
   UploadContactConfiguration,
-  callBackState,
   callBackdata,
-  defaultuploadConfiguration,
-  onlyAuth,
 } from "./ContactTypes";
-import { School, SchoolsContact } from "@prisma/client";
 import { updateStorage } from "@/components/Auth/Storage/AuthContactsStorage";
 
 declare let google: any;
 declare let window: any;
-const defaultScopes = ["https://www.googleapis.com/auth/contacts"];
 
+const defaultScopes = [
+  "https://www.googleapis.com/auth/contacts",
+  "https://www.googleapis.com/auth/drive.file"
+];
 
-
-
+const SESSION_KEYS = {
+    CONTACTS: 'google_token_contacts',
+    PLANS: 'google_token_plans',
+    GUIDES: 'google_token_guides',
+    SCHOOLS: 'google_token_schools', 
+    DEFAULT: 'google_token_default'
+};
 
 export const useContactComponent = (): [
-  (name: "upload" | "delete" | "update" | "onlyAuth") => (config: UploadContactConfiguration | UpdateContactConfiguration | onlyAuth) => any,
+  (name: "upload" | "delete" | "update" | "onlyAuth" | "create_contact" | "update_contact" | "delete_contact", contextId?: string) => (config: any) => any,
   authResult | undefined
 ] => {
 
-
-  const [pickerApiLoaded, setpickerApiLoaded] = useState(false);
-  const [openAfterAuth, setOpenAfterAuth] = useState(false);
-  const [authWindowVisible, setAuthWindowVisible] = useState(false);
   const [authRes, setAuthRes] = useState<authResult>();
+  const tokenClientRef = useRef<any>(null);
+  
+  // משתנה עזר למניעת לולאות רענון
+  const stopRefreshRef = useRef(false);
 
-  const [tokenClient, setClient] = useState(null)
-  const expiresInSeconds = useRef(0)
+  const pendingAction = useRef<{
+      config: any, 
+      callback: (config: any) => void,
+      contextKey: string
+  } | null>(null);
 
-  const AuthAndActivate = useCallback(async (config: UploadContactConfiguration | UpdateContactConfiguration | onlyAuth, authResCallback: any, callBack: (args) => {}) => {
+  const initClient = useCallback(() => {
+    if (typeof window === "undefined" || !window.google || tokenClientRef.current) return;
 
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: config.clientId,
-      scope: (config.customScopes
-        ? [...defaultScopes, ...config.customScopes]
-        : defaultScopes
-      ).join(" "),
-      callback: (tokenResponse: authResult) => {
-        authResCallback(tokenResponse);
-        callBack({ ...config, token: tokenResponse.access_token });
-        expiresInSeconds.current = tokenResponse.expires_in
+    const envClientId = process.env.NEXT_PUBLIC_CLIENT_ID || process.env.clientId;
+    if (!envClientId) return;
 
-        updateStorage({ authResult: tokenResponse, timeStamp: Date.now() })
+    try {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: envClientId,
+          scope: defaultScopes.join(" "),
+          callback: (tokenResponse: authResult) => {
+            if (tokenResponse && tokenResponse.access_token) {
+              setAuthRes(tokenResponse);
+              stopRefreshRef.current = false; // איפוס מנגנון הבטיחות בעת התחברות מוצלחת
+              updateStorage({ authResult: tokenResponse, timeStamp: Date.now() });
 
-      },
-    });
-    // we could also use only () since the default is consent
-    client.requestAccessToken({ prompt: "consent" });
-    setClient(client)
-  }, [])
-
-  useEffect(() => {
-
-    if (tokenClient == null || expiresInSeconds.current == 0) {
-      return
+              if (pendingAction.current) {
+                  const { config, callback, contextKey } = pendingAction.current;
+                  sessionStorage.setItem(contextKey, tokenResponse.access_token);
+                  const configWithToken = { ...config, token: tokenResponse.access_token };
+                  callback(configWithToken);
+                  pendingAction.current = null;
+              }
+            } else {
+               // אם חזר טוקן לא תקין או שגיאה
+               console.error("Token response invalid", tokenResponse);
+            }
+          },
+        });
+        tokenClientRef.current = client;
+    } catch (error) {
+        console.error("Google Client Init Error:", error);
     }
-    // Function to request a new access token
-    const refreshToken = () => {
-      console.log('Refreshing token...');
-      tokenClient.requestAccessToken({ prompt: '' }); // Silent refresh
-    };
-
-    // Set up an interval to refresh the token one minute before expiration
-    const interval = setInterval(() => {
-      refreshToken();
-    }, expiresInSeconds.current * 1000 - 60000); // one minute before expiration.
-
-    // Initial refresh immediately when the component mounts
-    refreshToken();
-
-    // Cleanup function to clear the interval on unmount
-    return () => {
-      clearInterval(interval);
-    };
-  }, [tokenClient]);
-  // get the apis from googleapis
-  useEffect(() => {
-    if (!pickerApiLoaded) {
-      loadApis();
-      setpickerApiLoaded(true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+        if (typeof window !== "undefined" && window.google) {
+            initClient();
+            clearInterval(interval);
+        }
+    }, 200);
+    return () => clearInterval(interval);
+  }, [initClient]);
+
   const gapiInted = useCallback(async () => {
+    const apiKey = process.env.developerKey || process.env.NEXT_PUBLIC_API_KEY; 
+    const clientId = process.env.clientId || process.env.NEXT_PUBLIC_CLIENT_ID;
+
+    if (!window.gapi) return;
 
     await gapi.client.init({
-      apiKey: process.env.developerKey,
-      clientId: process.env.clientId,
-      discoveryDocs: ["https://people.googleapis.com/$discovery/rest?version=v1"],
-    }).then(() => {
-
-    })
-
+      apiKey: apiKey,
+      clientId: clientId,
+      discoveryDocs: [
+        "https://people.googleapis.com/$discovery/rest?version=v1",
+        "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"
+      ],
+    }).then(() => console.log("GAPI Loaded")).catch(err => console.error("GAPI Error", err));
   }, [])
 
-  // load the Drive picker api
-  const loadApis = useCallback(() => {
-    if (window.gapi) {
-      window.gapi.load("client", gapiInted);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.gapi) {
+       window.gapi.load("client", gapiInted);
     }
-
   }, [gapiInted]);
 
-  const OnlyAuth = useCallback(async (config) => {
-    AuthAndActivate(config, setAuthRes, () => null)
+  // --- מנגנון רענון טוקן בטוח ---
+  useEffect(() => {
+    // אם עצרנו את הרענון או שאין קליינט, לא עושים כלום
+    if (!tokenClientRef.current || stopRefreshRef.current) return;
 
-  }, [AuthAndActivate])
+    const refreshToken = () => {
+        if (stopRefreshRef.current) return;
+        
+        try {
+            console.log("Attempting silent refresh...");
+            // prompt: '' מנסה לרענן ללא אינטראקציה. אם נכשל, זה לרוב יחזיר שגיאה לקונסול
+            tokenClientRef.current.requestAccessToken({ prompt: '' });
+        } catch (err) {
+            console.error("Refresh failed, stopping auto-refresh to prevent loop.", err);
+            stopRefreshRef.current = true; // עצירת הרענון האוטומטי
+        }
+    };
 
-  const getAllContacts = () => {
-    let nextToken = null
-
-
-
-
-
-  }
-
-  const getContacts = useCallback(async (pageToken: string) => {
-    return gapi.client.people.people.connections.list({
-      resourceName: 'people/me',
-      pageSize: 100,
-      personFields: 'names,emailAddresses,phoneNumbers',
-      pageToken: pageToken,
-
-    })
-
-  }, [])
-
-  /** Finds if the contact already exist */
-  const filterContacts = useCallback((data: ContactData, connections: gapi.client.people.Person[]) => {
-    if (!connections) { return [] }
-    // Filter contacts based on search criteria
-    const foundContacts = connections?.filter((person: any) => {
-      const nameMatches = data.name && person.names?.some((n: any) => n.displayName.includes(data.name));
-      const emailMatches = data.emailAddress && person.emailAddresses?.some((e: any) => e.value === data.emailAddress);
-      const phoneMatches = data.cellPhone !== '' && person.phoneNumbers?.some((p: any) => p.value === data.cellPhone);
-      return nameMatches || emailMatches || phoneMatches;
-    });
-    return foundContacts
-
-  }, [])
-
-  const findContact = useCallback(async (new_contact_info: ContactData): Promise<gapi.client.people.Person[]> => {
-    let pageToken = null
-    let res;
-    let result = [];
-    do {
-      res = await getContacts(pageToken)
-      // Extract connections and next pageToken
-      const connections = res.result.connections || [];
-      pageToken = res.result.nextPageToken;
-      // Filter contacts
-      result = filterContacts(new_contact_info, connections);
-
-      // If result is found, break out of the loop
-      if (result.length > 0) {
-        break;
-      }
-    } while (pageToken)
-    return result
-
-  }, [filterContacts, getContacts])
-
-  const uploadContact = useCallback(async ({
-    token,
-    clientId,
-    developerKey,
-    customScopes = ["https://www.googleapis.com/auth/contacts"],
-    data,
-    callbackFunction = () => { },
-  }: UploadContactConfiguration) => {
-    // Set the access token for gapi client requests
-    gapi.client.setToken({ access_token: token });
-
-    gapi.client.request({
-      method: "POST",
-      path: 'https://people.googleapis.com/v1/people:createContact',
-      body: {
-        "names": [{ givenName: data?.name }],
-        "emailAddresses": [{ value: data?.emailAddress }],
-        "phoneNumbers": [{ value: data?.cellPhone }],
-      }
-    }).then((res) => {
-      if (res.status === 200) {
-        const new_contact: gapi.client.people.Person = res.result
-        var ResourceName: string = new_contact.resourceName;
-        const resourceName = ResourceName.replace("people", "person");
-        const obj: callBackdata = {
-          resourceName: resourceName,
-          state: callBackState.Success,
-        };
-        callbackFunction(obj);
-      }
+    // רענון כל 45 דקות (הטוקן תקף לשעה)
+    const interval = setInterval(refreshToken, 45 * 60 * 1000); 
+    return () => clearInterval(interval);
+  }, [authRes]); // תלות ב-authRes כדי להתחיל טיימר מחדש אחרי התחברות מוצלחת
 
 
-    })
+  // --- Auth Function ---
+  const AuthAndActivate = useCallback((config: any, callbackToRun: (args: any) => void, contextId: string = 'default') => {
+    
+    let storageKey = SESSION_KEYS.DEFAULT;
+    if (contextId === 'contacts') storageKey = SESSION_KEYS.CONTACTS;
+    if (contextId === 'plans') storageKey = SESSION_KEYS.PLANS;
+    if (contextId === 'guides') storageKey = SESSION_KEYS.GUIDES;
+    if (contextId === 'schools') storageKey = SESSION_KEYS.SCHOOLS;
 
-
-
-
-
-
-
-    return;
-  }, [])
-
-  const deleteContact = useCallback(async ({
-    token,
-    clientId,
-    developerKey,
-    customScopes = ["https://www.googleapis.com/auth/contacts"],
-    data,
-    callbackFunction = (res) => { },
-  }) => {
-    // Set the access token for gapi client requests
-    gapi.client.setToken({ access_token: token });
-    console.log('deleting contact...')
-    const dat: SchoolsContact = data.row
-    const resourceName = data.row.GoogleContactLink?.substring(dat.GoogleContactLink.indexOf("person/") + 7)
-    // invalid data
-    if (resourceName[0] !== 'c') {
-      return
+    // בדיקה ב-Session Storage
+    const savedToken = sessionStorage.getItem(storageKey);
+    
+    if (savedToken) {
+        // בדיקה בסיסית שהטוקן נראה תקין (אפשר להוסיף בדיקת תוקף אם שומרים timestamp)
+        callbackToRun({ ...config, token: savedToken });
+        return;
     }
 
-    gapi.client.request({
-      method: "DELETE",
-      path: `https://people.googleapis.com/v1/people/${resourceName}:deleteContact`,
-    }).then((res) => {
-
-      if (res.status === 200) {
-        console.log('deleted successfully..')
-        callbackFunction(res);
-      }
-
-
-    })
-
-  }, [])
-  /** Easy way to create the name without the need to check if null or not for every entry */
-  const createName = useCallback((contact: SchoolsContact, school: School) => {
-    var new_name: string[] = []
-    new_name.push(contact.FirstName)
-    new_name.push(contact.Role)
-    new_name.push(school.EducationStage)
-    new_name.push(school.SchoolName)
-    new_name.push(school.City)
-
-    return new_name.join(' ')
-
-
-  }, [])
-
-  const updateContact = useCallback(async ({
-    token,
-    clientId,
-    developerKey,
-    customScopes = ["https://www.googleapis.com/auth/contacts"],
-    data,
-    callbackFunction = (res) => { },
-  }: UpdateContactConfiguration) => {
-    // Set the access token for gapi client requests
-    gapi.client.setToken({ access_token: token });
-
-    console.log('updating contact...')
-
-    const dat: SchoolsContact = data.row
-    const school: School = data.school
-
-    const resourceName = data.row.GoogleContactLink.substring(dat.GoogleContactLink.indexOf("person/") + 7)
-    // invalid data
-    if (resourceName[0] !== 'c') {
-      return
+    if (!tokenClientRef.current) {
+        initClient();
+        if (!tokenClientRef.current) {
+             alert("הרכיב עדיין נטען, נסה שוב בעוד רגע.");
+             return;
+        }
     }
 
-    gapi.client.people.people.get({
-      resourceName: `people/${resourceName}`,
-      personFields: 'names,phoneNumbers,emailAddresses'
-    }).then((res) => {
-      if (res.status === 200) {
-        const contact: gapi.client.people.Person = res.result
-        const new_name = createName(dat, school)
+    pendingAction.current = { config, callback: callbackToRun, contextKey: storageKey };
+    // שימוש ב-select_account כדי להפריד סשנים בין דפים
+    tokenClientRef.current.requestAccessToken({ prompt: 'select_account' });
 
-        gapi.client.request({
-          method: "PATCH",
-          path: `https://people.googleapis.com/v1/people/${resourceName}:updateContact?updatePersonFields=names%2CphoneNumbers%2CemailAddresses`,
+  }, [initClient]);
+
+  // --- Implementation Functions ---
+  const createContactImpl = useCallback(async ({ token, data, callbackFunction = () => { } }: UploadContactConfiguration) => {
+    gapi.client.setToken({ access_token: token });
+    try {
+        const res = await gapi.client.request({
+          method: "POST",
+          path: 'https://people.googleapis.com/v1/people:createContact',
           body: {
-            etag: contact.etag,
-            names: [{ givenName: new_name }],
-            emailAddresses: [{ value: dat.Email }],
-            phoneNumbers: [{ value: dat.Cellphone }],
+            "names": [{ givenName: data?.name }],
+            "emailAddresses": [{ value: data?.emailAddress }],
+            "phoneNumbers": [{ value: data?.cellPhone }],
           }
-        }).then((res) => {
+        });
+        const resourceName = res.result.resourceName.replace("people", "person");
+        callbackFunction({ resourceName: resourceName, state: 0 });
+    } catch (err: any) { 
+        console.error("Create Contact Error", err); 
+        if(err.status === 401) {
+            alert("פג תוקף החיבור. אנא רענן את הדף והתחבר מחדש.");
+            sessionStorage.clear(); // ניקוי טוקנים ישנים
+        } else {
+            alert("שגיאה ביצירת איש קשר: " + (err.result?.error?.message || "Unknown error")); 
+        }
+    }
+  }, [])
 
-          if (res.status === 200) {
-            console.log('updated successfully')
-            callbackFunction(res);
+  const deleteContactImpl = useCallback(async ({ token, data, callbackFunction = (res) => { } }) => {
+    gapi.client.setToken({ access_token: token });
+    let resourceName = data.row.GoogleContactLink;
+    if (resourceName && resourceName.includes("person/")) {
+        resourceName = resourceName.substring(resourceName.indexOf("person/") + 7);
+    }
+    if (!resourceName || !resourceName.startsWith('c')) return;
+
+    try {
+        const res = await gapi.client.request({
+            method: "DELETE",
+            path: `https://people.googleapis.com/v1/people/${resourceName}:deleteContact`,
+        });
+        if (res.status === 200 || res.status === 204) callbackFunction(res);
+    } catch (err) { console.error("Delete Error", err); }
+  }, [])
+
+  const updateContactImpl = useCallback(async ({ token, data, callbackFunction = (res) => { } }: UpdateContactConfiguration) => {
+    gapi.client.setToken({ access_token: token });
+     const dat = data.row;
+     const school = data.school;
+     let resourceName = dat.GoogleContactLink;
+     if (resourceName.includes("person/")) resourceName = resourceName.substring(resourceName.indexOf("person/") + 7);
+     
+     gapi.client.people.people.get({
+       resourceName: `people/${resourceName}`,
+       personFields: 'names,phoneNumbers,emailAddresses'
+     }).then((res) => {
+         const contact = res.result;
+         let new_name = dat.FirstName; 
+         if(school) new_name += " " + school.SchoolName;
+         
+         gapi.client.request({
+           method: "PATCH",
+           path: `https://people.googleapis.com/v1/people/${resourceName}:updateContact?updatePersonFields=names%2CphoneNumbers%2CemailAddresses`,
+           body: {
+             etag: contact.etag,
+             names: [{ givenName: new_name }],
+             emailAddresses: [{ value: dat.Email }],
+             phoneNumbers: [{ value: dat.Cellphone }],
+           }
+         }).then((res2) => callbackFunction(res2));
+     });
+  }, []);
+
+  const uploadFileImpl = useCallback(async ({ token, data, callbackFunction = () => { } }: any) => {
+    const file = data.file;
+    const metadata = { name: file.name, mimeType: file.type, parents: data.parents || [] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
+
+    fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+      method: 'POST',
+      headers: new Headers({ 'Authorization': 'Bearer ' + token }),
+      body: form,
+    }).then((res) => res.json()).then((val) => callbackFunction(val));
+  }, []);
+
+  const deleteFileImpl = useCallback(async ({ token, data, callbackFunction = () => {} }: any) => {
+      const fileId = data.fileId || data.id; 
+      if(!fileId) return;
+      fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+      }).then(res => { if (res.status === 204 || res.status === 200) callbackFunction(res); });
+  }, []);
+
+  const getFunction = useCallback((name: string): any => {
+    if (name === "create_contact") return createContactImpl;
+    if (name === "delete_contact") return deleteContactImpl;
+    if (name === "update_contact") return updateContactImpl;
+    if (name === "upload") return uploadFileImpl;
+    if (name === "delete") return deleteFileImpl;
+    return null;
+  }, [createContactImpl, deleteContactImpl, updateContactImpl, uploadFileImpl, deleteFileImpl]);
+
+  const AuthenticateActivate = useCallback((name: any, contextId: string = 'default') => {
+    return (config: any) => {
+      const callback = getFunction(name);
+      if (callback) {
+          if (config && config.token) {
+              callback(config);
+          } else {
+              AuthAndActivate(config, callback, contextId);
           }
-
-
-        })
-
-
+      } else {
+          console.error(`Function ${name} not found!`);
       }
-
-
-    })
-
-
-  }, [createName])
-  const getFunction = useCallback((name: "upload" | "delete" | "update" | "onlyAuth"): any => {
-    if (name === "upload") {
-      return uploadContact
-
     }
-    if (name === "delete") {
-
-      return deleteContact
-    }
-
-    if (name === "update") {
-
-      return updateContact
-    }
-    if (name === "onlyAuth") {
-      return OnlyAuth
-    }
-
-  }, [OnlyAuth, deleteContact, updateContact, uploadContact])
-
-  const AuthenticateActivate = useCallback((name: "upload" | "delete" | "update" | "onlyAuth") => {
-    const func = (config: UploadContactConfiguration | UpdateContactConfiguration | DeleteContactConfiguration | DeleteContactConfiguration | onlyAuth) => {
-      const callback = getFunction(name)
-      if (name === "onlyAuth") {
-        callback(config)
-      }
-      else if (config && !config.token) {
-        AuthAndActivate(config, setAuthRes, callback)
-      }
-      else {
-        callback(config)
-      }
-
-    }
-    return func
-
-
-  }, [AuthAndActivate, getFunction])
+  }, [AuthAndActivate, getFunction]);
 
   return [AuthenticateActivate, authRes];
 };
-

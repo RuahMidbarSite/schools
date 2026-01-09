@@ -1,6 +1,6 @@
 import { Guide } from "@prisma/client";
 import { ICellRendererParams } from "ag-grid-community";
-import { ChangeEvent, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useContext, useState } from "react";
 import { Form, OverlayTrigger, Tooltip } from "react-bootstrap";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import "ag-grid-community/styles/ag-grid.css";
@@ -23,10 +23,6 @@ export interface ExtendedLinkCell extends ICellRendererParams {
 }
 
 export const CustomLinkDrive = (props: ExtendedLinkCell) => {
-  const [ListenerActivated, setListenerActivated] = useState(false);
-  // משתנה למניעת טעינה אוטומטית של הפיקר - פותר את בעיית ה-SEO
-  const [showPicker, setShowPicker] = useState(false); 
-  
   const deleteFunction = props.AuthenticateActivate('delete')
   const { theme } = useContext(ThemeContext)
   
@@ -44,7 +40,7 @@ export const CustomLinkDrive = (props: ExtendedLinkCell) => {
     if (value === "PoliceApproval") return !Boolean(props.data.PoliceApproval) ? "" : "משטרה";
     if (value === "Insurance") return !Boolean(props.data.Insurance) ? "" : "ביטוח";
     if (value === "Aggrement") return !Boolean(props.data.Aggrement) ? "" : "הסכם";
-    if (value === "CV") return !Boolean(props.data.CV) ? "" : "קוח";
+    if (value === "CV") return !Boolean(props.data.CV) ? "" : "קורות חיים";
     if (value === "Other_Documents") return !Boolean(props.data.Other_Documents) ? "" : "תעודה";
   }, [props.colDef, props.data]);
 
@@ -115,18 +111,7 @@ export const CustomLinkDrive = (props: ExtendedLinkCell) => {
       {getLinks() !== "" ? (
         getLinks()
       ) : (
-        // אם הפיקר לא פתוח, מציגים רק אייקון
-        !showPicker ? (
-           <div 
-             className="flex items-center justify-center h-full cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
-             onClick={() => setShowPicker(true)}
-             title="העלה קובץ"
-           >
-             <IoMdCloudUpload size={24} className={theme === "dark-theme" ? "fill-slate-200" : "fill-gray-600"} />
-           </div>
-        ) : (
-          <GoogleDriverPicker {...props} />
-        )
+        <GoogleDriverPicker {...props} />
       )}
     </div>
   );
