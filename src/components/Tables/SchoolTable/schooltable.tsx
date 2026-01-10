@@ -93,7 +93,39 @@ export default function SchoolsTable() {
     const selectedRowsCount = event.api.getSelectedRows().length;
     setAmount(selectedRowsCount);
   }, [onSelectionChange, setAmount]);
+// פונקציות לניהול סטטוס Google Contacts
+  const checkContactsStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/google/check-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'contacts' }),
+      });
+      if (!response.ok) {
+        return { isConnected: false };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error checking Contacts status:", error);
+      return { isConnected: false };
+    }
+  }, []);
 
+  const onDisconnectContacts = useCallback(async () => {
+    try {
+      await fetch('/api/google/disconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'contacts' }),
+      });
+    } catch (error) {
+      console.error("Error disconnecting Contacts:", error);
+    }
+  }, []);
   const LoadingOverlay = useCallback(() => {
     if (!isLoading) {
       return <></>
@@ -180,12 +212,25 @@ export default function SchoolsTable() {
   return (
     <>
       {mounted && document.getElementById("navbar-actions") 
-        ? createPortal(
-            ToolBar(onClearFilterButtonClick, setColumnWindowOpen, onAddRowToolBarClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, checkedAmount, onFilterTextBoxChanged, onDisplayProgramsClicked, LoadingOverlay),
-            document.getElementById("navbar-actions") as HTMLElement
-          )
-        : null
-      }
+  ? createPortal(
+      ToolBar(
+        onClearFilterButtonClick, 
+        setColumnWindowOpen, 
+        onAddRowToolBarClick, 
+        onCancelChangeButtonClick, 
+        onSaveChangeButtonClick, 
+        onSaveDeletions, 
+        checkedAmount, 
+        onFilterTextBoxChanged, 
+        onDisplayProgramsClicked, 
+        LoadingOverlay,
+        checkContactsStatus,        // 👈 חדש!
+        onDisconnectContacts        // 👈 חדש!
+      ),
+      document.getElementById("navbar-actions") as HTMLElement
+    )
+  : null
+}
 
       <Suspense>
         <div

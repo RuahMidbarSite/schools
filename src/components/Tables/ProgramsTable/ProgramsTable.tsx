@@ -39,6 +39,7 @@ import { MultiSelectCellEditor } from "@/components/CustomSelect/MultiSelectCell
 import YearFilter from "./components/YearFilter";
 import StatusFilter from "./components/StatusFilter";
 import Redirect from "@/components/Auth/Components/Redirect";
+import { GoogleDriveAuthStatus } from "@/components/GoogleDriveAuthStatus";  // ← הוסף את זה
 
 // --- Styles & Formatters ---
 
@@ -551,42 +552,107 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
           console.error("Update failed:", error);
       }
   }, []);
+const checkDriveStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/google-drive/check-status?type=programs');
+      if (!response.ok) {
+        return { isConnected: false };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error checking Drive status:", error);
+      return { isConnected: false };
+    }
+  }, []);
 
+  const onDisconnectDrive = useCallback(async () => {
+    try {
+      await fetch('/api/google-drive/disconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'programs' }),
+      });
+    } catch (error) {
+      console.error("Error disconnecting Drive:", error);
+    }
+  }, []);
   return (
     <>
-      <Navbar id="ProgramsNavBar" className="bg-[#12242E] flex flex-row-reverse p-2 gap-2 shadow-sm items-center">
-        <Redirect type={'Programs'} ScopeType={'Drive'} />
-        <div className="flex flex-row-reverse items-center gap-2">
-          {(!ignoreContextFilters && (selectedYear || defaultStatus)) && (
-             <span className="text-yellow-400 text-xs font-bold border border-yellow-400 rounded px-2 py-1 ml-2">
-               מסונן: {selectedYear} {defaultStatus}
-             </span>
-          )}
-          <button onClick={clearAllFilters} title="נקה את כל הסינונים"><FcCancel className="w-[37px] h-[37px]" /></button>
-          <button onClick={onDeleteRows}><FcFullTrash className="w-[37px] h-[37px]" /></button>
-          <button onClick={() => setColumnWindowOpen(true)}><FcAddColumn className="w-[37px] h-[37px]" /></button>
-          <button onClick={handleAddRow} title="הוסף שורה חדשה"><FcAddRow className="w-[37px] h-[37px]" /></button>
-          
-          <input className="text-right bg-white text-gray-500 w-[180px] h-[35px] p-2 rounded border-none" type="text" placeholder="חיפוש..." onInput={(e: any) => gridRef.current?.api.setQuickFilter(e.target.value)} />
-          <div className="flex flex-row-reverse items-center gap-2 bg-[#1b2e3a] p-1 rounded border border-gray-700 mx-2">
-            
-            {/* כפתור שמירה: מופיע רק אם יש שורות חדשות */}
-            <button 
-                id="savechangesbutton" 
-                onClick={onSaveChangeButtonClick} 
-                className={`hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white ${hasNewRows ? '' : 'hidden'}`}
-            >
-                שמור ({hasNewRows ? 'שינויים' : ''})
-            </button>
+     <Navbar id="ProgramsNavBar" className="bg-[#12242E] flex justify-between items-center p-2 shadow-sm">
+  
+  {/* 👈 צד שמאל - סטטוס Drive עם רקע כחול פסטל */}
+  <div className="flex items-center">
+    <div className="bg-blue-100 px-4 py-2 rounded-lg border border-blue-300 shadow-sm">
+      <GoogleDriveAuthStatus
+        type="Programs"
+        checkAuthStatus={checkDriveStatus}
+        onDisconnect={onDisconnectDrive}
+      />
+    </div>
+  </div>
 
-            <button id="cancelchangesbutton" onClick={onCancelChanges} className="hover:bg-gray-500 bg-gray-600 rounded px-3 py-1 text-white hidden">ביטול</button>
-            {!aiLoading ? ( <Button variant="info" size="sm" onClick={handleAiSubmit} className="fw-bold">ייצר ✨</Button> ) : ( 
-                <button onClick={() => abortControllerRef.current?.abort()} className="bg-transparent border-none p-0"><MdStopCircle className="text-danger w-[32px] h-[32px]" /></button> 
-            )}
-            <input type="text" className="bg-transparent text-white border-none text-right outline-none px-2" placeholder="הזנה חכמה..." value={aiInput} onChange={(e) => setAiInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()} style={{ direction: 'rtl', width: '660px', fontSize: '14px' }} disabled={aiLoading} />
-          </div>
-        </div>
-      </Navbar>
+  {/* 👉 צד ימין - כל הכפתורים */}
+  <div className="flex flex-row-reverse items-center gap-2">
+    <Redirect type={'Programs'} ScopeType={'Drive'} />
+    
+    {(!ignoreContextFilters && (selectedYear || defaultStatus)) && (
+       <span className="text-yellow-400 text-xs font-bold border border-yellow-400 rounded px-2 py-1 ml-2">
+         מסונן: {selectedYear} {defaultStatus}
+       </span>
+    )}
+    
+    <button onClick={clearAllFilters} title="נקה את כל הסינונים"><FcCancel className="w-[37px] h-[37px]" /></button>
+    <button onClick={onDeleteRows}><FcFullTrash className="w-[37px] h-[37px]" /></button>
+    <button onClick={() => setColumnWindowOpen(true)}><FcAddColumn className="w-[37px] h-[37px]" /></button>
+    <button onClick={handleAddRow} title="הוסף שורה חדשה"><FcAddRow className="w-[37px] h-[37px]" /></button>
+    
+    <input 
+      className="text-right bg-white text-gray-500 w-[180px] h-[35px] p-2 rounded border-none" 
+      type="text" 
+      placeholder="חיפוש..." 
+      onInput={(e: any) => gridRef.current?.api.setQuickFilter(e.target.value)} 
+    />
+    
+    <div className="flex flex-row-reverse items-center gap-2 bg-[#1b2e3a] p-1 rounded border border-gray-700 mx-2">
+      <button 
+        id="savechangesbutton" 
+        onClick={onSaveChangeButtonClick} 
+        className={`hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white ${hasNewRows ? '' : 'hidden'}`}
+      >
+        שמור ({hasNewRows ? 'שינויים' : ''})
+      </button>
+
+      <button 
+        id="cancelchangesbutton" 
+        onClick={onCancelChanges} 
+        className="hover:bg-gray-500 bg-gray-600 rounded px-3 py-1 text-white hidden"
+      >
+        בטול
+      </button>
+      
+      {!aiLoading ? ( 
+        <Button variant="info" size="sm" onClick={handleAiSubmit} className="fw-bold">ייצר ✨</Button> 
+      ) : ( 
+        <button onClick={() => abortControllerRef.current?.abort()} className="bg-transparent border-none p-0">
+          <MdStopCircle className="text-danger w-[32px] h-[32px]" />
+        </button> 
+      )}
+      
+      <input 
+        type="text" 
+        className="bg-transparent text-white border-none text-right outline-none px-2" 
+        placeholder="הזנה חכמה..." 
+        value={aiInput} 
+        onChange={(e) => setAiInput(e.target.value)} 
+        onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()} 
+        style={{ direction: 'rtl', width: '660px', fontSize: '14px' }} 
+        disabled={aiLoading} 
+      />
+    </div>
+  </div>
+</Navbar>
       <div className={theme === "dark-theme" ? "ag-theme-quartz-dark w-full flex-grow" : "ag-theme-quartz w-full flex-grow"} style={{ height: "calc(100vh - 150px)" }}>
         <AgGridReact 
           ref={gridRef} 
