@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { fetchWithTimeout } from '@/app/utilities/fetchwithTimeout';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   // שאר ריק לעת עתה
@@ -12,6 +13,10 @@ export async function GET(req: Request) {
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
+  
+  console.log('🚀 [GoogleAuth] GET request started');
+  console.log('📝 [GoogleAuth] Code exists:', !!code);
+  console.log('📝 [GoogleAuth] State:', state);
   
   // טיפול בשגיאות מ-Google
   if (error) {
@@ -88,6 +93,7 @@ export async function GET(req: Request) {
     const parsed = JSON.parse(decoded);
     page_redirect = parsed.page_redirect;
     redirecttype = parsed.redirecttype;
+    console.log('✅ [GoogleAuth] State parsed:', { page_redirect, redirecttype });
   } catch (e) {
     console.error('Failed to parse state:', e);
     return NextResponse.redirect(new URL('/', req.url));
@@ -101,17 +107,11 @@ export async function GET(req: Request) {
     console.log('=== Google OAuth Debug ===');
     console.log('Client ID exists:', !!clientId);
     console.log('Client Secret exists:', !!clientSecret);
-    console.log('Client ID length:', clientId?.length);
-    console.log('Client ID (first 30 chars):', clientId?.substring(0, 30));
-    console.log('Code exists:', !!code);
-    console.log('Code length:', code?.length);
-    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Redirect type:', redirecttype);
     
     // בדיקה חשובה - אם Client ID או Secret חסרים
     if (!clientId || !clientSecret) {
       console.error('❌ Missing environment variables!');
-      console.error('NEXT_PUBLIC_CLIENT_ID:', !!clientId);
-      console.error('GOOGLE_CLIENT_SECRET:', !!clientSecret);
       
       const html = `
         <!DOCTYPE html>
@@ -270,18 +270,13 @@ export async function GET(req: Request) {
                 Status: ${tokenResponse.status}<br>
                 Error: ${JSON.stringify(errorData, null, 2)}
               </div>
-              <p style="margin-top: 1rem; font-size: 0.85rem;">
-                אם השגיאה היא "invalid_client", בדוק ש:
-                <br>1. Client ID ו-Secret נכונים ב-.env.local
-                <br>2. Redirect URI מוגדר ב-Google Cloud Console
-              </p>
             </div>
             <script>
               if (window.opener) {
                 window.opener.postMessage({
                   type: 'GOOGLE_AUTH_ERROR',
                   error: 'token_error',
-                  message: 'שגיאה בקבלת טוקן: ${errorData.error}'
+                  message: 'שגיאה בקבלת טוקן'
                 }, '*');
               }
               setTimeout(() => window.close(), 10000);
@@ -297,6 +292,84 @@ export async function GET(req: Request) {
 
     const tokenData = await tokenResponse.json();
     console.log('✅ Token received successfully');
+    console.log('🔑 Access token length:', tokenData.access_token?.length);
+
+    // 🔥 החלק החשוב - שמירת הטוקן ב-cookies! 🔥
+    
+    // קביעת שם ה-cookie לפי סוג ההתחברות
+    let tokenKey = 'google_token';
+    let emailKey = 'google_email';
+    
+    if (redirecttype === 'contacts') {
+      tokenKey = 'google_contacts_token';
+      emailKey = 'google_contacts_email';
+    } else if (redirecttype === 'drive') {
+      tokenKey = 'google_drive_token';
+      emailKey = 'google_drive_email';
+    }
+
+    console.log(`💾 Saving token to cookies: ${tokenKey}`);
+
+    // קבלת המייל מהטוקן (אם קיים)
+    let userEmail = '';
+    try {
+      // ניסיון לקבל את המייל מ-Google
+      const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+      });
+      
+      if (userInfoResponse.ok) {
+        const userInfo = await userInfoResponse.json();
+        userEmail = userInfo.email || '';
+        console.log(`📧 User email: ${userEmail}`);
+      }
+    } catch (e) {
+      console.warn('Could not fetch user email:', e);
+    }
+
+    // חישוב תאריך תפוגה (שעה מעכשיו)
+    const expiresIn = tokenData.expires_in || 3600; // default 1 hour
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+    
+    console.log('⏰ Cookie expires at:', expiresAt.toISOString());
+
+    // שמירת ה-cookies עם הגדרות מתוקנות
+    const cookieStore = await cookies();
+    
+    // הגדרות Cookie מתוקנות
+    const cookieOptions = {
+      path: '/',
+      expires: expiresAt,
+      httpOnly: false, // ✅ שינוי קריטי! מאפשר גישה מ-JavaScript
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const, // ✅ שינוי מ-strict ל-lax
+    };
+    
+    console.log('🔧 Cookie options:', cookieOptions);
+    
+    try {
+      cookieStore.set(tokenKey, tokenData.access_token, cookieOptions);
+      console.log(`✅ Set ${tokenKey} cookie`);
+      
+      if (userEmail) {
+        cookieStore.set(emailKey, userEmail, cookieOptions);
+        console.log(`✅ Set ${emailKey} cookie`);
+      }
+      
+      // בדיקה מיידית - האם ה-cookie נשמר?
+      const checkToken = cookieStore.get(tokenKey);
+      const checkEmail = cookieStore.get(emailKey);
+      console.log('🔍 Immediate verification:');
+      console.log(`  ${tokenKey}:`, checkToken ? 'EXISTS ✅' : 'NOT FOUND ❌');
+      console.log(`  ${emailKey}:`, checkEmail ? 'EXISTS ✅' : 'NOT FOUND ❌');
+      
+    } catch (cookieError) {
+      console.error('❌ Error setting cookies:', cookieError);
+    }
+
+    console.log(`✅ Cookie save process completed`);
 
     const html = `
       <!DOCTYPE html>
@@ -347,17 +420,26 @@ export async function GET(req: Request) {
             <p>החלון ייסגר אוטומטית...</p>
           </div>
           <script>
+            console.log('🎉 [Auth Success Page] Loaded');
+            console.log('📧 Email: ${userEmail}');
+            console.log('🔑 Token Key: ${tokenKey}');
+            
             if (window.opener) {
+              console.log('📤 [Auth Success Page] Sending message to opener');
               window.opener.postMessage({
                 type: 'GOOGLE_AUTH_SUCCESS',
-                tokenData: ${JSON.stringify(tokenData)},
-                authType: '${redirecttype}'
+                authType: '${redirecttype}',
+                email: '${userEmail}',
+                tokenKey: '${tokenKey}',
+                emailKey: '${emailKey}'
               }, '${new URL(page_redirect).origin}');
               
               setTimeout(() => {
+                console.log('👋 [Auth Success Page] Closing window');
                 window.close();
               }, 2000);
             } else {
+              console.log('🔄 [Auth Success Page] No opener, redirecting...');
               setTimeout(() => {
                 window.location.href = '${page_redirect}';
               }, 2000);

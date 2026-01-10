@@ -1,5 +1,5 @@
 "use client";
-import { School, Guide, Assigned_Guide, Profession, Areas, ReligionSector, StatusGuides, Guides_ToAssign, ColorCandidate } from "@prisma/client"; // look at this type to know the fields in the table.
+import { School, Guide, Assigned_Guide, Profession, Areas, ReligionSector, StatusGuides, Guides_ToAssign, ColorCandidate } from "@prisma/client";
 import {
   useState,
   useRef,
@@ -12,7 +12,7 @@ import {
 import { AgGridReact } from "ag-grid-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
+import "ag-grid-community/styles/ag-theme-quartz.css";
 
 import {
   CellValueChangedEvent,
@@ -36,7 +36,7 @@ import Spinner from "react-bootstrap/Spinner";
 import { Button, Navbar, OverlayTrigger } from "react-bootstrap";
 import Tooltip from "react-bootstrap/Tooltip";
 
-import Select from "react-select"; // later will probably add it...
+import Select from "react-select"; 
 
 import { FcAddColumn, FcAddRow, FcCancel } from "react-icons/fc";
 import { CustomMasterGrid } from "../SchoolTable/Components/MasterGrid/CustomMasterGrid";
@@ -65,6 +65,7 @@ import {
   getAllAssignedInstructors,
 } from "@/db/generalrequests";
 import { CustomMultiSelectCell } from "../GeneralFiles/Select/CustomMultiSelectCellRenderer";
+// ✅ הנתיב תוקן בגרסה הקודמת, שומרים עליו כך
 import { CustomMultiSelectCellEdit } from "../GeneralFiles/Select/CustomMultiSelect";
 import { CustomFilter } from "../GeneralFiles/Filters/CustomFilter";
 import { ChooseProfessions } from "../GuidesTable/components/CustomChooseProfessions";
@@ -85,6 +86,7 @@ import CustomWhatsAppRenderer from "./components/CustomWhatsAppRenderer";
 import { NamePhoneCellEditor } from "./components/NamePhoneCellEditor";
 import { NamePhoneCellRenderer } from "./components/NamePhoneCellRenderer";
 import { getAssignedInstructores } from "@/db/programsRequests";
+import { GoogleDriveAuthStatus } from "@/components/GoogleDriveAuthStatus";
 
 export default function GuidesTable({
   height,
@@ -949,6 +951,37 @@ export default function GuidesTable({
     }
 
   };
+
+  // 🔥 פונקציות חדשות עבור Google Drive Status
+  const checkDriveStatus = useCallback(async () => {
+    try {
+      // שליחת type=guides לאימות
+      const response = await fetch('/api/google-drive/check-status?type=guides');
+      if (!response.ok) {
+        return { isConnected: false };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error checking Drive status:", error);
+      return { isConnected: false };
+    }
+  }, []);
+
+  const onDisconnectDrive = useCallback(async () => {
+    try {
+      // שליחת type=guides לניתוק
+      await fetch('/api/google-drive/disconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'guides' }),
+      });
+    } catch (error) {
+      console.error("Error disconnecting Drive:", error);
+    }
+  }, []);
+  
   return (
     <>
       <Navbar
@@ -956,7 +989,10 @@ export default function GuidesTable({
         className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%]  flex-row-reverse"
       >
         <LoadingOverlay />
+        
         <Redirect type={'Guides'} ScopeType={'Drive'} />
+        
+        
         <OverlayTrigger
           placement={"top"}
           overlay={<Tooltip className="absolute">בטל סינון</Tooltip>}
@@ -1025,6 +1061,16 @@ export default function GuidesTable({
           placeholder="חיפוש"
           onInput={onFilterTextBoxChanged}
         />
+
+        {/* ✅ מיקום חדש - בצד שמאל הקיצוני */}
+        {/* ה-DIV העוטף דוחף את עצמו שמאלה באמצעות mr-auto (בגלל flex-row-reverse) ונותן את הרקע הסגול */}
+        <div className="mr-auto bg-[#E6E6FA] rounded-md p-1 flex items-center">
+          <GoogleDriveAuthStatus 
+            type="Guides"
+            checkAuthStatus={checkDriveStatus}
+            onDisconnect={onDisconnectDrive}
+          />
+        </div>
       </Navbar>
       <Suspense>
         <div
@@ -1101,4 +1147,4 @@ export default function GuidesTable({
         setColState={setColState} />
     </>
   );
-}
+} 

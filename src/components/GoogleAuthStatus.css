@@ -1,0 +1,154 @@
+.google-auth-status-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.dark-theme .google-auth-status-container {
+  background-color: #2d2d2d;
+  border-color: #404040;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.google-auth-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #333;
+  min-width: 140px;
+}
+
+.dark-theme .google-auth-label {
+  color: #e0e0e0;
+}
+
+.google-icon {
+  font-size: 20px;
+  color: #4285f4;
+}
+
+.google-auth-loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.label-text {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.google-auth-connected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.google-auth-disconnected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.status-icon {
+  font-size: 18px;
+}
+
+.google-auth-connected .status-icon {
+  color: #34a853;
+}
+
+.google-auth-disconnected .status-icon {
+  color: #ea4335;
+}
+
+.status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.dark-theme .status-text {
+  color: #e0e0e0;
+}
+
+.status-email {
+  font-size: 12px;
+  color: #666;
+  direction: ltr;
+  text-align: left;
+}
+
+.dark-theme .status-email {
+  color: #999;
+}
+
+.google-auth-disconnect-btn {
+  padding: 6px 16px;
+  background-color: #ea4335;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.google-auth-disconnect-btn:hover:not(:disabled) {
+  background-color: #d33828;
+  box-shadow: 0 2px 8px rgba(234, 67, 53, 0.3);
+}
+
+.google-auth-disconnect-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.google-auth-disconnect-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dark-theme .google-auth-disconnect-btn:disabled {
+  background-color: #555;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .google-auth-status-container {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .google-auth-label {
+    min-width: auto;
+  }
+
+  .status-email {
+    font-size: 11px;
+  }
+}

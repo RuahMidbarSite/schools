@@ -4,13 +4,23 @@ import { AgGridReact } from "ag-grid-react";
 import { MutableRefObject, useCallback } from "react";
 import { updateStorage } from "../Storage/BigContactsDataStorage";
 
-
-const useToolBarFunctions = (gridRef: MutableRefObject<AgGridReact<any>>, rowCount, dataRowCount, SetInTheMiddleOfAddingRows, validateFields, setDialogType, setDialogMessage, setOpen, setAmount, modifiedRowRef,maxIndex) => {
-
+const useToolBarFunctions = (
+  gridRef: MutableRefObject<AgGridReact<any>>,
+  rowCount,
+  dataRowCount,
+  SetInTheMiddleOfAddingRows,
+  validateFields,
+  setDialogType,
+  setDialogMessage,
+  setOpen,
+  setAmount,
+  modifiedRowRef,
+  maxIndex
+) => {
   const onClearFilterButtonClick = useCallback(() => {
     if (gridRef.current && gridRef.current.api) {
       gridRef.current.api.setFilterModel(null);
-      gridRef.current.api.setGridOption("quickFilterText", "")
+      gridRef.current.api.setGridOption("quickFilterText", "");
     }
     const filterInput = document.getElementById("filter-text-box") as HTMLInputElement;
     if (filterInput) {
@@ -34,12 +44,12 @@ const useToolBarFunctions = (gridRef: MutableRefObject<AgGridReact<any>>, rowCou
           IsRepresentive: false,
         },
       ],
-      addIndex: 0
+      addIndex: 0,
     });
-   maxIndex.current = maxIndex.current+1
+    maxIndex.current = maxIndex.current + 1;
     rowCount.current++;
     SetInTheMiddleOfAddingRows(true);
-    // activate( and therfore show) the update button and cancel button
+    // activate (and therefore show) the update button and cancel button
     const element: any = document.getElementById("savechangesbutton-contacts");
     if (element !== null) {
       element.style.display = "block";
@@ -59,13 +69,12 @@ const useToolBarFunctions = (gridRef: MutableRefObject<AgGridReact<any>>, rowCou
     const newly_added: SchoolsContact[] = [];
     var count = 0;
 
-    const phoneNumbers = []
+    const phoneNumbers = [];
     gridRef.current.api.forEachNode((node) => {
-      if (node.data?.Cellphone !== modifiedRowRef.current?.Cellphone && node.data.Cellphone!=='') {
-        phoneNumbers.push(node.data.Cellphone)
+      if (node.data?.Cellphone !== modifiedRowRef.current?.Cellphone && node.data.Cellphone !== "") {
+        phoneNumbers.push(node.data.Cellphone);
       }
-
-    })
+    });
 
     gridRef.current.api.forEachNode((node: any) => {
       future_data.push(node.data);
@@ -105,22 +114,33 @@ const useToolBarFunctions = (gridRef: MutableRefObject<AgGridReact<any>>, rowCou
     SetInTheMiddleOfAddingRows(false);
 
     // Send Event so that the contact component will add the new google contact at GoogleContactComponent.tsx
-    const google_new_contacts_event: any = { type: "New_Contacts", data: newly_added }
-    gridRef.current.api.dispatchEvent(google_new_contacts_event)
+    const google_new_contacts_event: any = { type: "New_Contacts", data: newly_added };
+    gridRef.current.api.dispatchEvent(google_new_contacts_event);
     gridRef.current.api!.applyColumnState({
       state: [{ colId: "Contactid", sort: "asc" }],
-      defaultState: { sort: null }
-    })
+      defaultState: { sort: null },
+    });
 
-      maxIndex.current =future_data.length > 0 ? Math.max(...future_data.map((contact)=>contact.Contactid)):0
+    maxIndex.current = future_data.length > 0 ? Math.max(...future_data.map((contact) => contact.Contactid)) : 0;
 
-    updateStorage({ schoolsContacts: future_data.sort((arg1, arg2) => arg1.Contactid - arg2.Contactid) })
-    gridRef.current.api.deselectAll()
-  }, [SetInTheMiddleOfAddingRows, dataRowCount, gridRef, modifiedRowRef,maxIndex, rowCount, setDialogMessage, setDialogType, setOpen, validateFields]);
+    updateStorage({ schoolsContacts: future_data.sort((arg1, arg2) => arg1.Contactid - arg2.Contactid) });
+    gridRef.current.api.deselectAll();
+  }, [
+    SetInTheMiddleOfAddingRows,
+    dataRowCount,
+    gridRef,
+    modifiedRowRef,
+    maxIndex,
+    rowCount,
+    setDialogMessage,
+    setDialogType,
+    setOpen,
+    validateFields,
+  ]);
 
   const onCancelChangeButtonClick = useCallback(() => {
     const prev_data: SchoolsContact[] = [];
-    var count = 0
+    var count = 0;
     gridRef.current.api.forEachNode((node: any) => {
       // Right now, a new row is added at the top and forEachNode goes through the order that appears in the table.
       if (count >= rowCount.current - dataRowCount.current) {
@@ -128,9 +148,9 @@ const useToolBarFunctions = (gridRef: MutableRefObject<AgGridReact<any>>, rowCou
       }
       count++;
     });
-maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((contact)=>contact.Contactid)):0
-    gridRef.current.api.setGridOption("rowData", prev_data)
-    
+    maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((contact) => contact.Contactid)) : 0;
+    gridRef.current.api.setGridOption("rowData", prev_data);
+
     // update so that there is no more rows unaccounted for in the database.
     rowCount.current = dataRowCount.current;
 
@@ -145,36 +165,33 @@ maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((contact)=>c
     }
 
     SetInTheMiddleOfAddingRows(false);
-
   }, [SetInTheMiddleOfAddingRows, dataRowCount, gridRef, rowCount]);
 
   const onSaveDeletions = useCallback(() => {
-    const ids: number[] = gridRef.current.api
-      .getSelectedRows()
-      .map((val: SchoolsContact) => val.Contactid);
+    const ids: number[] = gridRef.current.api.getSelectedRows().map((val: SchoolsContact) => val.Contactid);
 
     // this is what will remain after the deletion.
     const updated_data: SchoolsContact[] = [];
 
     // what are the ids in big schoolstable that are not deleted - we need that to reorder the table.
-    let id_range: number[] = []
+    let id_range: number[] = [];
     for (let index = 1; index <= dataRowCount.current; index++) {
       if (ids.includes(index)) {
-        continue
+        continue;
       }
-      id_range.push(index)
+      id_range.push(index);
     }
-    let index = 0
+    let index = 0;
     gridRef.current.api.forEachNode((node: any) => {
       if (!ids.includes(node.data.Contactid)) {
-        const new_data: SchoolsContact = { ...node.data, Contactid: index + 1 }
+        const new_data: SchoolsContact = { ...node.data, Contactid: index + 1 };
         updated_data.push(new_data);
-        index += 1
+        index += 1;
       }
     });
-    
-    gridRef.current.api.setGridOption("rowData", updated_data)
-    maxIndex.current = Math.max(...updated_data.map((contact)=>contact.Contactid))
+
+    gridRef.current.api.setGridOption("rowData", updated_data);
+    maxIndex.current = Math.max(...updated_data.map((contact) => contact.Contactid));
     deleteContactsRows(ids, updated_data, id_range);
     // update the amount of rows
     dataRowCount.current -= ids.length;
@@ -187,12 +204,18 @@ maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((contact)=>c
       element.style.display = "none";
     }
 
-    updateStorage({ schoolsContacts: updated_data.sort((arg1, arg2) => arg1.Contactid - arg2.Contactid) })
-    gridRef.current.api.deselectAll()
+    updateStorage({ schoolsContacts: updated_data.sort((arg1, arg2) => arg1.Contactid - arg2.Contactid) });
+    gridRef.current.api.deselectAll();
   }, [dataRowCount, gridRef, rowCount, setAmount]);
 
-  return { onClearFilterButtonClick: onClearFilterButtonClick, onAddRowToolBarClick: onAddRowToolBarClick, onSaveChangeButtonClick: onSaveChangeButtonClick, onCancelChangeButtonClick: onCancelChangeButtonClick, onSaveDeletions: onSaveDeletions, onFilterTextBoxChanged: onFilterTextBoxChanged }
+  return {
+    onClearFilterButtonClick,
+    onAddRowToolBarClick,
+    onSaveChangeButtonClick,
+    onCancelChangeButtonClick,
+    onSaveDeletions,
+    onFilterTextBoxChanged,
+  };
+};
 
-}
-
-export default useToolBarFunctions
+export default useToolBarFunctions;

@@ -1,5 +1,5 @@
 "use client";
-import { Role, School, SchoolsContact } from "@prisma/client"; // look at this type to know the fields in the table.
+import { Role, School, SchoolsContact } from "@prisma/client";
 import {
   useState,
   useRef,
@@ -42,6 +42,7 @@ import { useContactComponent } from "@/util/Google/GoogleContacts/ContactCompone
 import { CustomLinkContact } from "../GeneralFiles/GoogleContacts/CustonLinkContact";
 import { CustomMultiSelectCell } from "../GeneralFiles/Select/CustomMultiSelectCellRenderer";
 import { CustomFilter } from "../GeneralFiles/Filters/CustomFilter";
+import { GoogleAuthStatus } from "@/components/GoogleAuthStatus";
 
 import { columnsDefinition, OtherComponentsObject } from "@/util/cache/cachetypes";
 import { ThemeContext } from "@/context/Theme/Theme";
@@ -55,7 +56,7 @@ import useExternalUpdate from "./hooks/ExternalUpdateAgGridComponents";
 import useToolBarFunctions from "./hooks/ToolBarFunctions";
 import useGridEvents from "./hooks/GridEvents";
 import useGridFunctions from "./hooks/GridInitialize";
-import ToolBar from "./hooks/ToolBarComponent";
+import ToolBar from "@/components/Tables/ContactsTable/hooks/ToolBarComponent";
 import useColumnComponent from "./hooks/ColumnComponent";
 
 export default function ContactsTable() {
@@ -67,18 +68,13 @@ export default function ContactsTable() {
 
   const [InTheMiddleOfAddingRows, SetInTheMiddleOfAddingRows] = useState(false);
 
-  // this is used for adding new rows. using ref to prevent re-render.
-  // dataRowCount is the current amount of rows in the database, rowCount is how many rows in the grid right now.
   const dataRowCount = useRef(0);
   const rowCount = useRef(0);
 
   const modifiedRowRef = useRef(null);
 
-
-  // Row Data: The data to be displayed.
   const [rowData, setRowData] = useState<SchoolsContact[]>(null);
 
-  // Column Definitions: Defines & controls grid columns.
   const [colDefinition, setColDefs] = useState<columnsDefinition>(null);
 
   const [open, setOpen] = useState(false);
@@ -91,7 +87,6 @@ export default function ContactsTable() {
 
   const { updateColState, updateColStateFromCache } = useColumnEffects(gridRef, colState, setColState)
 
-
   const { authEffect } = useAuthEffect(AuthenticateActivate)
 
   useExternalEffect(authEffect, [AuthenticateActivate])
@@ -101,27 +96,97 @@ export default function ContactsTable() {
 
   const { onColumnResized, onColumnMoved } = useColumnHooks(gridRef, colState, setColDefs, setColState, colState)
 
-
   const { validateFields, ErrorModule } = useErrorValidationComponents(setOpen, setDialogType, setDialogMessage, open, dialogType, dialogMessage)
 
   const { ValueFormatSchool, ValueFormatWhatsApp, valueFormatCellPhone } = useExternalUpdate(AuthenticateActivate)
 
+  const maxIndex = useRef<number>(0)
 
-   // this is for adding new rows. This is because we previoused used ID for everything, this is a way
- // to still keep deletion fast.
- const maxIndex = useRef<number>(0)
+  const { onGridReady } = useGridFunctions(valueFormatCellPhone, AuthenticateActivate, ValueFormatSchool, ValueFormatWhatsApp, setRowData, setColDefs, dataRowCount, rowCount, maxIndex)
 
-
-  const { onGridReady } = useGridFunctions(valueFormatCellPhone, AuthenticateActivate, ValueFormatSchool, ValueFormatWhatsApp, setRowData, setColDefs, dataRowCount, rowCount,maxIndex)
-
-  const { onAddRowToolBarClick, onClearFilterButtonClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, onFilterTextBoxChanged } = useToolBarFunctions(gridRef, rowCount, dataRowCount, SetInTheMiddleOfAddingRows, validateFields, setDialogType, setDialogMessage, setOpen, setAmount, modifiedRowRef,maxIndex)
+  const { onAddRowToolBarClick, onClearFilterButtonClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, onFilterTextBoxChanged } = useToolBarFunctions(gridRef, rowCount, dataRowCount, SetInTheMiddleOfAddingRows, validateFields, setDialogType, setDialogMessage, setOpen, setAmount, modifiedRowRef, maxIndex)
 
   const { onCellValueChanged, onCellEditingStarted, onRowSelected, onSelectionChange, isRowSelectable, getRowStyles, getRowId } = useGridEvents(gridRef, InTheMiddleOfAddingRows, setAmount, checkedAmount, modifiedRowRef)
 
   const { WindowManager } = useColumnComponent(columnWindowOpen, setColumnWindowOpen, colDefinition, gridRef, colState, setColState)
 
-  //   had to register it through the components of ag grid to use a string in cellrenderer option so that the JSON parsing would also include
-  //  and render this component.
+  const handleDisconnectContacts = useCallback(async () => {
+    try {
+      console.log('🔌 [Contactstable] handleDisconnectContacts called');
+      
+      const response = await fetch('/api/google/disconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'contacts' }),
+      });
+
+      console.log('📥 [Contactstable] Disconnect response:', response.ok, response.status);
+
+      if (!response.ok) {
+        throw new Error('Failed to disconnect');
+      }
+
+      console.log('✅ [Contactstable] Disconnected successfully, reloading...');
+      window.location.reload();
+    } catch (error) {
+      console.error('❌ [Contactstable] Error disconnecting from Google Contacts:', error);
+      throw error;
+    }
+  }, []);
+
+  const checkContactsAuthStatus = useCallback(async () => {
+    console.log('🎯 [Contactstable] checkContactsAuthStatus called');
+    console.log('⏰ [Contactstable] Time:', new Date().toISOString());
+    
+    try {
+      console.log('📤 [Contactstable] Sending request to /api/google/check-status');
+      
+      const response = await fetch('/api/google/check-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'contacts' }),
+      });
+
+      console.log('📥 [Contactstable] Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [Contactstable] Response not OK:', errorText);
+        throw new Error('Failed to check status');
+      }
+
+      const data = await response.json();
+      console.log('📊 [Contactstable] Response data:', data);
+      console.log('✅ [Contactstable] isConnected:', data.isConnected);
+      console.log('📧 [Contactstable] email:', data.email);
+      
+      const result = {
+        isConnected: data.isConnected,
+        email: data.email,
+        debug: data.debug,
+      };
+      
+      console.log('🎁 [Contactstable] Returning:', result);
+      
+      return result;
+    } catch (error) {
+      console.error('❌ [Contactstable] Error checking Google Contacts status:', error);
+      console.error('❌ [Contactstable] Error details:', {
+        message: error.message,
+        stack: error.stack,
+      });
+      return { isConnected: false };
+    }
+  }, []);
+
   const components = useMemo(
     () => ({
       CustomLink: CustomLink,
@@ -133,7 +198,7 @@ export default function ContactsTable() {
     []
   );
 
-const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
+  const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
     const keyboardEvent = event.event as unknown as KeyboardEvent;
     keyboardEvent.stopPropagation()
     if (keyboardEvent.key === "Tab" || keyboardEvent.key === "Enter" || keyboardEvent.key === "ArrowLeft" || keyboardEvent.key === "ArrowRight") {
@@ -200,7 +265,7 @@ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
         const displayedColumns = event.api.getAllDisplayedColumns();
         const prevCol = displayedColumns[currentColumnIndex - 1]
         event.api.setFocusedCell(event.rowIndex, prevCol.getColId());
- 
+
         const prevCellDef = prevCol.getColDef();
         if (prevCellDef.cellRenderer) {
           triggerCellRenderer(event, prevCell.column);
@@ -214,28 +279,46 @@ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
       event.event.preventDefault();
     }
   }, []);
-  const CustomNoRowsOverlay =useCallback(() => {
-  const Name="לא זוהו נתונים"
-  return (
-    <div className="ag-overlay-no-rows-center text-blue-300">
-      <span> {Name} </span>
-    </div>
-  );
-},[])
+
+  const CustomNoRowsOverlay = useCallback(() => {
+    const Name = "לא זוהו נתונים"
+    return (
+      <div className="ag-overlay-no-rows-center text-blue-300">
+        <span> {Name} </span>
+      </div>
+    );
+  }, [])
+
+  const googleAuthComponent = useMemo(() => (
+    <GoogleAuthStatus
+      type="Contacts"
+      onDisconnect={handleDisconnectContacts}
+      checkAuthStatus={checkContactsAuthStatus}
+    />
+  ), [handleDisconnectContacts, checkContactsAuthStatus]);
+
   return (
     <>
-      {ToolBar(onClearFilterButtonClick, setColumnWindowOpen, onAddRowToolBarClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, checkedAmount, onFilterTextBoxChanged)}
+      {ToolBar(
+        onClearFilterButtonClick, 
+        setColumnWindowOpen, 
+        onAddRowToolBarClick, 
+        onCancelChangeButtonClick, 
+        onSaveChangeButtonClick, 
+        onSaveDeletions, 
+        checkedAmount, 
+        onFilterTextBoxChanged,
+        googleAuthComponent
+      )}
 
       <Suspense>
         <div
           id="grid-1"
           className={theme === "dark-theme" ? "ag-theme-quartz-dark w-screen h-screen" : "ag-theme-quartz w-screen h-screen"}
-          style={{
-
-          }}
+          style={{}}
         >
           <AgGridReact
-            noRowsOverlayComponent={ CustomNoRowsOverlay}
+            noRowsOverlayComponent={CustomNoRowsOverlay}
             ref={gridRef}
             onGridReady={onGridReady}
             rowData={rowData}

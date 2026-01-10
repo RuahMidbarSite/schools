@@ -36,14 +36,7 @@ const purpleSelectStyles: StylesConfig = {
 
 const SettingsPage = () => {
   // ← שימוש ב-Hook החדש
-  const { isReady, requestToken, error: authError } = useSettingsAuth();
-  
-  // הצגת שגיאה אם יש
-  useEffect(() => {
-    if (authError) {
-      console.error('🔴 Auth Error:', authError);
-    }
-  }, [authError]);
+  const { isReady, requestToken } = useSettingsAuth();
   
   const [Roles, setRoles] = useState<Role[]>();
   const [Years, setYears] = useState<Years[]>();
@@ -166,26 +159,17 @@ const SettingsPage = () => {
 
   // ← פונקציה מעודכנת להשתמש ב-Hook
   const triggerGoogleAuth = (type: string) => {
-    console.log('🟡 triggerGoogleAuth called, isReady:', isReady, 'authError:', authError);
-    
-    if (authError) {
-      alert(`שגיאה: ${authError}`);
-      return;
-    }
-    
     if (!isReady) {
       alert('Google SDK עדיין נטען, אנא המתן רגע ונסה שוב');
       return;
     }
 
     setLoadingType(type);
-    console.log('🟢 Requesting token for type:', type);
 
     requestToken(
       type,
       // onSuccess
       (tokenData) => {
-        console.log('✅ Success callback triggered');
         setLoadingType(null);
         
         // עדכון חשבונות
@@ -204,8 +188,8 @@ const SettingsPage = () => {
       },
       // onError
       (error) => {
-        console.error('❌ Error callback triggered:', error);
         setLoadingType(null);
+        console.error('Auth error:', error);
         alert(`❌ שגיאה באימות: ${error.message || 'שגיאה לא ידועה'}`);
       }
     );

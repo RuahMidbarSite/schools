@@ -24,6 +24,27 @@ const SESSION_KEYS = {
     DEFAULT: 'google_token_default'
 };
 
+// 🔥 פונקציה חדשה לשמירה בשרת
+const saveTokenToServer = async (token: string, type: string = 'contacts') => {
+  try {
+    const response = await fetch('/api/google/save-token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token, type }),
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to save token to server');
+    } else {
+      console.log('✅ Token saved to server successfully');
+    }
+  } catch (error) {
+    console.error('Error saving token to server:', error);
+  }
+};
+
 export const useContactComponent = (): [
   (name: "upload" | "delete" | "update" | "onlyAuth" | "create_contact" | "update_contact" | "delete_contact", contextId?: string) => (config: any) => any,
   authResult | undefined
@@ -32,7 +53,6 @@ export const useContactComponent = (): [
   const [authRes, setAuthRes] = useState<authResult>();
   const tokenClientRef = useRef<any>(null);
   
-  // משתנה עזר למניעת לולאות רענון
   const stopRefreshRef = useRef(false);
 
   const pendingAction = useRef<{
@@ -51,11 +71,14 @@ export const useContactComponent = (): [
         const client = google.accounts.oauth2.initTokenClient({
           client_id: envClientId,
           scope: defaultScopes.join(" "),
-          callback: (tokenResponse: authResult) => {
+          callback: async (tokenResponse: authResult) => { // 🔥 הוספתי async
             if (tokenResponse && tokenResponse.access_token) {
               setAuthRes(tokenResponse);
-              stopRefreshRef.current = false; // איפוס מנגנון הבטיחות בעת התחברות מוצלחת
+              stopRefreshRef.current = false;
               updateStorage({ authResult: tokenResponse, timeStamp: Date.now() });
+
+              // 🔥 שמירה בשרת!
+              await saveTokenToServer(tokenResponse.access_token, 'contacts');
 
               if (pendingAction.current) {
                   const { config, callback, contextKey } = pendingAction.current;
@@ -65,7 +88,6 @@ export const useContactComponent = (): [
                   pendingAction.current = null;
               }
             } else {
-               // אם חזר טוקן לא תקין או שגיאה
                console.error("Token response invalid", tokenResponse);
             }
           },
@@ -108,31 +130,32 @@ export const useContactComponent = (): [
     }
   }, [gapiInted]);
 
-  // --- מנגנון רענון טוקן בטוח ---
   useEffect(() => {
-    // אם עצרנו את הרענון או שאין קליינט, לא עושים כלום
     if (!tokenClientRef.current || stopRefreshRef.current) return;
 
-    const refreshToken = () => {
+    const refreshToken = async () => { // 🔥 הוספתי async
         if (stopRefreshRef.current) return;
         
         try {
             console.log("Attempting silent refresh...");
-            // prompt: '' מנסה לרענן ללא אינטראקציה. אם נכשל, זה לרוב יחזיר שגיאה לקונסול
             tokenClientRef.current.requestAccessToken({ prompt: '' });
+            
+            // 🔥 אחרי רענון, שמור שוב בשרת
+            const savedToken = sessionStorage.getItem(SESSION_KEYS.CONTACTS);
+            if (savedToken) {
+              await saveTokenToServer(savedToken, 'contacts');
+            }
         } catch (err) {
             console.error("Refresh failed, stopping auto-refresh to prevent loop.", err);
-            stopRefreshRef.current = true; // עצירת הרענון האוטומטי
+            stopRefreshRef.current = true;
         }
     };
 
-    // רענון כל 45 דקות (הטוקן תקף לשעה)
     const interval = setInterval(refreshToken, 45 * 60 * 1000); 
     return () => clearInterval(interval);
-  }, [authRes]); // תלות ב-authRes כדי להתחיל טיימר מחדש אחרי התחברות מוצלחת
+  }, [authRes]);
 
 
-  // --- Auth Function ---
   const AuthAndActivate = useCallback((config: any, callbackToRun: (args: any) => void, contextId: string = 'default') => {
     
     let storageKey = SESSION_KEYS.DEFAULT;
@@ -141,11 +164,9 @@ export const useContactComponent = (): [
     if (contextId === 'guides') storageKey = SESSION_KEYS.GUIDES;
     if (contextId === 'schools') storageKey = SESSION_KEYS.SCHOOLS;
 
-    // בדיקה ב-Session Storage
     const savedToken = sessionStorage.getItem(storageKey);
     
     if (savedToken) {
-        // בדיקה בסיסית שהטוקן נראה תקין (אפשר להוסיף בדיקת תוקף אם שומרים timestamp)
         callbackToRun({ ...config, token: savedToken });
         return;
     }
@@ -153,18 +174,29 @@ export const useContactComponent = (): [
     if (!tokenClientRef.current) {
         initClient();
         if (!tokenClientRef.current) {
-             alert("הרכיב עדיין נטען, נסה שוב בעוד רגע.");
+             alert("מערכת עדיין נטען, נסה שוב בעוד רגע.");
              return;
         }
     }
 
     pendingAction.current = { config, callback: callbackToRun, contextKey: storageKey };
-    // שימוש ב-select_account כדי להפריד סשנים בין דפים
     tokenClientRef.current.requestAccessToken({ prompt: 'select_account' });
 
   }, [initClient]);
 
   // --- Implementation Functions ---
+  
+  const onlyAuthImpl = useCallback(async ({ token, callbackFunction = () => { } }: any) => {
+    console.log("✅ onlyAuth completed with token");
+    
+    // 🔥 שמירה בשרת
+    await saveTokenToServer(token, 'contacts');
+    
+    if (callbackFunction) {
+      callbackFunction({ token, success: true });
+    }
+  }, []);
+
   const createContactImpl = useCallback(async ({ token, data, callbackFunction = () => { } }: UploadContactConfiguration) => {
     gapi.client.setToken({ access_token: token });
     try {
@@ -183,7 +215,7 @@ export const useContactComponent = (): [
         console.error("Create Contact Error", err); 
         if(err.status === 401) {
             alert("פג תוקף החיבור. אנא רענן את הדף והתחבר מחדש.");
-            sessionStorage.clear(); // ניקוי טוקנים ישנים
+            sessionStorage.clear();
         } else {
             alert("שגיאה ביצירת איש קשר: " + (err.result?.error?.message || "Unknown error")); 
         }
@@ -259,13 +291,14 @@ export const useContactComponent = (): [
   }, []);
 
   const getFunction = useCallback((name: string): any => {
+    if (name === "onlyAuth") return onlyAuthImpl;
     if (name === "create_contact") return createContactImpl;
     if (name === "delete_contact") return deleteContactImpl;
     if (name === "update_contact") return updateContactImpl;
     if (name === "upload") return uploadFileImpl;
     if (name === "delete") return deleteFileImpl;
     return null;
-  }, [createContactImpl, deleteContactImpl, updateContactImpl, uploadFileImpl, deleteFileImpl]);
+  }, [onlyAuthImpl, createContactImpl, deleteContactImpl, updateContactImpl, uploadFileImpl, deleteFileImpl]);
 
   const AuthenticateActivate = useCallback((name: any, contextId: string = 'default') => {
     return (config: any) => {
