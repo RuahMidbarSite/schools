@@ -1,92 +1,191 @@
 "use client";
 
-import { Dialog, Transition } from "@headlessui/react";
-import { useState, Fragment, useEffect, useRef, useMemo } from "react";
-import { QRCodeCanvas } from "qrcode.react";
-import { usePathname } from 'next/navigation';
+import { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from "react";
+import { usePathname } from 'next/navigation'
 
-export default function QrcodeComponent() {
-  const currentRoute = usePathname();
-  const [isMounted, setIsMounted] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  const [show, setShow] = useState<string | null>(null);
+const QrCode = forwardRef((props, ref) => {
+  const currentRoute = usePathname()
+  const releventRoutes = useMemo(() => ["/messagesForm", "/placementsPage"], [])
+
   const [Authenticated, setAuthenticated] = useState(false);
   const [ShownAuthentication, setShownAutentication] = useState(false);
-  const emitRequest = useRef(false);
-
-  // הגדרה: הרכיב פעיל אך ורק בדף שליחת ההודעות
-  const isRelevantPage = useMemo(() => currentRoute === "/messagesForm", [currentRoute]);
+  const emitRequest = useRef(false)
 
   useEffect(() => {
-    setIsMounted(true);
+    console.log("WhatsApp Server URL:", process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL);
   }, []);
 
-  useEffect(() => {
-    if (!isMounted || !isRelevantPage) return;
-    if (emitRequest.current) return;
-
-    const RequestSession = async () => {
-      emitRequest.current = true;
-      const baseUrl = "http://localhost:3000";
-      const initUrl = `${baseUrl}/Initialize`;
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-      try {
-        const res = await fetch(initUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!res.ok) return;
-        const res_parse = await res.json();
-
-        if (res_parse?.result === 'ready') {
-          setAuthenticated(true);
-        } else if (res_parse?.data) {
-          setIsOpen(true);
-          setShow(res_parse.data);
-          
-          const waitUrl = `${baseUrl}/WaitQr`;
-          const res_2 = await fetch(waitUrl);
-          if (res_2.ok) {
-              const result_qr = await res_2.json();
-              if (result_qr) {
-                setIsOpen(false);
-                setAuthenticated(true);
-              }
-          }
+  // Expose checkConnection method to parent component
+  useImperativeHandle(ref, () => ({
+    checkConnection: async () => {
+      console.log("🔍 checkConnection נקרא");
+      
+      // אם יש בקשה בתהליך, חכה שתסתיים
+      if (emitRequest.current) {
+        console.log("⏳ יש בקשה בתהליך, ממתין...");
+        for (let i = 0; i < 30; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          if (!emitRequest.current) break;
         }
-      } catch (error) {
-        console.warn("WhatsApp Server offline - bypassing.");
       }
-    };
+      
+      // ✅ תיקון: בדוק תחילה אם כבר מחובר
+      try {
+        const checkUrl = `${process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994'}/Initialize`;
+        console.log("📡 בודק חיבור קיים:", checkUrl);
+        
+        const checkRes = await fetch(checkUrl, { method: "GET" });
+        const checkData = await checkRes.json();
+        
+        if (checkData && checkData.result === 'ready') {
+          console.log("✅ כבר מחובר!");
+          setAuthenticated(true);
+          return true;
+        }
+        
+        console.log("⚠️ לא מחובר, צריך לסרוק QR");
+      } catch (err) {
+        console.log("❌ שגיאה בבדיקת חיבור:", err);
+      }
+      
+      // רק עכשיו פתח WhatsApp Web
+      console.log("🔄 פותח WhatsApp Web...");
+      const newWindow = window.open('https://web.whatsapp.com', '_blank');
+      if (!newWindow) {
+        alert("נא לאפשר pop-ups עבור האתר");
+        return false;
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const connected = await RequestSession();
+      console.log("✅ RequestSession החזיר:", connected);
+      return connected;
+    }
+  }));
 
-    RequestSession();
-  }, [isMounted, isRelevantPage]);
+  const RequestSession = async () => {
+    try {
+      emitRequest.current = true;
+      const req_address = `${process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994'}/Initialize`;
+      
+      console.log("📡 שולח בקשה ל:", req_address);
+      
+      const res = await fetch(req_address, {
+        method: "GET",
+      });
 
-  if (!isMounted || !isRelevantPage) return null;
+      console.log("📥 סטטוס תגובה:", res.status);
 
-  return (
-    <>
-      <Transition appear show={isOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={() => setIsOpen(false)}>
-          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
-          </Transition.Child>
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <Dialog.Panel className="w-full max-w-md bg-white p-8 rounded-2xl shadow-2xl text-center">
-                <Dialog.Title className="text-xl font-bold mb-4">חיבור לוואטסאפ</Dialog.Title>
-                {show ? <QRCodeCanvas value={show} size={250} className="mx-auto" /> : <p>טוען קוד...</p>}
-                <button className="mt-6 px-4 py-2 bg-gray-100 rounded" onClick={() => setIsOpen(false)}>סגור</button>
-              </Dialog.Panel>
+      if (res.status === 500) {
+        console.error("❌ שגיאת שרת ב-Initialize");
+        alert("שגיאה בחיבור לשרת WhatsApp. ווידא שהשרת רץ.");
+        setAuthenticated(false);
+        return false;
+      }
+
+      const res_parse = await res.json();
+      console.log("📦 תגובת Initialize:", res_parse);
+      
+      // אם יש כבר סשן שמור
+      if (res_parse && res_parse.result === 'ready') {
+        setAuthenticated(true);
+        console.log("✅ סשן קיים - מחובר!");
+        return true;
+      }
+      // אם אין סשן, חכה לסריקת QR
+      else if (res_parse && res_parse.data) {
+        console.log("⏳ אין סשן, QR זמין. ממתין לסריקה...");
+        console.log("📱 נא לסרוק את ה-QR ב-WhatsApp Web שנפתח");
+        
+        const req_address_wait = `${process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994'}/WaitQr`;
+        console.log("⏳ ממתין לסריקת QR:", req_address_wait);
+        
+        const res_2 = await fetch(req_address_wait, {
+          method: "GET",
+        });
+
+        console.log("📥 סטטוס WaitQr:", res_2.status);
+
+        if (res_2.status === 500) {
+          console.error("❌ שגיאת שרת ב-WaitQr - timeout");
+          alert("תם הזמן לסריקת QR. נסה שוב.");
+          setAuthenticated(false);
+          return false;
+        }
+        
+        const result_qr = await res_2.json();
+        console.log("📦 תגובת WaitQr:", result_qr);
+        
+        if (result_qr) {
+          setAuthenticated(true);
+          setShownAutentication(false);
+          setTimeout(() => setShownAutentication(true), 3000);
+          console.log("✅ QR נסרק בהצלחה - מחובר!");
+          return true;
+        }
+      }
+      
+      setAuthenticated(false);
+      return false;
+      
+    } catch (err) {
+      console.error("❌ שגיאה בחיבור:", err);
+      alert("שגיאה בחיבור לשרת WhatsApp: " + err);
+      setAuthenticated(false);
+      return false;
+    } finally {
+      emitRequest.current = false;
+      console.log("🔓 emitRequest אופס");
+    }
+  }
+
+  const getSuccessModal = () => {
+    if (ShownAuthentication || !Authenticated) return null;
+    
+    return (
+      <div>
+        <div
+          id="successModal"
+          tabIndex={-1}
+          aria-hidden="true"
+          className="fixed flex content-center overflow-y-auto overflow-x-hidden right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-modal md:h-full"
+        >
+          <div className="relative p-4 w-full max-w-md h-full md:h-auto">
+            <div className="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5">
+              <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 p-2 flex items-center justify-center mx-auto mb-3.5">
+                <svg
+                  aria-hidden="true"
+                  className="w-8 h-8 text-green-500 dark:text-green-400"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  ></path>
+                </svg>
+                <span className="sr-only">Success</span>
+              </div>
+              <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+                התחבר לווצאפ בהצלחה
+              </p>
             </div>
           </div>
-        </Dialog>
-      </Transition>
-      {Authenticated && !ShownAuthentication && (
-        <div className="fixed top-4 left-4 bg-green-500 text-white p-3 rounded-lg z-50 shadow-lg">✓ מחובר לוואטסאפ</div>
-      )}
-    </>
-  );
-}
+        </div>
+      </div>
+    );
+  };
+
+  if (Authenticated && releventRoutes.includes(currentRoute)) {
+    return getSuccessModal();
+  }
+
+  return null;
+});
+
+QrCode.displayName = 'QrCode';
+
+export default QrCode;

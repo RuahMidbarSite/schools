@@ -41,7 +41,7 @@ import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
 import { title } from "process";
 import { deletePatternFile, savePatternFile, sendMessageViaWhatsApp } from "@/db/whatsapprequests";
 import { DataType, getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
-//import QrCode from "@/components/whatsapp/QrcodeComponent";
+import QrCode from "@/components/whatsapp/QrcodeComponent";
 
 
 
@@ -72,7 +72,7 @@ export type ContactFilterOptions = {
 
 export default function MessagesPage() {
 
-
+  const qrCodeRef = useRef(null);
   const gridRef: any = useRef(null);
 
   // Row Data: The data to be displayed.
@@ -640,7 +640,7 @@ export default function MessagesPage() {
 
   return (
     <>
-      {/* <QrCode/>  */}
+<QrCode ref={qrCodeRef}/>
       <Container fluid className="formGrid text-end bg-transparent">
         <Row className="borderedColumns flex-row-reverse">
           <Col className="square border border-dark custom-col">
@@ -735,18 +735,111 @@ export default function MessagesPage() {
               </Form.Group>
             </Row>
             <Row>
-              <Col>
-                <Button
-                  variant="danger"
-                  onClick={async () => {
-                    //await sendMessageViaWhatsApp(msg1, msg2, addedFile, '0526554868', "972",selectedPattern?.PatternId)
-                    await sendMessageViaWhatsApp(msg1, msg2, addedFile, '0526554868', "972", selectedPattern?.PatternId)
-                  }}
-                >
-                  {pageText.testButton}
-                </Button>
-              </Col>
-            </Row>
+  <Col>
+    <Button
+      variant="danger"
+      onClick={() => {
+        console.log("=== 🔴 BUTTON CLICKED! ===");
+        
+        (async () => {
+          try {
+            console.log("=== 📍 INSIDE ASYNC FUNCTION ===");
+            
+            const testPhone = '526554868'; 
+            const countryCode = '972';
+            const fullPhone = countryCode + testPhone;
+            
+            console.log("🧪 Test button clicked!");
+            console.log("📞 Sending to:", fullPhone);
+            console.log("💬 Message 1:", msg1 || "הודעת טסט");
+            console.log("💬 Message 2:", msg2 || "empty");
+            console.log("📎 File:", addedFile?.name || "no file");
+            
+            // ✅ תיקון 1: בדוק חיבור
+            console.log("🔍 בודק אם כבר מחובר...");
+            const checkUrl = `${process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994'}/Initialize`;
+            
+            let isAlreadyConnected = false;
+            
+            try {
+              console.log("📡 Fetching:", checkUrl);
+              const checkRes = await fetch(checkUrl, { method: "GET" });
+              console.log("📥 Response status:", checkRes.status);
+              
+              const checkData = await checkRes.json();
+              console.log("📦 Response data:", checkData);
+              
+              if (checkData && checkData.result === 'ready') {
+                console.log("✅ כבר מחובר!");
+                isAlreadyConnected = true;
+              }
+            } catch (err) {
+              console.error("❌ שגיאה בבדיקת חיבור:", err);
+              alert("שגיאה בחיבור לשרת: " + err.message);
+              return;
+            }
+            
+            // ✅ תיקון 2: אם לא מחובר - התחבר
+            if (!isAlreadyConnected) {
+              console.log("🔌 לא מחובר, מנסה להתחבר...");
+              
+              if (!qrCodeRef.current) {
+                alert("שגיאה: קומפוננט QR לא זמין");
+                return;
+              }
+
+              console.log("📱 קורא ל-checkConnection...");
+              const isConnected = await qrCodeRef.current.checkConnection();
+              console.log("✅ תוצאת חיבור:", isConnected);
+              
+              if (!isConnected) {
+                console.log("❌ נכשל בחיבור");
+                alert("נכשל בחיבור. נסה שוב.");
+                return;
+              }
+
+              console.log("⏳ ממתין 3 שניות...");
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+
+            // ✅ תיקון 3: שלח הודעה (גם אם ריקה)
+            console.log("=== 📤 שולח הודעה ===");
+            
+            // אם אין הודעה - שלח הודעת טסט ברירת מחדל
+            const messageToSend = msg1 || "הודעת טסט מהמערכת 🎉";
+            
+            console.log("📝 הודעה לשליחה:", messageToSend);
+            
+            const result = await sendMessageViaWhatsApp(
+              messageToSend,  // ✅ תמיד נשלח משהו
+              msg2, 
+              addedFile, 
+              testPhone,
+              countryCode,
+              selectedPattern?.PatternId
+            );
+            
+            console.log("📊 תוצאת שליחה:", result);
+            
+            if (result.success) {
+              alert("הודעת הטסט נשלחה בהצלחה! ✅\nנשלח ל: " + fullPhone);
+              console.log("✅ הודעה נשלחה בהצלחה!");
+            } else {
+              alert("שגיאה: " + (result.error || "שגיאה לא ידועה"));
+              console.error("❌ שגיאה בשליחה:", result.error);
+            }
+            
+          } catch (error) {
+            console.error("❌ שגיאה כללית:", error);
+            alert("שגיאה: " + (error instanceof Error ? error.message : "שגיאה לא ידועה"));
+          }
+        })();
+      }}
+    >
+      {pageText.testButton}
+    </Button>
+  </Col>
+</Row>
           </Col>
 
           <Col className="square border border-dark">

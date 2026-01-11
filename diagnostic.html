@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Diagnostics</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #25D366;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #20BA5A;
+        }
+        button.danger {
+            background: #dc3545;
+        }
+        button.danger:hover {
+            background: #c82333;
+        }
+        .output {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            border-left: 4px solid #25D366;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.ready {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.not-ready {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        h2 {
+            color: #25D366;
+            border-bottom: 2px solid #25D366;
+            padding-bottom: 10px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #25D366;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 WhatsApp Server Diagnostics</h1>
+    
+    <div class="container">
+        <h2>1️⃣ בדיקת מצב נוכחי</h2>
+        <div class="grid">
+            <button onclick="checkState()">בדוק מצב</button>
+            <button onclick="checkSession()">בדוק קבצי סשן</button>
+            <button onclick="quickInit()">אתחול מהיר</button>
+        </div>
+        <div id="state-output" class="output" style="display:none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>2️⃣ בדיקת Initialize</h2>
+        <div class="grid">
+            <button onclick="testInitialize()">קרא ל-Initialize</button>
+            <button onclick="testInitializeTwice()">קרא פעמיים (בדיקת כפילות)</button>
+        </div>
+        <div id="init-output" class="output" style="display:none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>3️⃣ בדיקת שליחת הודעה</h2>
+        <input type="text" id="test-phone" placeholder="מספר טלפון (ללא 0)" style="padding: 10px; width: 200px; margin-left: 10px;">
+        <button onclick="testSendMessage()">שלח הודעת טסט</button>
+        <div id="send-output" class="output" style="display:none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>4️⃣ פעולות מתקדמות</h2>
+        <div class="grid">
+            <button class="danger" onclick="restartClient()">אתחל מחדש (מחק Client)</button>
+            <button onclick="showLogs()">הצג לוגים אחרונים</button>
+        </div>
+        <div id="advanced-output" class="output" style="display:none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>📊 תוצאות אחרונות</h2>
+        <div id="results" class="output"></div>
+    </div>
+
+    <script>
+        const SERVER = 'http://localhost:3994';
+        
+        function log(message, element = 'results') {
+            const output = document.getElementById(element);
+            const time = new Date().toLocaleTimeString('he-IL');
+            output.textContent = `[${time}] ${message}\n\n` + output.textContent;
+            output.style.display = 'block';
+        }
+
+        async function checkState() {
+            log('בודק מצב...', 'state-output');
+            try {
+                const res = await fetch(`${SERVER}/debug/state`);
+                const data = await res.json();
+                log(JSON.stringify(data, null, 2), 'state-output');
+                
+                const status = data.isReady ? 
+                    '<span class="status ready">✅ READY</span>' : 
+                    '<span class="status not-ready">❌ NOT READY</span>';
+                document.getElementById('state-output').innerHTML += status;
+            } catch (e) {
+                log('❌ שגיאה: ' + e.message, 'state-output');
+            }
+        }
+
+        async function checkSession() {
+            log('בודק קבצי סשן...', 'state-output');
+            try {
+                const res = await fetch(`${SERVER}/debug/session`);
+                const data = await res.json();
+                log(JSON.stringify(data, null, 2), 'state-output');
+            } catch (e) {
+                log('❌ שגיאה: ' + e.message, 'state-output');
+            }
+        }
+
+        async function quickInit() {
+            log('מבצע אתחול מהיר...', 'state-output');
+            try {
+                const start = Date.now();
+                const res = await fetch(`${SERVER}/debug/quick-init`);
+                const data = await res.json();
+                const duration = Date.now() - start;
+                log(`✅ הושלם ב-${duration}ms\n${JSON.stringify(data, null, 2)}`, 'state-output');
+            } catch (e) {
+                log('❌ שגיאה: ' + e.message, 'state-output');
+            }
+        }
+
+        async function testInitialize() {
+            log('קורא ל-/Initialize...', 'init-output');
+            try {
+                const start = Date.now();
+                const res = await fetch(`${SERVER}/Initialize`);
+                const data = await res.json();
+                const duration = Date.now() - start;
+                log(`✅ תשובה התקבלה ב-${duration}ms\n${JSON.stringify(data, null, 2)}`, 'init-output');
+            } catch (e) {
+                log('❌ שגיאה: ' + e.message, 'init-output');
+            }
+        }
+
+        async function testInitializeTwice() {
+            log('קורא ל-/Initialize פעמיים...', 'init-output');
+            try {
+                const start1 = Date.now();
+                const res1 = await fetch(`${SERVER}/Initialize`);
+                const data1 = await res1.json();
+                const duration1 = Date.now() - start1;
+                
+                log(`קריאה ראשונה (${duration1}ms): ${JSON.stringify(data1)}`, 'init-output');
+                
+                await new Promise(r => setTimeout(r, 1000));
+                
+                const start2 = Date.now();
+                const res2 = await fetch(`${SERVER}/Initialize`);
+                const data2 = await res2.json();
+                const duration2 = Date.now() - start2;
+                
+                log(`קריאה שנייה (${duration2}ms): ${JSON.stringify(data2)}`, 'init-output');
+                
+                if (duration2 < 100) {
+                    log('✅ קריאה שנייה הייתה מהירה - לא נוצר Client כפול!', 'init-output');
+                } else {
+                    log('⚠️ קריאה שנייה לקחה זמן - יתכן שיש כפילות', 'init-output');
+                }
+            } catch (e) {
+                log('❌ שגיאה: ' + e.message, 'init-output');
+            }
+        }
+
+        async function testSendMessage() {
+            const phone = document.getElementById('test-phone').value;
+            if (!phone) {
+                alert('הזן מספר טלפון');
+                return;
+            }
+            
+            log(`שולח הודעה ל-${phone}...`, 'send-output');
+            try {
+                const formData = new FormData();
+                formData.append('PhoneNumber', `972${phone}@c.us`);
+                formData.append('Message_1', 'הודעת טסט מדף הדיאגנוסטיקה');
+                
+                const start = Date.now();
+                const res = await fetch(`${SERVER}/SendMessage`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                const duration = Date.now() - start;
+                
+                log(`✅ תשובה (${duration}ms): ${JSON.stringify(data, null, 2)}`, 'send-output');
+            } catch (e) {
+                log('❌ שגיאה: ' + e.message, 'send-output');
+            }
+        }
+
+        async function restartClient() {
+            if (!confirm('האם אתה בטוח? זה ימחק את ה-Client הנוכחי')) {
+                return;
+            }
+            
+            log('מאתחל Client...', 'advanced-output');
+            try {
+                const res = await fetch(`${SERVER}/debug/restart`, { method: 'POST' });
+                const data = await res.json();
+                log(JSON.stringify(data, null, 2), 'advanced-output');
+            } catch (e) {
+                log('❌ שגיאה: ' + e.message, 'advanced-output');
+            }
+        }
+
+        function showLogs() {
+            log('פתח את Console של הדפדפן (F12) כדי לראות לוגים', 'advanced-output');
+            console.log('=== WhatsApp Diagnostics Console ===');
+            console.log('Server:', SERVER);
+            console.log('Use the buttons above to test different endpoints');
+        }
+
+        // Auto-check state on load
+        window.onload = () => {
+            log('דף דיאגנוסטיקה נטען');
+            checkState();
+        };
+    </script>
+</body>
+</html>
