@@ -1,186 +1,108 @@
-"use client";
+  // whatsapprequests.tsx - פונקציה מעודכנת לשליחת הודעות
 
-// WhatsApp server configuration - use environment variable
-const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994';
+const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || "http://localhost:3994";
 
-// Debug: Log the URL on module load
-if (typeof window !== 'undefined') {
-  console.log('🌐 WhatsApp Server URL configured:', WHATSAPP_SERVER_URL);
-}
-
-/**
- * Send message via WhatsApp
- */
 export async function sendMessageViaWhatsApp(
-  message_1: string, 
-  message_2: string, 
-  addedFile: File | null, 
-  cellPhone: string, 
-  countryCode: string, 
-  PatternID?: number
-) {
+  message1: string,
+  message2: string,
+  file: File | null,
+  phoneNumber: string,
+  countryCode: string = "972",
+  patternId?: number
+): Promise<{ success: boolean; error?: string }> {
+  console.log("\n=== 📤 sendMessageViaWhatsApp Called ===");
+  console.log("⏰ Time:", new Date().toISOString());
+  console.log("📞 Phone:", phoneNumber);
+  console.log("🌍 Country code:", countryCode);
+  console.log("💬 Message 1:", message1?.substring(0, 50));
+  console.log("💬 Message 2:", message2?.substring(0, 50) || "empty");
+  console.log("📎 File:", file?.name || "no file");
+  console.log("🆔 Pattern ID:", patternId || "none");
+  
   try {
-    console.log('📤 Starting WhatsApp message send...');
-    console.log('📤 Server URL:', WHATSAPP_SERVER_URL);
+    // Prepare phone number
+    let fullPhoneNumber = phoneNumber;
     
-    // Clean phone number - remove leading zero
-    let cleanPhone = cellPhone;
-    if (cleanPhone.startsWith("0")) {
-      cleanPhone = cleanPhone.substring(1);
+    // Remove any existing country code
+    if (fullPhoneNumber.startsWith(countryCode)) {
+      fullPhoneNumber = fullPhoneNumber.substring(countryCode.length);
     }
     
-    // Build full phone number with WhatsApp format
-    const fullPhoneNumber = `${countryCode}${cleanPhone}@c.us`;
-    console.log('📞 Full phone number:', fullPhoneNumber);
+    // Remove any non-digits
+    fullPhoneNumber = fullPhoneNumber.replace(/\D/g, '');
+    
+    // Add country code and @c.us
+    fullPhoneNumber = `${countryCode}${fullPhoneNumber}@c.us`;
+    
+    console.log("📱 Full phone number:", fullPhoneNumber);
 
-    // Build form data
+    // Prepare FormData
     const formData = new FormData();
-    formData.append('PhoneNumber', fullPhoneNumber);
-    
-    if (message_1) {
-      formData.append('Message_1', message_1);
-      console.log('📝 Message 1:', message_1.substring(0, 50) + '...');
-    }
-    
-    if (message_2) {
-      formData.append('Message_2', message_2);
-      console.log('📝 Message 2:', message_2.substring(0, 50) + '...');
-    }
-    
-    if (addedFile) {
-      formData.append('file', addedFile);
-      console.log('📎 File:', addedFile.name, `(${addedFile.size} bytes)`);
-    }
-    
-    if (PatternID) {
-      formData.append('PatternID', String(PatternID));
-      console.log('📖 Pattern ID:', PatternID);
+    formData.append("PhoneNumber", fullPhoneNumber);
+
+    if (message1 && message1.trim()) {
+      console.log("➕ Adding Message_1");
+      formData.append("Message_1", message1);
     }
 
-    const url = `${WHATSAPP_SERVER_URL}/SendMessage`;
-    console.log('🌐 Sending POST to:', url);
+    if (message2 && message2.trim()) {
+      console.log("➕ Adding Message_2");
+      formData.append("Message_2", message2);
+    }
+
+    if (file) {
+      console.log("➕ Adding file:", file.name, `(${file.size} bytes)`);
+      formData.append("file", file);
+    }
+
+    if (patternId) {
+      console.log("➕ Adding PatternID:", patternId);
+      formData.append("PatternID", patternId.toString());
+    }
 
     // Send request
+    const url = `${WHATSAPP_SERVER_URL}/SendMessage`;
+    console.log("🌐 Sending POST to:", url);
+    console.log("⏰ Time:", new Date().toISOString());
+
     const response = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       body: formData,
-      // Remove Content-Type header - let browser set it with boundary for FormData
     });
 
-    console.log('📥 Response status:', response.status);
-    console.log('📥 Response ok:', response.ok);
+    console.log("📥 Response status:", response.status);
+    console.log("📥 Response ok:", response.ok);
+    console.log("⏰ Time:", new Date().toISOString());
+
+    const data = await response.json();
+    console.log("📦 Response data:", data);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Server error response:', errorText);
-      return { 
-        success: false, 
-        error: `Server returned ${response.status}: ${errorText}` 
-      };
-    }
-    
-    const result = await response.json();
-    console.log('✅ Success! Result:', result);
-    
-    return { 
-      success: true, 
-      data: result 
-    };
-    
-  } catch (error) {
-    console.error('❌ Request failed with error:', error);
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+      const errorMsg = data.message || `Server error ${response.status}`;
+      console.error("❌ Server error:", errorMsg);
       return {
         success: false,
-        error: `Cannot connect to WhatsApp server at ${WHATSAPP_SERVER_URL}. Is the server running?`
+        error: errorMsg,
       };
     }
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
 
-/**
- * Save pattern file
- */
-export async function savePatternFile(PatternID: number, addedFile: File | null) {
-  try {
-    if (!addedFile) {
-      console.warn('⚠️ No file provided for pattern', PatternID);
-      return { success: false, error: 'No file provided' };
+    if (data.status === "Success") {
+      console.log("✅ Message sent successfully!");
+      console.log("📊 Message count:", data.messageCount);
+      return { success: true };
+    } else {
+      console.error("❌ Unexpected response:", data);
+      return {
+        success: false,
+        error: data.message || "Unknown error",
+      };
     }
-
-    console.log('💾 Saving file for pattern:', PatternID);
-
-    const formData = new FormData();
-    formData.append('file', addedFile);
-
-    const url = `${WHATSAPP_SERVER_URL}/SavePatternFile/${PatternID}`;
-    console.log('🌐 Sending POST to:', url);
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Error saving file:', errorText);
-      return { success: false, error: errorText };
-    }
-    
-    const result = await response.json();
-    console.log('✅ File saved successfully');
-    
-    return { 
-      success: true, 
-      data: result 
-    };
-    
-  } catch (error) {
-    console.error('❌ Error saving pattern file:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
-
-/**
- * Delete pattern file
- */
-export async function deletePatternFile(PatternID: number) {
-  try {
-    console.log('🗑️ Deleting file for pattern:', PatternID);
-
-    const url = `${WHATSAPP_SERVER_URL}/DeletePatternFile/${PatternID}`;
-    console.log('🌐 Sending DELETE to:', url);
-    
-    const response = await fetch(url, {
-      method: 'DELETE'
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Error deleting file:', errorText);
-      return { success: false, error: errorText };
-    }
-    
-    const result = await response.text();
-    console.log('✅ File deleted successfully');
-    
-    return { 
-      success: true, 
-      data: result 
-    };
-    
-  } catch (error) {
-    console.error('❌ Error deleting pattern file:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+  } catch (error: any) {
+    console.error("❌ sendMessageViaWhatsApp Error:", error);
+    console.log("⏰ Error time:", new Date().toISOString());
+    return {
+      success: false,
+      error: error.message || "Network error",
     };
   }
 }

@@ -734,84 +734,61 @@ export default function MessagesPage() {
                 />
               </Form.Group>
             </Row>
-            <Row>
+  // רק החלק של כפתור הטסט - להחליף בקוד שלך
+
+// החלף את כפתור הטסט הקיים בקוד הזה:
+
+<Row>
   <Col>
     <Button
       variant="danger"
       onClick={() => {
-        console.log("=== 🔴 BUTTON CLICKED! ===");
-        
         (async () => {
-          try {
-            console.log("=== 📍 INSIDE ASYNC FUNCTION ===");
-            
-            const testPhone = '526554868'; 
+          console.log("\n=== 🧪 TEST BUTTON CLICKED ===");
+          console.log("⏰ Start time:", new Date().toISOString());
+          
+                  try {
+            const testPhone = '585333944'; // ← בלי 0 בהתחלה!
             const countryCode = '972';
-            const fullPhone = countryCode + testPhone;
             
-            console.log("🧪 Test button clicked!");
-            console.log("📞 Sending to:", fullPhone);
+            console.log("📞 Target:", testPhone);
             console.log("💬 Message 1:", msg1 || "הודעת טסט");
             console.log("💬 Message 2:", msg2 || "empty");
             console.log("📎 File:", addedFile?.name || "no file");
             
-            // ✅ תיקון 1: בדוק חיבור
-            console.log("🔍 בודק אם כבר מחובר...");
-            const checkUrl = `${process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994'}/Initialize`;
-            
-            let isAlreadyConnected = false;
-            
-            try {
-              console.log("📡 Fetching:", checkUrl);
-              const checkRes = await fetch(checkUrl, { method: "GET" });
-              console.log("📥 Response status:", checkRes.status);
-              
-              const checkData = await checkRes.json();
-              console.log("📦 Response data:", checkData);
-              
-              if (checkData && checkData.result === 'ready') {
-                console.log("✅ כבר מחובר!");
-                isAlreadyConnected = true;
-              }
-            } catch (err) {
-              console.error("❌ שגיאה בבדיקת חיבור:", err);
-              alert("שגיאה בחיבור לשרת: " + err.message);
+            // Step 1: Check/Initialize connection (60 second timeout)
+            console.log("\n=== Step 1: Checking Connection ===");
+            if (!qrCodeRef.current) {
+              alert("שגיאה: קומפוננט QR לא זמין");
               return;
             }
+
+            console.log("🔌 Calling checkConnection...");
+            const isConnected = await qrCodeRef.current.checkConnection();
+            console.log("✅ Connection result:", isConnected);
+            console.log("⏰ Time:", new Date().toISOString());
             
-            // ✅ תיקון 2: אם לא מחובר - התחבר
-            if (!isAlreadyConnected) {
-              console.log("🔌 לא מחובר, מנסה להתחבר...");
-              
-              if (!qrCodeRef.current) {
-                alert("שגיאה: קומפוננט QR לא זמין");
-                return;
-              }
-
-              console.log("📱 קורא ל-checkConnection...");
-              const isConnected = await qrCodeRef.current.checkConnection();
-              console.log("✅ תוצאת חיבור:", isConnected);
-              
-              if (!isConnected) {
-                console.log("❌ נכשל בחיבור");
-                alert("נכשל בחיבור. נסה שוב.");
-                return;
-              }
-
-              console.log("⏳ ממתין 3 שניות...");
-              await new Promise(resolve => setTimeout(resolve, 3000));
+            if (!isConnected) {
+              console.log("❌ Failed to connect");
+              alert("נכשל בחיבור. נסה שוב.");
+              return;
             }
 
-            // ✅ תיקון 3: שלח הודעה (גם אם ריקה)
-            console.log("=== 📤 שולח הודעה ===");
-            
-            // אם אין הודעה - שלח הודעת טסט ברירת מחדל
+            // Step 2: Wait additional time to ensure ready
+            console.log("\n=== Step 2: Waiting for Full Readiness ===");
+            console.log("⏳ Waiting 10 seconds to ensure client is ready...");
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            console.log("✅ Wait complete");
+            console.log("⏰ Time:", new Date().toISOString());
+
+            // Step 3: Send message
+            console.log("\n=== Step 3: Sending Message ===");
             const messageToSend = msg1 || "הודעת טסט מהמערכת 🎉";
             
-            console.log("📝 הודעה לשליחה:", messageToSend);
+            console.log("📤 Message:", messageToSend.substring(0, 50));
             
             const result = await sendMessageViaWhatsApp(
-              messageToSend,  // ✅ תמיד נשלח משהו
+              messageToSend,
               msg2, 
               addedFile, 
               testPhone,
@@ -819,19 +796,26 @@ export default function MessagesPage() {
               selectedPattern?.PatternId
             );
             
-            console.log("📊 תוצאת שליחה:", result);
+            console.log("📊 Send result:", result);
+            console.log("⏰ Time:", new Date().toISOString());
             
             if (result.success) {
-              alert("הודעת הטסט נשלחה בהצלחה! ✅\nנשלח ל: " + fullPhone);
-              console.log("✅ הודעה נשלחה בהצלחה!");
+              alert(`✅ הודעת הטסט נשלחה בהצלחה!\nנשלח ל: ${fullPhone}`);
+              console.log("✅ Message sent successfully!");
             } else {
-              alert("שגיאה: " + (result.error || "שגיאה לא ידועה"));
-              console.error("❌ שגיאה בשליחה:", result.error);
+              const errorMsg = result.error || "שגיאה לא ידועה";
+              alert(`❌ שגיאה בשליחה:\n${errorMsg}`);
+              console.error("❌ Send failed:", errorMsg);
             }
             
+            console.log("\n=== ✅ TEST COMPLETE ===");
+            console.log("⏰ End time:", new Date().toISOString());
+            
           } catch (error) {
-            console.error("❌ שגיאה כללית:", error);
-            alert("שגיאה: " + (error instanceof Error ? error.message : "שגיאה לא ידועה"));
+            console.error("\n=== ❌ TEST ERROR ===");
+            console.error("Error:", error);
+            console.log("⏰ Error time:", new Date().toISOString());
+            alert(`❌ שגיאה: ${error instanceof Error ? error.message : "שגיאה לא ידועה"}`);
           }
         })();
       }}

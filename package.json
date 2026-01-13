@@ -55,6 +55,8 @@
     "patch-package": "^8.0.0",
     "path": "^0.12.7",
     "postcss": "^8.4.35",
+    "qr-code-styling": "^1.9.2",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "qrcode.react": "^3.1.0",
     "react": "^18.2.0",
@@ -77,6 +79,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "@types/selenium-webdriver": "^4.1.21",
     "@types/styled-components": "^5.1.34",
     "open": "^10.1.0",
