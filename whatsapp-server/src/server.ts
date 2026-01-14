@@ -280,13 +280,31 @@ try {
   
 } catch (err) {
   console.log("⚠️ Error checking number:", err);
-}
-
-const promises: Promise<any>[] = [];
+}const responses: any[] = [];
+      let messageCount = 0;
       
-      // Handle pattern file
+      // ✅ סדר נכון: Message_1 → File → Message_2 (ברצף!)
+      
+      // 1️⃣ שלח הודעה ראשונה (אם יש)
+      if (requestBody.Message_1) {
+        console.log("💬 Sending Message_1...");
+        try {
+          const chat = await client.getChatById(actualPhoneNumber || phoneNumber);
+          const response = await chat.sendMessage(requestBody.Message_1);
+          responses.push(response);
+          messageCount++;
+          console.log("✅ Message_1 sent!");
+        } catch (err) {
+          console.log("⚠️ Fallback to direct send");
+          const response = await client.sendMessage(phoneNumber, requestBody.Message_1);
+          responses.push(response);
+          messageCount++;
+        }
+      }
+      
+      // 2️⃣ שלח קובץ (pattern או uploaded) - רק אחרי שההודעה הראשונה נשלחה!
       if (requestBody.PatternID && !req.file) {
-        console.log("🔍 Looking for pattern file:", requestBody.PatternID);
+        console.log("📁 Looking for pattern file:", requestBody.PatternID);
         const files = fs.readdirSync(uploadDirectory);
         const found_file = files.find((val) =>
           val.startsWith(`file-${requestBody.PatternID}`)
@@ -305,64 +323,61 @@ const promises: Promise<any>[] = [];
           );
           
           console.log("📤 Sending pattern file...");
-          promises.push(client.sendMessage(phoneNumber, media));
+          const response = await client.sendMessage(phoneNumber, media);
+          responses.push(response);
+          messageCount++;
+          console.log("✅ Pattern file sent!");
         }
       }
 
-      // Handle uploaded file
       if (req.file) {
         console.log("📎 Processing uploaded file:", req.file.originalname);
+        
+        // ✅ תיקון שם קובץ בעברית
+        const fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+        
         const media = new MessageMedia(
           req.file.mimetype,
           req.file.buffer.toString("base64"),
-          req.file.originalname,
+          fileName,
           req.file.size
         );
         
         console.log("📤 Sending uploaded file...");
-        promises.push(client.sendMessage(phoneNumber, media));
+        const response = await client.sendMessage(phoneNumber, media);
+        responses.push(response);
+        messageCount++;
+        console.log("✅ Uploaded file sent!");
       }
 
-     // Handle Message_1
-if (requestBody.Message_1) {
-  console.log("💬 Sending Message_1...");
-  
-  // ✅ שיטה חלופית - יצירת צ'אט ושליחה ישירות
-  try {
-    const chat = await client.getChatById(actualPhoneNumber || phoneNumber);
-    promises.push(chat.sendMessage(requestBody.Message_1));
-  } catch (err) {
-    console.log("⚠️ Fallback to direct send");
-    promises.push(client.sendMessage(phoneNumber, requestBody.Message_1));
-  }
-}
+      // 3️⃣ שלח הודעה שנייה (אם יש) - רק אחרי שהקובץ נשלח!
+      if (requestBody.Message_2) {
+        console.log("💬 Sending Message_2...");
+        try {
+          const chat = await client.getChatById(actualPhoneNumber || phoneNumber);
+          const response = await chat.sendMessage(requestBody.Message_2);
+          responses.push(response);
+          messageCount++;
+          console.log("✅ Message_2 sent!");
+        } catch (err) {
+          console.log("⚠️ Fallback to direct send");
+          const response = await client.sendMessage(phoneNumber, requestBody.Message_2);
+          responses.push(response);
+          messageCount++;
+        }
+      }
       
-      // Handle Message_2
-if (requestBody.Message_2) {
-  console.log("💬 Sending Message_2...");
-  
-  try {
-    const chat = await client.getChatById(actualPhoneNumber || phoneNumber);
-    promises.push(chat.sendMessage(requestBody.Message_2));
-  } catch (err) {
-    console.log("⚠️ Fallback to direct send");
-    promises.push(client.sendMessage(phoneNumber, requestBody.Message_2));
-  }
-}
-      
-      console.log(`⏳ Sending ${promises.length} message(s)...`);
-      
-      const responses = await Promise.all(promises);
+      console.log(`✅ Total messages sent: ${messageCount}`);
       
       console.log("✅ All messages sent!");
       console.log("⏰ Time:", new Date().toISOString());
       
       return res.status(200).json({ 
-        body: responses, 
-        status: "Success",
-        sentTo: phoneNumber,
-        messageCount: promises.length
-      });
+  body: responses, 
+  status: "Success",
+  sentTo: phoneNumber,
+  messageCount: messageCount  // ← משתמש במשתנה החדש
+});
         
     } catch (err) {
       console.error("❌ Error in /SendMessage:", err);

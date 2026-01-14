@@ -734,10 +734,6 @@ export default function MessagesPage() {
                 />
               </Form.Group>
             </Row>
-  // רק החלק של כפתור הטסט - להחליף בקוד שלך
-
-// החלף את כפתור הטסט הקיים בקוד הזה:
-
 <Row>
   <Col>
     <Button
@@ -748,7 +744,7 @@ export default function MessagesPage() {
           console.log("⏰ Start time:", new Date().toISOString());
           
                   try {
-            const testPhone = '585333944'; // ← בלי 0 בהתחלה!
+            const testPhone = '526554868'; // ← בלי 0 בהתחלה!
             const countryCode = '972';
             
             console.log("📞 Target:", testPhone);
@@ -800,7 +796,7 @@ export default function MessagesPage() {
             console.log("⏰ Time:", new Date().toISOString());
             
             if (result.success) {
-              alert(`✅ הודעת הטסט נשלחה בהצלחה!\nנשלח ל: ${fullPhone}`);
+              alert(`✅ הודעת הטסט נשלחה בהצלחה!\nנשלח ל: ${testPhone}`);
               console.log("✅ Message sent successfully!");
             } else {
               const errorMsg = result.error || "שגיאה לא ידועה";
