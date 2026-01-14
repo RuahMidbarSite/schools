@@ -2,7 +2,8 @@
 "use client";
 
 import React, { ChangeEvent, Suspense, useRef } from "react";
-import Select from 'react-select'
+import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
 import { Button, Col, Container, Form, InputGroup, Row } from "react-bootstrap";
 import { useState, useContext, useEffect } from "react";
 import SchoolsTable from "@/components/Tables/SchoolTable/schooltable";
@@ -141,7 +142,8 @@ export default function MessagesPage() {
   const [schoolAmountError, setSchoolAmountError] = useState(false);
   const [newStatusError, setNewStatusError] = useState(false);
 
-
+// הוסף שורה זו:
+  const [sendingStats, setSendingStats] = useState({ success: 0, missing: 0, error: 0 });
 
   const [oneTime, updateOneTime] = useState(0);
   // this is used for adding new rows. using ref to prevent re-render.
@@ -308,6 +310,18 @@ export default function MessagesPage() {
         setRowData(schoolRows);
         setSchools(schoolRows);
         setSelectedSchools(schoolRows)
+        
+        console.log("=== 🔍 CACHE DEBUG ===");
+        console.log("📚 Schools:", schoolRows.length);
+        console.log("👥 Contacts:", schoolsContacts?.length);
+        console.log("🏫 First school Representive:", schoolRows[0]?.Representive);
+        console.log("👤 First 3 contacts names:", schoolsContacts?.slice(0, 3).map(c => ({
+          ContactName: c.ContactName,
+          FirstName: c.FirstName,
+          LastName: c.LastName,
+          Cellphone: c.Cellphone
+        })));
+        
         var colDefs: any = model[0]?.map((value: any, index: any) => {
           if (value === "ReligiousSector") {
             return {
@@ -370,8 +384,71 @@ export default function MessagesPage() {
           };
         });
 
+        console.log("📊 Adding phone column...");
+
+        // ✅ הוסף עמודת טלפון נייד של איש הקשר
+        colDefs.push({
+          field: "RepresentivePhone",
+          headerName: "טלפון נייד",
+              valueGetter: (params) => {
+        // 1. בדיקה ישירה לפי ID (הכי אמין ומדויק)
+        // אנחנו בודקים וריאציות שונות של שם השדה למקרה של שגיאת כתיב בדאטה
+        const repId = params.data.RepresentiveID || params.data.RepresentativeId || params.data.RepresentiveId;
+
+        if (repId && schoolsContacts) {
+          // חיפוש איש הקשר עם ה-ID הזה בדיוק
+          const matchById = schoolsContacts.find(c => String(c.Contactid) === String(repId));
+          
+          if (matchById) {
+            console.log(`🎯 Found direct match by ID: ${repId}`);
+            return matchById.Cellphone || matchById.Phone || "";
+          }
+  }
+
+  // --- לוגיקת גיבוי (אם אין ID בשורה) ---
+  
+  const repName = params.data.Representive;
+  const currentSchoolId = params.data.Schoolid;
+
+  if (!repName || !schoolsContacts) return "";
+
+  // סינון לפי בית ספר
+  const relevantContacts = schoolsContacts.filter(c => 
+    c.SchoolId === currentSchoolId || c.Schoolid === currentSchoolId
+  );
+
+  const searchPool = relevantContacts.length > 0 ? relevantContacts : schoolsContacts;
+  const cleanRepName = repName.trim();
+
+  // חיפוש לפי שם (כולל טיפול במקרה של תוספת תפקיד לשם)
+  const contact = searchPool.find(c => {
+    const contactFullName = `${c.FirstName || ""} ${c.LastName || ""}`.trim();
+    
+    // בדיקה מורחבת: האם המילים מהשם בטבלה קיימות בשם איש הקשר?
+    // זה יעזור למצוא את "מריאנה" בתוך "מריאנה מנהלת"
+    const nameParts = cleanRepName.split(" ");
+    const firstNameMatch = nameParts[0] === c.FirstName;
+    
+    return (
+        contactFullName === cleanRepName ||
+        (contactFullName.length > 2 && cleanRepName.includes(contactFullName)) ||
+        (cleanRepName.length > 2 && contactFullName.includes(cleanRepName)) ||
+        // בדיקה מיוחדת: אם השם הפרטי זהה והשם בטבלה מכיל את התפקיד
+        (firstNameMatch && cleanRepName.includes(c.Role || "---"))
+    );
+  });
+
+  return contact ? (contact.Cellphone || contact.Phone || "") : "";
+},
+          filter: true,
+        });
+
+        console.log("✅ Phone column added");
+        console.log("=== 🔍 END CACHE DEBUG ===");
+
         setColDefs(colDefs);
       } else {
+        console.log("=== 🔍 SERVER DEBUG ===");
         Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getAllContacts(), getModelFields("School")]).then((
           [schools, religion, cities, schoolsContacts, model]
         ) => {
@@ -383,7 +460,17 @@ export default function MessagesPage() {
           setRowData(schools);
           setSchools(schools);
           setSelectedSchools(schools)
-          updateStorage({ Schools: schools, Cities: cities, Religion: religion, schoolsContacts: schoolsContacts, Tablemodel: model })
+          
+          console.log("📚 Schools:", schoolRows.length);
+          console.log("👥 Contacts:", schoolsContacts?.length);
+          console.log("🏫 First school Representive:", schoolRows[0]?.Representive);
+          console.log("👤 First 3 contacts names:", schoolsContacts?.slice(0, 3).map(c => ({
+            ContactName: c.ContactName,
+            FirstName: c.FirstName,
+            LastName: c.LastName,
+            Cellphone: c.Cellphone
+          })));
+          
           var colDefs: any = model[0]?.map((value: any, index: any) => {
             if (value === "ReligiousSector") {
               return {
@@ -445,6 +532,57 @@ export default function MessagesPage() {
               filter: true,
             };
           });
+
+          console.log("📊 Adding phone column...");
+
+          // ✅ הוסף עמודת טלפון נייד של איש הקשר
+          colDefs.push({
+            field: "RepresentivePhone",
+            headerName: "טלפון נייד",
+            valueGetter: (params) => {
+  const repName = params.data.Representive;
+  const currentSchoolId = params.data.Schoolid; // שליפת ה-ID של בית הספר
+
+  // אם אין שם נציג או אין רשימת אנשי קשר, אין מה לחפש
+  if (!repName || !schoolsContacts) return "";
+
+  // שלב 1: סינון חכם לפי ID
+  // אנחנו יוצרים רשימה קטנה רק של אנשי הקשר ששייכים לבית הספר הספציפי הזה
+  // (הוספתי תמיכה גם ב-SchoolId וגם ב-Schoolid ליתר ביטחון, תלוי איך זה שמור בדאטה שלך)
+  const relevantContacts = schoolsContacts.filter(c => 
+    c.SchoolId === currentSchoolId || c.Schoolid === currentSchoolId
+  );
+
+  // מאגר החיפוש הסופי: משתמשים ברשימה המסוננת. 
+  // רק אם היא ריקה (למשל, אין אנשי קשר משויכים ב-DB), נחפש בלית ברירה בכל הרשימה הכללית.
+  const searchPool = relevantContacts.length > 0 ? relevantContacts : schoolsContacts;
+
+  const cleanRepName = repName.trim();
+
+  // שלב 2: מציאת האדם הנכון לפי השם
+  const contact = searchPool.find(c => {
+    // בניית השם המלא של איש הקשר הנוכחי לבדיקה
+    const contactFullName = `${c.FirstName || ""} ${c.LastName || ""}`.trim();
+    
+    // בדיקה משולשת:
+    // 1. האם השמות זהים בדיוק?
+    // 2. האם השם בטבלה מכיל את שם איש הקשר? (למשל: "ישראל ישראלי - מנהל" מכיל את "ישראל ישראלי")
+    // 3. האם שם איש הקשר מכיל את השם בטבלה?
+    return (
+        contactFullName === cleanRepName ||
+        (contactFullName.length > 2 && cleanRepName.includes(contactFullName)) ||
+        (cleanRepName.length > 2 && contactFullName.includes(cleanRepName))
+    );
+  });
+
+  // החזרת התוצאה: טלפון נייד, ואם אין אז טלפון רגיל
+  return contact ? (contact.Cellphone || contact.Phone || "") : "";
+},
+            filter: true,
+          });
+
+          console.log("✅ Phone column added");
+          console.log("=== 🔍 END SERVER DEBUG ===");
 
           setColDefs(colDefs);
         })
@@ -1000,40 +1138,87 @@ export default function MessagesPage() {
 
             <Row className="mb-3">
               <Col>
-                <Button
-                  variant="primary"
-                  onClick={async () => {
-                    if (schoolAmount > 0) {
+               <Button
+  variant="primary"
+  onClick={async () => {
+    console.log("\n=== 🔍 בחירת אנשי קשר מבתי ספר מסוננים ===");
+    
+    // בדיקה: האם יש בתי ספר נבחרים?
+    if (selectedSchools.length === 0) {
+      alert("אנא בחר בתי ספר תחילה (השתמש בסינון או בכמות)");
+      return;
+    }
+    
+    console.log("📚 בתי ספר נבחרים:", selectedSchools.length);
+    
+    // שלב 1: קבל את מזהי בתי הספר שנבחרו/סוננו
+    const selectedSchoolsIds = selectedSchools.map(
+      (school: { Schoolid: any }) => school.Schoolid
+    );
+    
+    // שלב 2: הבא את כל אנשי הקשר מבתי הספר האלה
+    const allContacts = await selectContacts(selectedSchoolsIds);
+    console.log("👥 סה\"כ אנשי קשר מבתי הספר:", allContacts.length);
+    
+    setSelectedContacts(allContacts);
+    
+    // שלב 3: סנן את אנשי הקשר לפי הקריטריונים שנבחרו
+    const filtered = allContacts.filter((contact: any) => {
+      
+      // 🎯 סינון לפי נציג (ברירת מחדל: רק נציגים)
+      // isRep = true → רק נציגים
+      // isRep = false → רק לא נציגים  
+      // isRep = null → הכל
+      const repMatch = isRep === null || contact.IsRepresentive === isRep;
+      
+      // 📋 סינון לפי תפקיד (אם נבחרו תפקידים)
+      const roleMatch = selectedRoles.length === 0 || 
+                       selectedRoles.includes(contact.Role);
+      
+      // 📊 סינון לפי סטטוס איש קשר (אם נבחרו סטטוסים)
+      const statusMatch = selectedContactStatuses.length === 0 || 
+                         selectedContactStatuses.includes(contact.Status);
+      
+      return repMatch && roleMatch && statusMatch;
+    });
+    
+    console.log("✅ אחרי סינון:", filtered.length);
+    console.log("📊 קריטריוני סינון:");
+    console.log("   - נציג:", isRep === null ? "הכל (שניהם)" : (isRep ? "רק נציגים ✓" : "לא נציגים"));
+    console.log("   - תפקידים:", selectedRoles.length === 0 ? "הכל" : selectedRoles.join(", "));
+    console.log("   - סטטוסים:", selectedContactStatuses.length === 0 ? "הכל" : selectedContactStatuses.join(", "));
+    
+    setFilteredContacts(filtered);
+    setMsgStatuses([]);
+     // ✅ עדכן גם את הטבלה להצגת בתי הספר המסוננים בלבד
+    setRowData(selectedSchools);
+    // הצג תוצאה
+    const resultMsg = `
+נמצאו ${filtered.length} אנשי קשר מתוך ${allContacts.length}
 
-                      const selectedSchoolsIds = selectedSchools.map(
-                        (id: { Schoolid: any }) => id.Schoolid
-                      )
-
-                      const contacts = await selectContacts(
-                        selectedSchoolsIds
-                      );
-                      setSelectedContacts(contacts);
-                      setMsgStatuses([]);
-                    } else {
-                      setSchoolAmountError(true);
-                      alert(pageText.schoolAmountError);
-                    }
-                  }}
-                >
-                  {pageText.chooseContacts}
-                </Button>
+מבתי ספר: ${selectedSchools.length}
+נציג: ${isRep === null ? "הכל" : (isRep ? "רק נציגים" : "לא נציגים")}
+תפקידים: ${selectedRoles.length === 0 ? "הכל" : selectedRoles.length}
+סטטוסים: ${selectedContactStatuses.length === 0 ? "הכל" : selectedContactStatuses.length}
+    `.trim();
+    
+    alert(resultMsg);
+  }}
+>
+  {pageText.chooseContacts}
+</Button>
               </Col>
             </Row>
 
             <Row className="mb-3">
               <Form.Group as={Col} controlId="formNewStatus">
                 <Form.Label>בחר סטטוס</Form.Label>
-                <Select
+                <CreatableSelect
                   value={newStatus}
                   onChange={handleStatusChange}
                   options={statusesOptions}
                   isClearable
-                  placeholder="..בחר סטטוס"
+                  placeholder="..בחר סטטוס או הקלד חדש"
                 />
               </Form.Group>
             </Row>
@@ -1043,24 +1228,85 @@ export default function MessagesPage() {
                   variant="primary"
                   onClick={async () => {
                     setNewStatusError(false);
-                    console.log("contacts: ", filteredContacts);
-                    const numbers: string[] = filteredContacts.map(
-                      (contact: { Cellphone: any }) => contact.Cellphone
-                    );
+                    
+                    // איפוס המונים בתחילת ריצה
+                    setSendingStats({ success: 0, missing: 0, error: 0 });
+                    
+                    console.log("\n=== 🚀 Starting Batch Send with Live Stats ===");
+                    
+                    if (filteredContacts.length === 0) {
+                        alert("לא נבחרו אנשי קשר לשליחה");
+                        return;
+                    }
 
-                    let promise = []
-                    // for (const num of numbers) {
-                    //   promise.push(sendMessageViaWhatsApp(msg1, msg2, addedFile, num, "972", selectedPattern?.PatternId));
-                    // }
-                    // Promise.all([...promise]).then((val) => {
-                    //   console.log(val)
+                    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-                    // })
+                    // פונקציית עזר לעדכון הגריד
+                    const updateGridRow = (contact: any, newStatus: string) => {
+                        if (gridRef.current && gridRef.current.api) {
+                            const updatedRow = { ...contact, Status: newStatus };
+                            gridRef.current.api.applyTransaction({ update: [updatedRow] });
+                        }
+                    };
 
-                    const filteredContactsIds = filteredContacts.map(
-                      (id: { Contactid: any }) => id.Contactid
-                    )
-                    await updateContactsStatus(newStatus['value'], filteredContactsIds);
+                    for (const [index, contact] of filteredContacts.entries()) {
+                        const phone = contact.Cellphone;
+                        const name = `${contact.FirstName} ${contact.LastName}`;
+                        
+                        console.log(`\n⏳ Processing ${index + 1}/${filteredContacts.length}: ${name}`);
+
+                        // 1. בדיקה אם חסר טלפון
+                        if (!phone || phone.trim() === "") {
+                            setSendingStats(prev => ({ ...prev, missing: prev.missing + 1 }));
+                            
+                            await updateContactsStatus("להשיג", [contact.Contactid]); 
+                            updateGridRow(contact, "להשיג");
+                            continue; 
+                        }
+
+                        try {
+                            // 2. ניסיון שליחה
+                            const result = await sendMessageViaWhatsApp(
+                                msg1, 
+                                msg2, 
+                                addedFile, 
+                                phone, 
+                                "972", 
+                                selectedPattern?.PatternId
+                            );
+
+                            if (result.success) {
+                                setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
+                                
+                                if (newStatus && newStatus['value']) {
+                                    const statusToSet = newStatus['value'];
+                                    await updateContactsStatus(statusToSet, [contact.Contactid]);
+                                    updateGridRow(contact, statusToSet);
+                                }
+                                
+                            } else {
+                                setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+                                
+                                await updateContactsStatus("שגוי", [contact.Contactid]);
+                                updateGridRow(contact, "שגוי");
+                            }
+
+                        } catch (error) {
+                            setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+                            
+                            console.error("❌ Critical Error", error);
+                            await updateContactsStatus("שגוי", [contact.Contactid]);
+                            updateGridRow(contact, "שגוי");
+                        }
+
+                        // השהייה
+                        if (index < filteredContacts.length - 1) {
+                            const delay = Math.floor(Math.random() * (12000 - 5000 + 1) + 5000); 
+                            await sleep(delay);
+                        }
+                    }
+
+                    alert("תהליך השליחה הסתיים בהצלחה!");
                   }}
                 >
                   {pageText.sendMessages}
@@ -1070,11 +1316,50 @@ export default function MessagesPage() {
           </Col>
         </Row>
 
-        <Row>
+        {/* --- התחלת הקוד החדש של לוח המחוונים (עיצוב שורה אחת) --- */}
+        <Row className="mt-4 mb-2">
           <Col>
-            <p>{`Amount of Selected Schools: ${selectedSchools.length}, Amount of Selected Contacts: ${filteredContacts.length}`}</p>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-around', 
+              alignItems: 'center', // מיישר את הכל לאמצע הגובה
+              background: '#f8f9fa', 
+              padding: '15px', 
+              borderRadius: '8px', 
+              border: '1px solid #dee2e6',
+              direction: 'rtl'
+            }}>
+              
+              {/* בתי ספר */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <strong>בתי ספר שנבחרו:</strong>
+                <span style={{ fontSize: '1.1em' }}>{selectedSchools.length}</span>
+              </div>
+
+              <div style={{ width: '1px', height: '20px', background: '#ccc' }}></div>
+
+              {/* נשלחו */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', color: 'green' }}>
+                <strong>נשלחו בהצלחה:</strong>
+                <span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>{sendingStats.success}</span>
+              </div>
+
+              {/* להשיג */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', color: '#d63384' }}>
+                <strong>חסר טלפון ("להשיג"):</strong>
+                <span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>{sendingStats.missing}</span>
+              </div>
+
+              {/* שגוי */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', color: 'red' }}>
+                <strong>תקלות ("שגוי"):</strong>
+                <span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>{sendingStats.error}</span>
+              </div>
+
+            </div>
           </Col>
         </Row>
+        {/* --- סוף הקוד החדש --- */}
         <Suspense>
           <div
             id="grid-1"
