@@ -775,7 +775,20 @@ export default function MessagesPage() {
       setFileName(e.target.files[0].name)
     }
   };
-
+// ✅ תיקון #1: פונקציה להחלפת משתנים בהודעה
+  // הוסף את הפונקציה הזו אחרי handleFileChange ולפני return
+  const replaceMessageVariables = (message: string, contact: any): string => {
+    if (!message) return message;
+    
+    // החלף {name} בשם הפרטי של איש הקשר
+    let result = message.replace(/{name}/gi, contact.FirstName || "");
+    
+    // אפשר להוסיף עוד משתנים בעתיד:
+    // result = result.replace(/{lastName}/gi, contact.LastName || "");
+    // result = result.replace(/{role}/gi, contact.Role || "");
+    
+    return result;
+  };
   return (
     <>
 <QrCode ref={qrCodeRef}/>
@@ -1239,6 +1252,23 @@ export default function MessagesPage() {
                         return;
                     }
 
+                  // ✅ תיקון #2: מניעת כפילויות - שלח רק למספרי טלפון ייחודיים
+                    const uniqueContacts = new Map();
+                    for (const contact of filteredContacts) {
+                      const phone = contact.Cellphone;
+                      if (phone && phone.trim() !== "") {
+                        // אם המספר כבר קיים, דלג עליו
+                        if (!uniqueContacts.has(phone)) {
+                          uniqueContacts.set(phone, contact);
+                        } else {
+                          console.log(`⚠️ Skipping duplicate phone: ${phone} for ${contact.FirstName} ${contact.LastName}`);
+                        }
+                      }
+                    }
+                    
+                    const contactsToSend = Array.from(uniqueContacts.values());
+                    console.log(`📊 Total contacts: ${filteredContacts.length}, Unique phones: ${contactsToSend.length}`);
+
                     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
                     // פונקציית עזר לעדכון הגריד
@@ -1249,7 +1279,8 @@ export default function MessagesPage() {
                         }
                     };
 
-                    for (const [index, contact] of filteredContacts.entries()) {
+                    // עכשיו השתמש ב-contactsToSend במקום filteredContacts
+                    for (const [index, contact] of contactsToSend.entries()) {
                         const phone = contact.Cellphone;
                         const name = `${contact.FirstName} ${contact.LastName}`;
                         
@@ -1264,40 +1295,47 @@ export default function MessagesPage() {
                             continue; 
                         }
 
-                        try {
-                            // 2. ניסיון שליחה
-                            const result = await sendMessageViaWhatsApp(
-                                msg1, 
-                                msg2, 
-                                addedFile, 
-                                phone, 
-                                "972", 
-                                selectedPattern?.PatternId
-                            );
+                       try {
+    // 🔥 החלף {name} בהודעות לפני השליחה
+    const personalizedMsg1 = replaceMessageVariables(msg1, contact);
+    const personalizedMsg2 = replaceMessageVariables(msg2, contact);
+    
+    // לוגים לבדיקה
+    console.log(`📝 Original msg1: ${msg1?.substring(0, 50)}`);
+    console.log(`✏️ Personalized for ${contact.FirstName}: ${personalizedMsg1?.substring(0, 50)}`);
 
-                            if (result.success) {
-                                setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
-                                
-                                if (newStatus && newStatus['value']) {
-                                    const statusToSet = newStatus['value'];
-                                    await updateContactsStatus(statusToSet, [contact.Contactid]);
-                                    updateGridRow(contact, statusToSet);
-                                }
-                                
-                            } else {
-                                setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
-                                
-                                await updateContactsStatus("שגוי", [contact.Contactid]);
-                                updateGridRow(contact, "שגוי");
-                            }
+    // 2. שליחה עם ההודעות המותאמות אישית
+    const result = await sendMessageViaWhatsApp(
+        personalizedMsg1,
+        personalizedMsg2,
+        addedFile, 
+        phone, 
+        "972", 
+        selectedPattern?.PatternId
+    );
 
-                        } catch (error) {
-                            setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
-                            
-                            console.error("❌ Critical Error", error);
-                            await updateContactsStatus("שגוי", [contact.Contactid]);
-                            updateGridRow(contact, "שגוי");
-                        }
+    if (result.success) {
+        setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
+        
+        // עדכן סטטוס
+        await updateContactsStatus(statusToSet, [contact.Contactid]);
+        updateGridRow(contact, statusToSet);
+        console.log(`✅ Updated contact ${contact.Contactid} to status: ${statusToSet}`);
+        
+    } else {
+        setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+        
+        await updateContactsStatus("שגוי", [contact.Contactid]);
+        updateGridRow(contact, "שגוי");
+    }
+
+} catch (error) {
+    setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+    
+    console.error("❌ Critical Error", error);
+    await updateContactsStatus("שגוי", [contact.Contactid]);
+    updateGridRow(contact, "שגוי");
+}
 
                         // השהייה
                         if (index < filteredContacts.length - 1) {

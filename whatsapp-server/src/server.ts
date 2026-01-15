@@ -210,7 +210,7 @@ app.get("/WaitQr", async (req: Request, res: Response) => {
   }
 });
 
-// ✅ SendMessage endpoint
+// ✅ SendMessage endpoint - עם כל התיקונים
 app.post(
   "/SendMessage",
   MemoryWithNoStoring.single("file"),
@@ -226,7 +226,7 @@ app.post(
       
       console.log("⏳ Waiting for client to be ready (up to 60 seconds)...");
       let waitCount = 0;
-      while (!isReady() && waitCount < 120) { // 60 seconds
+      while (!isReady() && waitCount < 120) {
         await new Promise(resolve => setTimeout(resolve, 500));
         waitCount++;
         if (waitCount % 20 === 0) {
@@ -242,14 +242,12 @@ app.post(
         });
       }
       
-     
       console.log("✅ Client is ready!");
 
-      // ✅ תיקון 2: המתנה נוספת לסנכרון מלא
+      // ✅ המתנה נוספת לסנכרון מלא
       console.log("⏳ Waiting additional 30 seconds for full WhatsApp sync...");
       await new Promise(resolve => setTimeout(resolve, 30000));
       console.log("✅ Sync complete!");
-
 
       const requestBody: {
         PhoneNumber: string;
@@ -258,29 +256,55 @@ app.post(
         PatternID: string | undefined;
       } = req.body;
       
-      const phoneNumber = requestBody.PhoneNumber;
-console.log("📞 Target:", phoneNumber);
+      let phoneNumber = requestBody.PhoneNumber;
+      console.log("📞 Original number:", phoneNumber);
 
-// ✅ תיקון: צור/מצא את הצ'אט לפני שליחה
-let actualPhoneNumber = phoneNumber; // ← משתנה חדש שניתן לשנות
-try {
-  console.log("🔍 Getting chat...");
-  const numberId = await client.getNumberId(phoneNumber.replace('@c.us', ''));
-  
-  if (!numberId) {
-    console.log("❌ Number not found on WhatsApp!");
-    return res.status(404).json({ 
-      status: "Error", 
-      message: `Number ${phoneNumber} is not registered on WhatsApp`
-    });
-  }
-  
-  console.log("✅ Number found:", numberId._serialized);
-  actualPhoneNumber = numberId._serialized; // ← משתמש במשתנה החדש
-  
-} catch (err) {
-  console.log("⚠️ Error checking number:", err);
-}const responses: any[] = [];
+      // 🔥 FIX: נקה את המספר ונרמל אותו
+      phoneNumber = phoneNumber.replace('@c.us', '').replace(/[\s-]/g, '');
+      console.log("🧹 Cleaned number:", phoneNumber);
+
+      // 🔥 FIX: קבל את המזהה הנכון מ-WhatsApp
+      let chatId: string;
+      let chat: any;
+      
+      try {
+        console.log("🔍 Getting number ID from WhatsApp...");
+        const numberId = await client.getNumberId(phoneNumber);
+        
+        if (!numberId) {
+          console.log("❌ Number not found on WhatsApp!");
+          return res.status(404).json({ 
+            status: "Error", 
+            message: `Number ${phoneNumber} is not registered on WhatsApp`
+          });
+        }
+        
+        chatId = numberId._serialized;
+        console.log("✅ Got chat ID:", chatId);
+        
+        // 🔥 NEW: טען את הצ'אט ווודא שהוא מוכן
+        console.log("📂 Loading chat...");
+        try {
+          chat = await client.getChatById(chatId);
+          console.log("✅ Chat loaded successfully");
+          
+          // המתן קצת לסנכרון מלא של הצ'אט
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+        } catch (chatErr) {
+          console.log("⚠️ Could not load chat, will try direct send:", chatErr);
+          chat = null;
+        }
+        
+      } catch (err) {
+        console.log("⚠️ Error getting number ID:", err);
+        // Fallback: נסה עם פורמט ישיר
+        chatId = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@c.us`;
+        console.log("🔄 Using fallback chat ID:", chatId);
+        chat = null;
+      }
+
+      const responses: any[] = [];
       let messageCount = 0;
       
       // ✅ סדר נכון: Message_1 → File → Message_2 (ברצף!)
@@ -289,16 +313,24 @@ try {
       if (requestBody.Message_1) {
         console.log("💬 Sending Message_1...");
         try {
-          const chat = await client.getChatById(actualPhoneNumber || phoneNumber);
-          const response = await chat.sendMessage(requestBody.Message_1);
+          let response;
+          
+          // 🔥 FIX: שלח ישירות ללא sendSeen אוטומטי
+          console.log("📤 Sending message directly without sendSeen...");
+          response = await client.sendMessage(chatId, requestBody.Message_1, {
+            sendSeen: false  // ← זה מונע את שגיאת markedUnread
+          });
+          
           responses.push(response);
           messageCount++;
           console.log("✅ Message_1 sent!");
+          
+          // המתן קצת בין הודעות
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          
         } catch (err) {
-          console.log("⚠️ Fallback to direct send");
-          const response = await client.sendMessage(phoneNumber, requestBody.Message_1);
-          responses.push(response);
-          messageCount++;
+          console.error("❌ Error sending Message_1:", err);
+          throw err;
         }
       }
       
@@ -323,10 +355,16 @@ try {
           );
           
           console.log("📤 Sending pattern file...");
-          const response = await client.sendMessage(phoneNumber, media);
+          const response = await client.sendMessage(chatId, media, {
+            sendSeen: false
+          });
+          
           responses.push(response);
           messageCount++;
           console.log("✅ Pattern file sent!");
+          
+          // המתן קצת
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
 
@@ -344,40 +382,45 @@ try {
         );
         
         console.log("📤 Sending uploaded file...");
-        const response = await client.sendMessage(phoneNumber, media);
+        const response = await client.sendMessage(chatId, media, {
+          sendSeen: false
+        });
+        
         responses.push(response);
         messageCount++;
         console.log("✅ Uploaded file sent!");
+        
+        // המתן קצת
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
       // 3️⃣ שלח הודעה שנייה (אם יש) - רק אחרי שהקובץ נשלח!
       if (requestBody.Message_2) {
         console.log("💬 Sending Message_2...");
         try {
-          const chat = await client.getChatById(actualPhoneNumber || phoneNumber);
-          const response = await chat.sendMessage(requestBody.Message_2);
+          const response = await client.sendMessage(chatId, requestBody.Message_2, {
+            sendSeen: false
+          });
+          
           responses.push(response);
           messageCount++;
           console.log("✅ Message_2 sent!");
         } catch (err) {
-          console.log("⚠️ Fallback to direct send");
-          const response = await client.sendMessage(phoneNumber, requestBody.Message_2);
-          responses.push(response);
-          messageCount++;
+          console.error("❌ Error sending Message_2:", err);
+          throw err;
         }
       }
       
       console.log(`✅ Total messages sent: ${messageCount}`);
-      
       console.log("✅ All messages sent!");
       console.log("⏰ Time:", new Date().toISOString());
       
       return res.status(200).json({ 
-  body: responses, 
-  status: "Success",
-  sentTo: phoneNumber,
-  messageCount: messageCount  // ← משתמש במשתנה החדש
-});
+        body: responses, 
+        status: "Success",
+        sentTo: chatId,
+        messageCount: messageCount
+      });
         
     } catch (err) {
       console.error("❌ Error in /SendMessage:", err);

@@ -47,12 +47,29 @@ const GetClientOrInitialize = async () => {
   console.log("\n=== 🚀 GetClientOrInitialize Called ===");
   console.log("⏰ Time:", new Date().toISOString());
   
- // ✅ תיקון 1: בדוק אם Client כבר קיים - תמיד החזר אותו!
+  // ✅ אם Client קיים, בדוק אם הוא באמת מחובר
   if (GlobalClient.client) {
-    console.log("♻️ Client already exists - reusing it");
-    console.log("🔍 isClientReady:", isClientReady);
-    console.log("🔍 isFullyReady:", isFullyReady);
-    return GlobalClient.client;
+    console.log("♻️ Client already exists - checking if connected...");
+    
+    try {
+      const state = await GlobalClient.client.getState();
+      console.log("📊 Current state:", state);
+      
+      // אם מחובר - החזר אותו
+      if (state === 'CONNECTED') {
+        console.log("✅ Client connected! Ready:", isClientReady, "FullyReady:", isFullyReady);
+        return GlobalClient.client;
+      }
+      
+      // אם לא מחובר - נקה והתחל מחדש
+      console.log("⚠️ Client not connected (state:", state, "). Resetting...");
+      await resetClient(); // משתמש בפונקציה הקיימת!
+      // עכשיו נמשיך ליצור Client חדש למטה
+      
+    } catch (err) {
+      console.log("⚠️ Error checking state:", err, "- Resetting client");
+      await resetClient();
+    }
   }
   
   // If initializing, wait
