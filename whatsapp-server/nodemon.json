@@ -1,0 +1,10 @@
+{
+  "watch": ["src"],
+  "ext": "ts",
+  "ignore": [
+    "WhatsAppData/**",
+    "uploads/**",
+    "node_modules/**"
+  ],
+  "delay": "5000"
+}
