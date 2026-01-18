@@ -5,7 +5,7 @@ import Select from 'react-select';
 import CreatableSelect from 'react-select/creatable';
 import { Button, Col, Container, Form, InputGroup, Row } from "react-bootstrap";
 import { useState, useContext, useEffect } from "react";
-import { useRouter } from "next/navigation"; // ✅ ייבוא חשוב לרענון הדף
+import { useRouter } from "next/navigation"; 
 import SchoolsTable from "@/components/Tables/SchoolTable/schooltable";
 import { MessagePattern, StatusContacts, StatusSchools } from "@prisma/client";
 import {
@@ -21,7 +21,7 @@ import {
   addPattern,
   deletePattern,
   updateContactsStatus,
-  updateSchoolStatus, // ✅ וודא שזה מיובא
+  updateSchoolStatus, 
   getSchoolTypes,
   getAllSchoolsTypes,
   getAllStatuses,
@@ -63,9 +63,12 @@ export type ContactFilterOptions = {
 }
 
 export default function MessagesPage() {
-  const router = useRouter(); // ✅ שימוש ב-Router
+  const router = useRouter(); 
   const qrCodeRef = useRef(null);
   const gridRef: any = useRef(null);
+
+  const [isSending, setIsSending] = useState(false); 
+  const shouldStopRef = useRef(false); 
 
   const [rowData, setRowData]: any = useState("");
   const [colDefs, setColDefs]: any = useState("");
@@ -86,7 +89,6 @@ export default function MessagesPage() {
 
   const [statusesOptions, setStatusesOptions] = useState([]);
 
-  // ✅ אתחול כמערך ריק למניעת קריסה
   const [SchoolStatuses, setSchoolStatuses] = useState<any[]>([]);
   const [ContactStatuses, setContactStatuses] = useState<any[]>([]);
 
@@ -98,7 +100,8 @@ export default function MessagesPage() {
   const [addedFile, setAddedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
 
-  const [isRep, setIsRep] = useState(null);
+  // ברירת מחדל: נציגים בלבד (true)
+  const [isRep, setIsRep] = useState<boolean | null>(true); 
 
   const [selectedSectors, setSelectedSectors] = useState([]);
   const [selectedCities, setSelectedCities] = useState([]);
@@ -120,6 +123,12 @@ export default function MessagesPage() {
   const [sendingStats, setSendingStats] = useState({ success: 0, missing: 0, error: 0 });
   const [oneTime, updateOneTime] = useState(0);
   
+  // Ref לסטטוס הנבחר כדי שהגריד יראה אותו בזמן אמת
+  const newStatusRef = useRef(newStatus);
+  useEffect(() => {
+    newStatusRef.current = newStatus;
+  }, [newStatus]);
+
   const dataRowCount = useRef(0);
   const rowCount = useRef(0);
 
@@ -147,7 +156,6 @@ export default function MessagesPage() {
           setCities(cities);
           setSectors(sectors);
           setRoles(roles);
-          // הגנה מפני undefined
           setSchoolStatuses(SchoolStatuses?.map((val) => val.StatusName) || []);
           setContactStatuses(statuses || []);
           setStatusesOptions(transformedStatuses);
@@ -192,7 +200,6 @@ export default function MessagesPage() {
             setSectors(sectors);
             setRoles(roles);
             
-            // הגנה מפני undefined גם כאן
             setSchoolStatuses(SchoolStatuses ? SchoolStatuses.map((val) => val.StatusName) : []);
             setContactStatuses(statuses || []);
             setStatusesOptions(transformedStatuses);
@@ -229,209 +236,193 @@ export default function MessagesPage() {
   }, [options]);
 
   const onGridReady = async () => {
+    const getPhoneValue = (params: any, contactsList: any[]) => {
+      if (!contactsList || contactsList.length === 0 || !params.data) return "";
+      const data = params.data;
+      
+      const repId = data.RepresentiveID || 
+                    data.RepresentativeId || 
+                    data.RepresentiveId || 
+                    data.RepId || 
+                    data.ContactId || 
+                    data["Representative ID"] || 
+                    data["Repres entive ID"]; 
+
+      if (repId) {
+        const match = contactsList.find(c => String(c.Contactid) === String(repId));
+        if (match) {
+          return match.Cellphone || match.Phone || match.cellphone || "";
+        }
+      }
+
+      const repName = data.Representive || data.Representative || data.Name;
+      const schoolId = data.Schoolid || data.SchoolId;
+
+      if (repName && schoolId) {
+        const schoolContacts = contactsList.filter(c => String(c.SchoolId || c.Schoolid) === String(schoolId));
+        const match = schoolContacts.find(c => {
+            const fullName = `${c.FirstName || ""} ${c.LastName || ""}`.trim();
+            const cleanRepName = String(repName).trim();
+            return fullName === cleanRepName || fullName.includes(cleanRepName) || cleanRepName.includes(fullName);
+        });
+        if (match) return match.Cellphone || match.Phone || "";
+      }
+      return "";
+    };
+
     getFromStorage().then(({ Schools, Religion, Cities, schoolsContacts, Tablemodel }: DataType) => {
       if (Schools && Religion && Cities && schoolsContacts && Tablemodel) {
-        const schoolRows = Schools
-        rowCount.current = schoolRows.length;
-        dataRowCount.current = schoolRows.length;
-        const model = Tablemodel
-        const religion = Religion
-        const cities = Cities
-        setRowData(schoolRows);
-        setSchools(schoolRows);
-        setSelectedSchools(schoolRows)
+        setRowData(Schools);
+        setSchools(Schools);
+        setSelectedSchools(Schools);
+        
+        rowCount.current = Schools.length;
+        dataRowCount.current = Schools.length;
 
-        var colDefs: any = model[0]?.map((value: any, index: any) => {
-          if (value === "ReligiousSector") {
-            return {
-              field: value,
-              headerName: model[1][index],
-              editable: true,
-              cellEditor: "agSelectCellEditor",
-              cellEditorParams: {
-                values: religion,
-              },
-              filter: true,
-            };
-          }
-          if (value === "City") {
-            return {
-              field: value,
-              headerName: model[1][index],
-              editable: true,
-              cellEditor: "CustomSelect",
-              cellEditorParams: {
-                selectData: cities.map((val) => ({ value: val, label: val })),
-              },
-              filter: true,
-              cellEditorPopup: true,
-              cellEditorPopupPosition: "under",
-            };
-          }
-          if (value === "Schoolid") {
-            return {
-              field: value,
-              headerName: model[1][index],
-              cellEditor: "agTextCellEditor",
-              rowDrag: true,
-            };
-          }
-          if (value === "Representive") {
-            return {
-              field: value,
-              headerName: model[1][index],
-              editable: true,
-              cellEditor: "CustomSelect",
-              cellEditorParams: {
-                selectData: schoolsContacts,
-              },
-              filter: true,
-              cellEditorPopup: true,
-              cellEditorPopupPosition: "under",
-            };
-          }
-          return {
+        const colDefsBuilder: any[] = Tablemodel[0]?.map((value: any, index: any) => {
+          const headerName = Tablemodel[1][index];
+
+          // הגדרות עמודה בסיסיות
+          let colDef: any = {
             field: value,
-            headerName: model[1][index],
+            headerName: headerName,
             editable: true,
-            cellEditor: "agTextCellEditor",
             filter: true,
           };
-        });
 
-        colDefs.push({
-          field: "RepresentivePhone",
+          if (value === "ReligiousSector") {
+            colDef.cellEditor = "agSelectCellEditor";
+            colDef.cellEditorParams = { values: Religion };
+          }
+          else if (value === "City") {
+            colDef.cellEditor = "CustomSelect";
+            colDef.cellEditorParams = { selectData: Cities.map((val) => ({ value: val, label: val })) };
+            colDef.cellEditorPopup = true;
+            colDef.cellEditorPopupPosition = "under";
+          }
+          else if (value === "Representive") {
+            colDef.cellEditor = "CustomSelect";
+            colDef.cellEditorParams = { selectData: schoolsContacts };
+            colDef.cellEditorPopup = true;
+            colDef.cellEditorPopupPosition = "under";
+          }
+          else if (value === "Schoolid") {
+            colDef.cellEditor = "agTextCellEditor";
+            colDef.rowDrag = true;
+          }
+          else {
+             colDef.cellEditor = "agTextCellEditor";
+          }
+
+          // === 🟢 צביעת הסטטוס בירוק ===
+          if (headerName === "סטטוס" || value === "Status" || value === "status") {
+             colDef.cellStyle = (params: any) => {
+                // חילוץ המחרוזת הנכונה מתוך אובייקט הסטטוס (אם הוא אובייקט)
+                const currentStatusObj = newStatusRef.current;
+                const statusValue = (currentStatusObj && typeof currentStatusObj === 'object' && 'value' in currentStatusObj) 
+                                    ? currentStatusObj.value 
+                                    : currentStatusObj;
+                
+                // בדיקת התאמה מדויקת
+                if (params.value && statusValue && String(params.value) === String(statusValue)) {
+                     return { backgroundColor: '#198754', color: 'white', fontWeight: 'bold' };
+                }
+                return null;
+             };
+          }
+
+          return colDef;
+        }) || [];
+
+        colDefsBuilder.push({
+          field: "CalculatedPhone",
           headerName: "טלפון נייד",
-          valueGetter: (params) => {
-            const repId = params.data.RepresentiveID || params.data.RepresentativeId || params.data.RepresentiveId;
-            if (repId && schoolsContacts) {
-              const matchById = schoolsContacts.find(c => String(c.Contactid) === String(repId));
-              if (matchById) {
-                return matchById.Cellphone || matchById.Phone || "";
-              }
-            }
-            const repName = params.data.Representive;
-            const currentSchoolId = params.data.Schoolid;
-            if (!repName || !schoolsContacts) return "";
-            const relevantContacts = schoolsContacts.filter(c =>
-              c.SchoolId === currentSchoolId || c.Schoolid === currentSchoolId
-            );
-            const searchPool = relevantContacts.length > 0 ? relevantContacts : schoolsContacts;
-            const cleanRepName = repName.trim();
-            const contact = searchPool.find(c => {
-              const contactFullName = `${c.FirstName || ""} ${c.LastName || ""}`.trim();
-              const nameParts = cleanRepName.split(" ");
-              const firstNameMatch = nameParts[0] === c.FirstName;
-              return (
-                contactFullName === cleanRepName ||
-                (contactFullName.length > 2 && cleanRepName.includes(contactFullName)) ||
-                (cleanRepName.length > 2 && contactFullName.includes(cleanRepName)) ||
-                (firstNameMatch && cleanRepName.includes(c.Role || "---"))
-              );
-            });
-            return contact ? (contact.Cellphone || contact.Phone || "") : "";
-          },
+          valueGetter: (params) => getPhoneValue(params, schoolsContacts),
           filter: true,
+          width: 150
         });
-        setColDefs(colDefs);
+
+        setColDefs(colDefsBuilder);
+
       } else {
-        Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getAllContacts(), getModelFields("School")]).then((
-          [schools, religion, cities, schoolsContacts, model]
-        ) => {
-          const schoolRows = schools
-          rowCount.current = schoolRows.length;
-          dataRowCount.current = schoolRows.length;
-          setRowData(schools);
-          setSchools(schools);
-          setSelectedSchools(schools)
+        Promise.all([
+            getAllSchools(), 
+            getAllReligionSectors(), 
+            getAllCities(), 
+            getAllContacts(), 
+            getModelFields("School")
+        ]).then(([schoolsData, religionData, citiesData, contactsData, modelData]) => {
+            
+            setRowData(schoolsData);
+            setSchools(schoolsData);
+            setSelectedSchools(schoolsData);
+            
+            rowCount.current = schoolsData.length;
+            dataRowCount.current = schoolsData.length;
 
-          var colDefs: any = model[0]?.map((value: any, index: any) => {
-            if (value === "ReligiousSector") {
-              return {
-                field: value,
-                headerName: model[1][index],
-                editable: true,
-                cellEditor: "agSelectCellEditor",
-                cellEditorParams: {
-                  values: religion,
-                },
-                filter: true,
-              };
-            }
-            if (value === "City") {
-              return {
-                field: value,
-                headerName: model[1][index],
-                editable: true,
-                cellEditor: "CustomSelect",
-                cellEditorParams: {
-                  selectData: cities.map((val) => ({ value: val, label: val })),
-                },
-                filter: true,
-                cellEditorPopup: true,
-                cellEditorPopupPosition: "under",
-              };
-            }
-            if (value === "Schoolid") {
-              return {
-                field: value,
-                headerName: model[1][index],
-                cellEditor: "agTextCellEditor",
-                rowDrag: true,
-              };
-            }
-            if (value === "Representive") {
-              return {
-                field: value,
-                headerName: model[1][index],
-                editable: true,
-                cellEditor: "CustomSelect",
-                cellEditorParams: {
-                  selectData: schoolsContacts,
-                },
-                filter: true,
-                cellEditorPopup: true,
-                cellEditorPopupPosition: "under",
-              };
-            }
-            return {
-              field: value,
-              headerName: model[1][index],
-              editable: true,
-              cellEditor: "agTextCellEditor",
-              filter: true,
-            };
-          });
+            const colDefsBuilder: any[] = modelData[0]?.map((value: any, index: any) => {
+                const headerName = modelData[1][index];
+                
+                let colDef: any = {
+                    field: value, 
+                    headerName: headerName, 
+                    editable: true, 
+                    filter: true
+                };
 
-          colDefs.push({
-            field: "RepresentivePhone",
-            headerName: "טלפון נייד",
-            valueGetter: (params) => {
-              const repName = params.data.Representive;
-              const currentSchoolId = params.data.Schoolid;
-              if (!repName || !schoolsContacts) return "";
-              const relevantContacts = schoolsContacts.filter(c =>
-                c.SchoolId === currentSchoolId || c.Schoolid === currentSchoolId
-              );
-              const searchPool = relevantContacts.length > 0 ? relevantContacts : schoolsContacts;
-              const cleanRepName = repName.trim();
-              const contact = searchPool.find(c => {
-                const contactFullName = `${c.FirstName || ""} ${c.LastName || ""}`.trim();
-                return (
-                  contactFullName === cleanRepName ||
-                  (contactFullName.length > 2 && cleanRepName.includes(contactFullName)) ||
-                  (cleanRepName.length > 2 && contactFullName.includes(cleanRepName))
-                );
-              });
-              return contact ? (contact.Cellphone || contact.Phone || "") : "";
-            },
-            filter: true,
-          });
-          setColDefs(colDefs);
-        })
+                if (value === "ReligiousSector") {
+                    colDef.cellEditor = "agSelectCellEditor";
+                    colDef.cellEditorParams = { values: religionData };
+                }
+                else if (value === "City") {
+                    colDef.cellEditor = "CustomSelect";
+                    colDef.cellEditorParams = { selectData: citiesData.map((val: any) => ({ value: val.CityName, label: val.CityName })) };
+                    colDef.cellEditorPopup = true;
+                    colDef.cellEditorPopupPosition = "under";
+                }
+                else if (value === "Representive") {
+                    colDef.cellEditor = "CustomSelect";
+                    colDef.cellEditorParams = { selectData: contactsData };
+                    colDef.cellEditorPopup = true;
+                    colDef.cellEditorPopupPosition = "under";
+                }
+                else {
+                    colDef.cellEditor = "agTextCellEditor";
+                }
+
+                 // === 🟢 אותו תיקון גם כאן ===
+                if (headerName === "סטטוס" || value === "Status" || value === "status") {
+                    colDef.cellStyle = (params: any) => {
+                        const currentStatusObj = newStatusRef.current;
+                        const statusValue = (currentStatusObj && typeof currentStatusObj === 'object' && 'value' in currentStatusObj) 
+                                            ? currentStatusObj.value 
+                                            : currentStatusObj;
+                        
+                        if (params.value && statusValue && String(params.value) === String(statusValue)) {
+                             return { backgroundColor: '#198754', color: 'white', fontWeight: 'bold' };
+                        }
+                        return null;
+                    };
+                 }
+                 
+                 if (value === "Schoolid") colDef.rowDrag = true;
+
+                return colDef;
+            }) || [];
+
+            colDefsBuilder.push({
+                field: "CalculatedPhone",
+                headerName: "טלפון נייד",
+                valueGetter: (params) => getPhoneValue(params, contactsData),
+                filter: true,
+                width: 150
+            });
+
+            setColDefs(colDefsBuilder);
+        });
       }
-    })
-  }
+    });
+  };
 
   const filterSchools = () => {
     const filteredSchools = schools.filter(school => {
@@ -679,39 +670,39 @@ export default function MessagesPage() {
             <Row className="mb-3">
               <Col>
                 <Button variant="primary" onClick={async () => {
-    console.log("\n=== 📋 בחירת אנשי קשר מבתי ספר מסוננים ===");
-    if (selectedSchools.length === 0) { 
-      alert("אנא בחר בתי ספר תחילה (השתמש בסינון או בכמות)"); 
-      return; 
-    }
-    
-    const selectedSchoolsIds = selectedSchools.map((school: { Schoolid: any }) => school.Schoolid);
-    const allContacts = await selectContacts(selectedSchoolsIds);
-    setSelectedContacts(allContacts);
-    
-    const filtered = allContacts.filter((contact: any) => {
-      const contactIsRep = contact.IsRepresentative === true || 
-                          contact.isRepresentative === true || 
-                          contact.IsRepresentive === true || 
-                          contact.IsRep === true;
-      const repMatch = isRep === null || 
-                      (isRep === true && contactIsRep) || 
+                  console.log("\n=== 📋 בחירת אנשי קשר מבתי ספר מסוננים ===");
+                  if (selectedSchools.length === 0) {
+                    alert("אנא בחר בתי ספר תחילה (השתמש בסינון או בכמות)");
+                    return;
+                  }
+
+                  const selectedSchoolsIds = selectedSchools.map((school: { Schoolid: any }) => school.Schoolid);
+                  const allContacts = await selectContacts(selectedSchoolsIds);
+                  setSelectedContacts(allContacts);
+
+                  const filtered = allContacts.filter((contact: any) => {
+                    const contactIsRep = contact.IsRepresentative === true ||
+                      contact.isRepresentative === true ||
+                      contact.IsRepresentive === true ||
+                      contact.IsRep === true;
+                    const repMatch = isRep === null ||
+                      (isRep === true && contactIsRep) ||
                       (isRep === false && !contactIsRep);
-      const roleMatch = selectedRoles.length === 0 || selectedRoles.includes(contact.Role);
-      const statusMatch = selectedContactStatuses.length === 0 || 
-                         selectedContactStatuses.includes(contact.Status);
-      return repMatch && roleMatch && statusMatch;
-    });
-    
-    setFilteredContacts(filtered);
-    setMsgStatuses([]);
-    setRowData(selectedSchools);
-    
-    const resultMsg = `נמצאו ${filtered.length} אנשי קשר מתוך ${allContacts.length}\nבתי ספר: ${selectedSchools.length}\nנציג: ${isRep === null ? "הכל" : (isRep ? "רק נציגים" : "לא נציגים")}\nתפקידים: ${selectedRoles.length === 0 ? "הכל" : selectedRoles.length}\nסטטוסים: ${selectedContactStatuses.length === 0 ? "הכל" : selectedContactStatuses.length}`.trim();
-    alert(resultMsg);
-}}>
-  {pageText.chooseContacts}
-</Button>
+                    const roleMatch = selectedRoles.length === 0 || selectedRoles.includes(contact.Role);
+                    const statusMatch = selectedContactStatuses.length === 0 ||
+                      selectedContactStatuses.includes(contact.Status);
+                    return repMatch && roleMatch && statusMatch;
+                  });
+
+                  setFilteredContacts(filtered);
+                  setMsgStatuses([]);
+                  setRowData(selectedSchools);
+
+                  const resultMsg = `נמצאו ${filtered.length} אנשי קשר מתוך ${allContacts.length}\nבתי ספר: ${selectedSchools.length}\nנציג: ${isRep === null ? "הכל" : (isRep ? "רק נציגים" : "לא נציגים")}\nתפקידים: ${selectedRoles.length === 0 ? "הכל" : selectedRoles.length}\nסטטוסים: ${selectedContactStatuses.length === 0 ? "הכל" : selectedContactStatuses.length}`.trim();
+                  alert(resultMsg);
+                }}>
+                  {pageText.chooseContacts}
+                </Button>
               </Col>
             </Row>
 
@@ -722,202 +713,219 @@ export default function MessagesPage() {
               </Form.Group>
             </Row>
             <Row className="mb-3">
-              <Col>
-                <Button variant="primary" onClick={async () => {
-    setNewStatusError(false);
-    setSendingStats({ success: 0, missing: 0, error: 0 });
-    console.log("\n=== 🚀 Starting Batch Send ===");
-    
-    if (filteredContacts.length === 0) { 
-      alert("לא נבחרו אנשי קשר לשליחה"); 
-      return; 
-    }
-    
-    // קבלת הסטטוס
-    let statusToUse = "";
-    if (newStatus && typeof newStatus === 'object' && 'value' in newStatus) { 
-      statusToUse = (newStatus as any).value; 
-    } else if (typeof newStatus === 'string') { 
-      statusToUse = newStatus; 
-    }
+              <Col style={{ display: "flex", gap: "10px" }}>
+                {/* === כפתור שליחה מעודכן === */}
+                <Button
+                  variant="primary"
+                  disabled={isSending}
+                  onClick={async () => {
+                    setNewStatusError(false);
+                    // איפוס State של React
+                    setSendingStats({ success: 0, missing: 0, error: 0 });
+                    
+                    let localSuccessCount = 0;
+                    let localErrorCount = 0;
+                    let localMissingCount = 0;
 
-    // הוספת סטטוס חדש אם לא קיים
-    if (statusToUse) {
-      if (!ContactStatuses.includes(statusToUse)) { 
-        await addContactStatuses(statusToUse); 
-        setContactStatuses(prev => [...prev, statusToUse]); 
-      }
-      if (!SchoolStatuses.includes(statusToUse)) { 
-        await addSchoolStatuses(statusToUse); 
-        setSchoolStatuses(prev => [...prev, statusToUse]);
-      }
-    }
+                    shouldStopRef.current = false; 
+                    setIsSending(true); 
 
-    // סינון אנשי קשר ייחודיים
-    const uniqueContacts = new Map();
-    for (const contact of filteredContacts) {
-      const phone = contact.Cellphone;
-      if (phone && phone.trim() !== "") { 
-        if (!uniqueContacts.has(phone)) { 
-          uniqueContacts.set(phone, contact); 
-        } 
-      }
-    }
-    const contactsToSend = Array.from(uniqueContacts.values());
-    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-    
-    console.log(`📤 Sending to ${contactsToSend.length} unique contacts...`);
-    
-    // שליחת הודעות
-    for (const [index, contact] of contactsToSend.entries()) {
-      const phone = contact.Cellphone;
-      
-      if (!phone || phone.trim() === "") { 
-        setSendingStats(prev => ({ ...prev, missing: prev.missing + 1 })); 
-        await updateContactsStatus("להשיב", [contact.Contactid]); 
-        continue; 
-      }
-      
-      try {
-        const personalizedMsg1 = replaceMessageVariables(msg1, contact);
-        const personalizedMsg2 = replaceMessageVariables(msg2, contact);
-        
-        console.log(`📨 [${index + 1}/${contactsToSend.length}] Sending to ${contact.FirstName} (${phone})...`);
-        
-        const result = await sendMessageViaWhatsApp(
-          personalizedMsg1, 
-          personalizedMsg2, 
-          addedFile, 
-          phone, 
-          "972", 
-          selectedPattern?.PatternId
-        );
-        
-        if (result.success) {
-          console.log(`✅ Sent successfully to ${contact.FirstName}`);
-          setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
-          
-          if (statusToUse) {
-            // עדכן סטטוס איש קשר
-            await updateContactsStatus(statusToUse, [contact.Contactid]);
-            
-            // עדכן סטטוס בית ספר אם זה נציג
-            const isRep = contact.IsRepresentative === true || 
-                         contact.IsRepresentive === true || 
-                         contact.isRepresentative === true || 
-                         contact.IsRep === true;
-            
-            if (isRep) {
-              const rawSchoolId = contact.Schoolid || 
-                                 contact.SchoolId || 
-                                 contact.schoolid || 
-                                 contact.schoolId;
-              
-              if (rawSchoolId) {
-                const schoolIdNum = Number(rawSchoolId);
-                console.log(`🏫 Updating School ID: ${schoolIdNum} to status: ${statusToUse}`);
-                await updateSchoolStatus(statusToUse, [schoolIdNum]);
-              }
-            }
-          }
-        } else { 
-          console.log(`❌ Failed to send to ${contact.FirstName}`);
-          setSendingStats(prev => ({ ...prev, error: prev.error + 1 })); 
-          await updateContactsStatus("שגוי", [contact.Contactid]); 
-        }
-      } catch (error) { 
-        console.error(`❌ Error sending to ${contact.FirstName}:`, error);
-        setSendingStats(prev => ({ ...prev, error: prev.error + 1 })); 
-      }
-      
-      // המתנה אקראית בין הודעות
-      if (index < contactsToSend.length - 1) { 
-        const delay = Math.floor(Math.random() * (12000 - 5000 + 1) + 5000);
-        console.log(`⏳ Waiting ${(delay/1000).toFixed(1)}s before next message...`);
-        await sleep(delay); 
-      }
-    }
+                    console.log("\n=== 🚀 Starting Batch Send ===");
 
-    // ✅ סנכרון מלא עם Storage
-    console.log("\n🔄 Syncing all data from server...");
-    console.log("⏰ Time:", new Date().toISOString());
-    
-    try {
-      // שלב 1: טען נתונים טריים מהשרת
-      console.log("📡 Fetching fresh data from server...");
-      const [freshSchools, freshContacts] = await Promise.all([
-        getAllSchools(),
-        getAllContacts()
-      ]);
+                    if (filteredContacts.length === 0) {
+                      alert("לא נבחרו אנשי קשר לשליחה");
+                      setIsSending(false);
+                      return;
+                    }
 
-      console.log(`📊 Fetched ${freshSchools.length} schools, ${freshContacts.length} contacts`);
+                    // קבלת הסטטוס
+                    let statusToUse = "";
+                    if (newStatus && typeof newStatus === 'object' && 'value' in newStatus) {
+                      statusToUse = (newStatus as any).value;
+                    } else if (typeof newStatus === 'string') {
+                      statusToUse = newStatus;
+                    }
 
-      // שלב 2: עדכן את ה-Storage
-      console.log("💾 Updating LocalForage storage...");
-      await updateStorage({ 
-        Schools: freshSchools,
-        schoolsContacts: freshContacts
-      });
-      
-      console.log("✅ Storage updated successfully!");
-      // 🔍 בדיקה 1: האם ה-Storage באמת התעדכן?
-console.log("🔍 VERIFICATION: Checking if Storage was updated...");
-const verifyStorage = await getFromStorage();
-console.log("📦 Storage Schools count:", verifyStorage.Schools?.length);
-console.log("📦 Storage Contacts count:", verifyStorage.schoolsContacts?.length);
-console.log("📦 First school status:", verifyStorage.Schools?.[0]?.Status);
-console.log("📦 First contact status:", verifyStorage.schoolsContacts?.[0]?.Status);
-      // שלב 3: עדכן את ה-state המקומי של הדף הזה
-      setSchools(freshSchools);
-      setRowData(freshSchools);
-      
-      // שלב 4: עדכן את AgGrid אם קיים
-      if (gridRef.current?.api) {
-        gridRef.current.api.setGridOption('rowData', freshSchools);
-        gridRef.current.api.refreshCells({ force: true });
-      }
-      
-      // שלב 5: רענן גם את הסטטוסים
-      console.log("📋 Updating statuses...");
-      const [updatedSchoolStatuses, updatedContactStatuses] = await Promise.all([
-        getAllStatuses("Schools"),
-        getAllStatuses("Contacts")
-      ]);
-      
-      await updateStorage({
-        SchoolStatuses: updatedSchoolStatuses,
-        ContactsStatuses: updatedContactStatuses
-      });
-      
-      setSchoolStatuses(updatedSchoolStatuses?.map(s => s.StatusName) || []);
-      setContactStatuses(updatedContactStatuses?.map(s => s.StatusName) || []);
-      
-      console.log("✅ All data synced successfully!");
-      console.log("⏰ Time:", new Date().toISOString());
-      
-    } catch (e) {
-      console.error("❌ Failed to sync storage:", e);
-      alert("השליחה הסתיימה, אבל היתה בעיה בעדכון הנתונים. אנא רענן את הדף.");
-      return;
-    }
+                    // הוספת סטטוס חדש אם לא קיים
+                    if (statusToUse) {
+                      if (!ContactStatuses.includes(statusToUse)) {
+                        await addContactStatuses(statusToUse);
+                        setContactStatuses(prev => [...prev, statusToUse]);
+                      }
+                      if (!SchoolStatuses.includes(statusToUse)) {
+                        await addSchoolStatuses(statusToUse);
+                        setSchoolStatuses(prev => [...prev, statusToUse]);
+                      }
+                    }
 
-    // הצגת סיכום
-    const summary = `
-תהליך השליחה הסתיים בהצלחה!
+                    // === 🛠️ ביטול מנגנון סינון כפילויות לצורך בדיקות ===
+                    // לוקחים את כל אנשי הקשר שיש להם טלפון, גם אם המספר חוזר על עצמו
+                    const contactsToSend = filteredContacts.filter(contact => 
+                        contact.Cellphone && contact.Cellphone.trim() !== ""
+                    );
+                    
+                    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-✅ נשלחו בהצלחה: ${sendingStats.success}
-⚠️ חסר טלפון: ${sendingStats.missing}
-❌ תקלות: ${sendingStats.error}
+                    console.log(`📤 Sending to ${contactsToSend.length} contacts (including duplicates for testing)...`);
+                    
+                    // הדפסת לוג ברור עם פירוט IsRepresentative
+                    console.table(contactsToSend.map(c => ({ 
+                        Name: `${c.FirstName} ${c.LastName}`, 
+                        Phone: c.Cellphone,
+                        Role: c.Role,
+                        SchoolID: c.SchoolId || c.Schoolid,
+                        IsRep: c.IsRepresentative || c.IsRepresentive || c.isRepresentative // בדיקה למה נבחר
+                    })));
 
-כל הנתונים סונכרנו והדפים האחרים יתעדכנו אוטומטית!
-    `.trim();
-    
-    alert(summary);
-    console.log("\n" + summary);
-    
-}}>
-  {pageText.sendMessages}
-</Button>
+                    // שליחת הודעות - הלולאה הראשית
+                    for (const [index, contact] of contactsToSend.entries()) {
+
+                      // 🛑 בדיקת עצירה בתחילת כל איטרציה
+                      if (shouldStopRef.current) {
+                        console.log("🛑 Sending Process Stopped by User");
+                        alert(`התהליך נעצר על ידי המשתמש.\nנשלחו ${index} הודעות מתוך ${contactsToSend.length}.`);
+                        break;
+                      }
+
+                      const phone = contact.Cellphone;
+
+                      if (!phone || phone.trim() === "") {
+                        setSendingStats(prev => ({ ...prev, missing: prev.missing + 1 }));
+                        localMissingCount++; // עדכון מונה מקומי
+                        await updateContactsStatus("להשיב", [contact.Contactid]);
+                        continue;
+                      }
+
+                      try {
+                        const personalizedMsg1 = replaceMessageVariables(msg1, contact);
+                        const personalizedMsg2 = replaceMessageVariables(msg2, contact);
+
+                        console.log(`📨 [${index + 1}/${contactsToSend.length}] Sending to ${contact.FirstName} (${phone})...`);
+
+                        const result = await sendMessageViaWhatsApp(
+                          personalizedMsg1, 
+                          personalizedMsg2, 
+                          addedFile, 
+                          phone, 
+                          "972", 
+                          selectedPattern?.PatternId
+                        );
+
+                        if (result.success) {
+                          console.log(`✅ Sent successfully to ${contact.FirstName}`);
+                          
+                          // עדכון גם ב-State (עבור התצוגה למעלה) וגם במשתנה מקומי (עבור האלרט)
+                          setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
+                          localSuccessCount++; 
+
+                          if (statusToUse) {
+                            // 1. עדכון בשרת (Contacts)
+                            await updateContactsStatus(statusToUse, [contact.Contactid]);
+
+                            const isRep = contact.IsRepresentative === true ||
+                              contact.IsRepresentive === true ||
+                              contact.isRepresentative === true ||
+                              contact.IsRep === true;
+
+                            if (isRep) {
+                              const rawSchoolId = contact.Schoolid || contact.SchoolId;
+
+                              if (rawSchoolId) {
+                                const schoolIdNum = Number(rawSchoolId);
+                                // 2. עדכון בשרת (School)
+                                await updateSchoolStatus(statusToUse, [schoolIdNum]);
+
+                                // 3. 🌟 עדכון ויזואלי מיידי בטבלה (AgGrid) 🌟
+                                if (gridRef.current && gridRef.current.api) {
+                                  const rowNode = gridRef.current.api.getRowNode(String(schoolIdNum));
+                                  if (rowNode) {
+                                    rowNode.setDataValue('Status', statusToUse);
+                                    // אופציונלי: הבהוב השורה כדי להראות שינוי
+                                    gridRef.current.api.flashCells({ rowNodes: [rowNode] });
+                                    // רענון התא כדי שיתפוס את הצבע החדש
+                                    gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        } else {
+                          console.log(`❌ Failed to send to ${contact.FirstName}`);
+                          setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+                          localErrorCount++;
+                          await updateContactsStatus("שגוי", [contact.Contactid]);
+                        }
+                      } catch (error) {
+                        console.error(`❌ Error sending to ${contact.FirstName}:`, error);
+                        setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+                        localErrorCount++;
+                      }
+
+                      // המתנה אקראית - רק אם לא הגענו לסוף וגם לא עצרנו
+                      if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
+                        // === 🕒 זמן המתנה מקוצר: 15 עד 25 שניות ===
+                        const delay = Math.floor(Math.random() * (25000 - 15000 + 1) + 15000);
+                        console.log(`⏳ Waiting ${(delay / 1000).toFixed(1)}s (Client) + Server Sync Time...`);
+                        await sleep(delay);
+                      }
+                    } // סוף לולאה
+
+                    // סיום התהליך
+                    setIsSending(false);
+
+                    // סנכרון מלא בסוף - רק אם לא עצרנו באמצע
+                    if (!shouldStopRef.current) {
+                      console.log("\n🔄 Syncing data in background...");
+                      
+                      try {
+                        const [freshSchools, freshContacts] = await Promise.all([
+                          getAllSchools(),
+                          getAllContacts()
+                        ]);
+                        
+                        // עדכון ה-Storage הגלובלי שיפעיל את האירוע לשאר הטבלאות
+                        await updateStorage({
+                          Schools: freshSchools,
+                          schoolsContacts: freshContacts
+                        });
+
+                        const [updatedSchoolStatuses, updatedContactStatuses] = await Promise.all([
+                          getAllStatuses("Schools"),
+                          getAllStatuses("Contacts")
+                        ]);
+
+                        await updateStorage({
+                          SchoolStatuses: updatedSchoolStatuses,
+                          ContactsStatuses: updatedContactStatuses
+                        });
+
+                        setSchoolStatuses(updatedSchoolStatuses?.map(s => s.StatusName) || []);
+                        setContactStatuses(updatedContactStatuses?.map(s => s.StatusName) || []);
+
+                      } catch (e) {
+                        console.error("❌ Failed to sync storage:", e);
+                      }
+
+                      // === 🛠️ תיקון: שימוש במשתנה המקומי המדויק ===
+                      alert(`תהליך השליחה הסתיים.\nהצלחות: ${localSuccessCount}`);
+                    }
+                  }}>
+                  {isSending ? "שולח..." : pageText.sendMessages}
+                </Button>
+
+                {/* === כפתור עצירה חדש === */}
+                {isSending && (
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      if (window.confirm("האם אתה בטוח שברצונך לעצור את השליחה?")) {
+                        shouldStopRef.current = true;
+                      }
+                    }}
+                  >
+                    עצור שליחה ⏹️
+                  </Button>
+                )}
               </Col>
             </Row>
           </Col>
