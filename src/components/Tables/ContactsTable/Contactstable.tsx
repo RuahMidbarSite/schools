@@ -1,5 +1,5 @@
 "use client";
-import { Role, School, SchoolsContact } from "@prisma/client";
+import type { SchoolsContact } from "@prisma/client";
 import {
   useState,
   useRef,
@@ -10,32 +10,17 @@ import {
   useContext,
 } from "react";
 import { AgGridReact } from "ag-grid-react";
-import {
-  getAllSchools,
-} from "@/db/schoolrequests";
 
 import {
-  CellValueChangedEvent,
-  CellEditingStartedEvent,
-  RowSelectedEvent,
-  SelectionChangedEvent,
-  RowClassParams,
-  RowStyle,
-  GetRowIdParams,
-  ColDef,
   CellKeyDownEvent,
 } from "ag-grid-community";
 import Spinner from "react-bootstrap/Spinner";
-import { Button, Navbar, OverlayTrigger } from "react-bootstrap";
-import Tooltip from "react-bootstrap/Tooltip";
-import { FcAddColumn, FcAddRow, FcCancel } from "react-icons/fc";
-import { TableType, getAllCities, getModelFields, getRoles } from "@/db/generalrequests";
+
+// ייבוא פונקציית המחיקה מהשרת
 import {
-  addContactRows,
   deleteContactsRows,
-  getAllContacts,
-  updateContactColumn,
 } from "@/db/contactsRequests";
+
 import CustomWhatsAppRenderer from "../../CellComponents/General/CustomWhatsAppRenderer";
 import CustomLink from "../../CellComponents/General/CustomLink";
 import { useContactComponent } from "@/util/Google/GoogleContacts/ContactComponent";
@@ -44,9 +29,8 @@ import { CustomMultiSelectCell } from "../GeneralFiles/Select/CustomMultiSelectC
 import { CustomFilter } from "../GeneralFiles/Filters/CustomFilter";
 import { GoogleAuthStatus } from "@/components/GoogleAuthStatus";
 
-import { columnsDefinition, OtherComponentsObject } from "@/util/cache/cachetypes";
+import { columnsDefinition } from "@/util/cache/cachetypes";
 import { ThemeContext } from "@/context/Theme/Theme";
-import { getInfo } from "@/db/instructorsrequest";
 import { useExternalEffect } from "../GeneralFiles/Hooks/ExternalUseEffect";
 import useColumnEffects from "./hooks/ColumnEffects";
 import useAuthEffect from "./hooks/AuthEffect";
@@ -58,11 +42,12 @@ import useGridEvents from "./hooks/GridEvents";
 import useGridFunctions from "./hooks/GridInitialize";
 import ToolBar from "@/components/Tables/ContactsTable/hooks/ToolBarComponent";
 import useColumnComponent from "./hooks/ColumnComponent";
+import { useStorageSync, getCacheVersion, getFromStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
 
 export default function ContactsTable() {
   const gridRef: any = useRef<AgGridReact>(null);
 
-  const [AuthenticateActivate, authRes] = useContactComponent();
+  const [AuthenticateActivate] = useContactComponent();
 
   const [checkedAmount, setAmount]: any = useState(0);
 
@@ -85,6 +70,8 @@ export default function ContactsTable() {
 
   const { theme } = useContext(ThemeContext)
 
+  const [mounted, setMounted] = useState(false)
+
   const { updateColState, updateColStateFromCache } = useColumnEffects(gridRef, colState, setColState)
 
   const { authEffect } = useAuthEffect(AuthenticateActivate)
@@ -104,85 +91,125 @@ export default function ContactsTable() {
 
   const { onGridReady } = useGridFunctions(valueFormatCellPhone, AuthenticateActivate, ValueFormatSchool, ValueFormatWhatsApp, setRowData, setColDefs, dataRowCount, rowCount, maxIndex)
 
-  const { onAddRowToolBarClick, onClearFilterButtonClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, onFilterTextBoxChanged } = useToolBarFunctions(gridRef, rowCount, dataRowCount, SetInTheMiddleOfAddingRows, validateFields, setDialogType, setDialogMessage, setOpen, setAmount, modifiedRowRef, maxIndex)
+  const { onAddRowToolBarClick, onClearFilterButtonClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onFilterTextBoxChanged } = useToolBarFunctions(gridRef, rowCount, dataRowCount, SetInTheMiddleOfAddingRows, validateFields, setDialogType, setDialogMessage, setOpen, setAmount, modifiedRowRef, maxIndex)
 
   const { onCellValueChanged, onCellEditingStarted, onRowSelected, onSelectionChange, isRowSelectable, getRowStyles, getRowId } = useGridEvents(gridRef, InTheMiddleOfAddingRows, setAmount, checkedAmount, modifiedRowRef)
 
   const { WindowManager } = useColumnComponent(columnWindowOpen, setColumnWindowOpen, colDefinition, gridRef, colState, setColState)
 
+  // 🛠️ פונקציה מתוקנת למחיקה: שולחת רק מזהים (IDs) ולא אובייקטים
+  const handleDeleteRows = useCallback(async () => {
+    if (!gridRef.current || !gridRef.current.api) return;
+
+    const selectedNodes = gridRef.current.api.getSelectedNodes();
+    
+    // ✅ התיקון הקריטי: חילוץ ה-Contactid בלבד
+    const selectedIds = selectedNodes
+      .map(node => node.data.Contactid)
+      .filter(id => id !== undefined && id !== null); // סינון ערכים לא תקינים
+    
+    if (selectedIds.length === 0) return;
+
+    const isConfirmed = window.confirm(`האם אתה בטוח שברצונך למחוק ${selectedIds.length} אנשי קשר?`);
+    if (!isConfirmed) return;
+
+    try {
+      console.log("🚀 Sending delete request for IDs:", selectedIds);
+      
+      // שליחת מערך של מספרים בלבד לשרת
+      await deleteContactsRows(selectedIds);
+
+      console.log("✅ Server delete success");
+
+      // עדכון ה-UI: הסרת השורות מהטבלה ללא רענון עמוד
+      const rowsToRemove = selectedNodes.map(node => node.data);
+      gridRef.current.api.applyTransaction({ remove: rowsToRemove });
+      
+      // איפוס בחירה
+      gridRef.current.api.deselectAll();
+      setAmount(0);
+      
+    } catch (error: any) {
+      console.error("❌ Failed to delete contacts:", error);
+      alert(`שגיאה במחיקה: ${error.message || "נא לבדוק חיבור לרשת"}`);
+    }
+  }, [setAmount]);
+
+  // פונקציה לרענון נתונים מה-Storage (ללא רענון עמוד)
+  const refreshContactsFromStorage = useCallback(async () => {
+    try {
+      const storageData = await getFromStorage()
+      if (storageData && storageData.schoolsContacts) {
+        setRowData(storageData.schoolsContacts)
+        if (gridRef.current?.api) {
+          gridRef.current.api.setGridOption('rowData', storageData.schoolsContacts)
+          gridRef.current.api.refreshCells({ force: true })
+        }
+      }
+    } catch (error) {
+      console.error("Error refreshing contacts:", error)
+    }
+  }, [setRowData])
+  
+  // האזנה לשינויים ב-Storage
+  useEffect(() => {
+    if (!mounted) return
+    
+    // בדיקה ש-Hook קיים כדי למנוע שגיאות
+    if (typeof useStorageSync !== 'function') return;
+
+    const cleanup = useStorageSync((updatedKeys, version) => {
+      const shouldRefresh = updatedKeys.includes('schoolsContacts') || updatedKeys.includes('ALL')
+      if (shouldRefresh) {
+        refreshContactsFromStorage()
+      }
+    })
+    return cleanup
+  }, [mounted, refreshContactsFromStorage])
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const handleDisconnectContacts = useCallback(async () => {
     try {
-      console.log('🔌 [Contactstable] handleDisconnectContacts called');
-      
       const response = await fetch('/api/google/disconnect', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'contacts' }),
       });
 
-      console.log('📥 [Contactstable] Disconnect response:', response.ok, response.status);
-
-      if (!response.ok) {
-        throw new Error('Failed to disconnect');
-      }
-
-      console.log('✅ [Contactstable] Disconnected successfully, reloading...');
-      window.location.reload();
+      if (!response.ok) throw new Error('Failed to disconnect');
+      
+      console.log("Disconnected successfully");
+      // הסרנו את ה-reload כדי למנוע לופים
+      alert("התנתקת בהצלחה. אנא רענן את הדף ידנית במידת הצורך.");
+      
     } catch (error) {
-      console.error('❌ [Contactstable] Error disconnecting from Google Contacts:', error);
-      throw error;
+      console.error('❌ Error disconnecting:', error);
     }
   }, []);
 
   const checkContactsAuthStatus = useCallback(async () => {
-    console.log('🎯 [Contactstable] checkContactsAuthStatus called');
-    console.log('⏰ [Contactstable] Time:', new Date().toISOString());
-    
     try {
-      console.log('📤 [Contactstable] Sending request to /api/google/check-status');
-      
       const response = await fetch('/api/google/check-status', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'contacts' }),
       });
 
-      console.log('📥 [Contactstable] Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-      });
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ [Contactstable] Response not OK:', errorText);
-        throw new Error('Failed to check status');
+          return { isConnected: false };
       }
 
       const data = await response.json();
-      console.log('📊 [Contactstable] Response data:', data);
-      console.log('✅ [Contactstable] isConnected:', data.isConnected);
-      console.log('📧 [Contactstable] email:', data.email);
-      
-      const result = {
+      return {
         isConnected: data.isConnected,
         email: data.email,
         debug: data.debug,
       };
-      
-      console.log('🎁 [Contactstable] Returning:', result);
-      
-      return result;
     } catch (error) {
-      console.error('❌ [Contactstable] Error checking Google Contacts status:', error);
-      console.error('❌ [Contactstable] Error details:', {
-        message: error.message,
-        stack: error.stack,
-      });
+      console.error('❌ Error checking status:', error);
       return { isConnected: false };
     }
   }, []);
@@ -209,7 +236,6 @@ export default function ContactsTable() {
       );
 
       let nextCell = null;
-      let prevCell = null
       const displayedColumns = event.api.getAllDisplayedColumns();
 
       const isColumnEditable = (colDef, node) => {
@@ -305,7 +331,7 @@ export default function ContactsTable() {
         onAddRowToolBarClick, 
         onCancelChangeButtonClick, 
         onSaveChangeButtonClick, 
-        onSaveDeletions, 
+        handleDeleteRows, 
         checkedAmount, 
         onFilterTextBoxChanged,
         googleAuthComponent

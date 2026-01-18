@@ -588,3 +588,60 @@ export const getAllYears = async (): Promise<Years[]> => {
 }
 
 
+// --- הוסף את זה לסוף הקובץ src/db/generalrequests.tsx ---
+
+export const updateSchoolStatus = async (status: string, schoolIds: any[]) => {
+  "use server";
+  try {
+    // המרה למספרים כי בבסיס הנתונים Schoolid הוא Int
+    const validIds = schoolIds
+      .map(id => Number(id))
+      .filter(id => !isNaN(id) && id > 0);
+
+    if (validIds.length === 0) {
+      console.log("No valid school IDs to update");
+      return;
+    }
+
+    console.log(`Updating schools ${validIds} to status: ${status}`);
+
+    await prisma.school.updateMany({
+      where: {
+        Schoolid: {
+          in: validIds,
+        },
+      },
+      data: {
+        Status: status,
+      },
+    });
+
+    console.log(`Successfully updated status for schools: ${validIds.join(', ')}`);
+  } catch (error) {
+    console.error('Error updating school statuses:', error);
+    throw error;
+  }
+};
+
+export const addSchoolStatuses = async (status: string) => {
+  "use server";
+  try {
+    // בדיקה אם קיים כבר כדי למנוע כפילויות
+    const existing = await prisma.statusSchools.findFirst({
+      where: { StatusName: status }
+    });
+    
+    if (existing) return existing;
+
+    const newStatus = await prisma.statusSchools.create({
+      data: {
+        StatusName: status,
+      },
+    });
+    return newStatus;
+  } catch (error) {
+    console.error('Error adding school status:', error);
+    // לא זורקים שגיאה קריטית כדי לא לעצור את התהליך אם הסטטוס כבר קיים
+    return null; 
+  }
+}

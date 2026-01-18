@@ -343,3 +343,27 @@ export const getSchoolsPrograms = async (schoolIds: number[]) => {
   return programs
 }
 
+// הוסף את זה בסוף הקובץ:
+
+export async function updateSchoolStatus(
+  schoolId: number, 
+  status: string
+): Promise<any> {
+  try {
+    const response = await fetch('/api/schools/updateStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schoolId, status })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.json();
+    
+  } catch (error) {
+    console.error('Error updating school status:', error);
+    throw error;
+  }
+}
