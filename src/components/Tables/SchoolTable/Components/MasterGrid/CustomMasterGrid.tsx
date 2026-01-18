@@ -15,9 +15,10 @@ import { updateSchoolsColumn } from "@/db/schoolrequests";
 interface MasterGridRendererProps extends CustomCellRendererProps<School> {
   UpdateContactComponent: any;
   GoogleFunctions: any;
+  deleteContact?: (data: any[]) => Promise<void>; // 🆕 הוספת הטיפוס לפונקציית המחיקה
 }
 
-export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, ...props }: MasterGridRendererProps) => {
+export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, deleteContact, ...props }: MasterGridRendererProps) => {
   // useContext צריך להיות ראשון!
   const { theme } = useContext(ThemeContext);
   
@@ -119,6 +120,7 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, ...p
             SchoolApi={schoolApi} 
             setAllSchoolContacts={AllContacts}
             GoogleFunctions={GoogleFunctions}
+            deleteContact={deleteContact} // 🆕 העברת פונקציית המחיקה לטבלה הקטנה
           />
         </div>
       </div>

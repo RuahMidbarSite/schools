@@ -139,4 +139,3 @@ const updateDeps = async (data: (DataType)) => {
  }
 
     export {updateStorage,getFromStorage}
-

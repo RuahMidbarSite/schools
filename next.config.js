@@ -1,20 +1,18 @@
 /** @type {import('next').NextConfig} */
 
-
-
 const nextConfig = {
+  // תיקון למגבלת ה-1MB
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '4mb',
+    },
+  },
    
   webpack: (config) => {
-    
-     
-    // this will override the experiments
     config.experiments = { ...config.experiments };
-    // this will just update topLevelAwait property of config.experiments
-    // config.experiments.topLevelAwait = true 
     return config;
   },
   reactStrictMode: false,
-  
 };
  
 module.exports = nextConfig
