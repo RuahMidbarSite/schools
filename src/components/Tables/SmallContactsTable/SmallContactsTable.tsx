@@ -1,6 +1,6 @@
 "use client";
 import { SchoolsContact, School } from "@prisma/client";
-import { useState, useRef, useCallback, useMemo, Suspense, useContext, Ref } from "react";
+import { useState, useRef, useCallback, useMemo, Suspense, useContext, Ref, useEffect } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { GridApi, ColDef, CellKeyDownEvent, GetRowIdParams } from "ag-grid-community";
 import Spinner from "react-bootstrap/Spinner";
@@ -22,12 +22,14 @@ import useColumnComponent from "./hooks/ColumnComponent";
 import useToolBarFunctions from "./hooks/ToolBarFunctions";
 import ToolBar from "./hooks/ToolBarComponent";
 import useGridEvents from "./hooks/GridEvents";
+// ✅ ייבוא המנגנון לסנכרון נתונים
+import { useStorageSync, getFromStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
 
 interface SmallContactsTableProps {
   SchoolID: number;
   SchoolApi: Ref<GridApi<School>>;
   setAllSchoolContacts: any;
-  deleteContact?: (ids: number[]) => Promise<boolean>; // מעודכן לקבלת בוליאני
+  deleteContact?: (ids: number[]) => Promise<boolean>;
   GoogleFunctions?: any;
 }
 
@@ -52,9 +54,56 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
   const { updateColState, updateColStateFromCache } = useColumnEffects(gridRef, colState, setColState, SchoolID)
   const { validateFields, ErrorModule } = useErrorValidationComponents(setOpen, setDialogType, setDialogMessage, open, dialogType, dialogMessage)
   const [isLoading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useExternalEffect(updateColStateFromCache, [colDefinition])
   useExternalEffect(updateColState, [colState])
+
+  // === 🟢 תוספת: האזנה לשינויים בסטורג' ורענון הטבלה הקטנה ===
+  const refreshLocalData = useCallback(async () => {
+    try {
+      const data = await getFromStorage();
+      if (data && data.schoolsContacts) {
+        // סינון אנשי הקשר ששייכים רק לבית הספר הנוכחי
+        const currentSchoolContacts = data.schoolsContacts.filter(
+          (c: SchoolsContact) => c.SchoolId === SchoolID || c.Schoolid === SchoolID
+        );
+        
+        setRowData(currentSchoolContacts);
+        
+        // עדכון ישיר של הגריד אם הוא קיים
+        if (gridRef.current?.api) {
+          gridRef.current.api.setGridOption('rowData', currentSchoolContacts);
+          // רענון תאים כדי שהסטטוס החדש יופיע ויזואלית (כולל צבעים אם יש)
+          gridRef.current.api.refreshCells({ force: true });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to refresh small table:", e);
+    }
+  }, [SchoolID]);
+
+  // השימוש ב-hook שמאזין לאירוע גלובלי
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const handleStorageUpdate = (event: any) => {
+        // אם עודכנו אנשי קשר, נרענן את הטבלה
+        if (event.detail?.keys?.includes("schoolsContacts") || event.detail?.keys?.includes("ALL")) {
+            refreshLocalData();
+        }
+    };
+
+    window.addEventListener("storageUpdated", handleStorageUpdate);
+    return () => {
+        window.removeEventListener("storageUpdated", handleStorageUpdate);
+    };
+  }, [mounted, refreshLocalData]);
+  // ==============================================================
 
   const maxIndex = useRef<number>(0)
   const { ValueFormatSchool, ValueFormatWhatsApp, valueFormatCellPhone } = useExternalUpdate(AuthenticateActivate)
@@ -64,7 +113,6 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
   const { onAddRowToolBarClick, onClearFilterButtonClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, onFilterTextBoxChanged, DeleteCheckedAmountText } = useToolBarFunctions(gridRef, rowCount, dataRowCount, SetInTheMiddleOfAddingRows, validateFields, setDialogType, setDialogMessage, setOpen, setAmount, SchoolID, checkedAmount, AllContacts, setRowData, setAllContacts, allContactsCount, SchoolApi, setAllSchoolContacts, setLoading, rowData, maxIndex)
   const { onCellValueChanged, onRowSelected, onSelectionChange, isRowSelectable } = useGridEvents(gridRef, InTheMiddleOfAddingRows, setAmount, checkedAmount, SchoolApi, SchoolID, setAllContacts, AllContacts, setAllSchoolContacts, setRowData, rowData)
 
-  // 🔑 מזהה שורה תקין קריטי למחיקה ויזואלית
   const getRowId = useCallback((params: GetRowIdParams<SchoolsContact>) => {
     return String(params.data.Contactid);
   }, []);
@@ -74,27 +122,17 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
 
     const selectedNodes = gridRef.current.api.getSelectedNodes();
     const selectedData = selectedNodes.map(node => node.data);
-    
-    // שליחת רק ה-IDs לאבא
     const selectedIds = selectedData.map(d => d.Contactid).filter(id => typeof id === 'number');
 
     if (selectedIds.length === 0) return;
 
-    // אם קיבלנו פונקציית מחיקה מהאבא
     if (deleteContact) {
-      // 1. מבקשים אישור מהמשתמש כאן (בילד)
       if (!window.confirm(`האם למחוק ${selectedIds.length} אנשי קשר?`)) return;
-
-      // 2. קוראים לאבא למחוק (שרת + Storage) ומחכים לתשובה
       const success = await deleteContact(selectedIds);
-      
       if (success) {
-        // 3. אם הצליח -> מוחקים ויזואלית מהטבלה הזו
         gridRef.current.api.applyTransaction({ remove: selectedData });
         gridRef.current.api.deselectAll();
         setAmount(0);
-
-        // 4. עדכון ה-State המקומי (כדי שלא יחזור אם הרכיב ירוענן)
         setRowData(prev => prev ? prev.filter(row => !selectedIds.includes(row.Contactid)) : []);
       }
     } else {
@@ -111,10 +149,8 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
     }), []);
 
   const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
-    // ... (אותו קוד ניווט ארוך נשאר כפי שהיה)
     const keyboardEvent = event.event as unknown as KeyboardEvent;
     keyboardEvent.stopPropagation();
-    // ... שאר הלוגיקה שלך ...
   }, []);
 
   const CustomNoRowsOverlay = useCallback(() => <div className="ag-overlay-no-rows-center text-blue-300"><span> לא זוהו נתונים </span></div>, [])
@@ -147,7 +183,7 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
             undoRedoCellEditingLimit={5}
             enableCellChangeFlash={true}
             rowSelection={"multiple"}
-            getRowId={getRowId} // ✅ קריטי
+            getRowId={getRowId}
             suppressRowTransform={true}
             suppressMenuHide={true}
             suppressRowClickSelection={true}

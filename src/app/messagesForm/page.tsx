@@ -732,6 +732,19 @@ export default function MessagesPage() {
 
                     console.log("\n=== 🚀 Starting Batch Send ===");
 
+                    // 👇 קוד חדש 1: הכנה - טעינת הנתונים המקומיים פעם אחת בהתחלה
+                    let currentStorageData: any = null;
+                    let localContactsList: any[] = [];
+                    try {
+                      currentStorageData = await getFromStorage();
+                      if (currentStorageData && currentStorageData.schoolsContacts) {
+                        localContactsList = currentStorageData.schoolsContacts;
+                      }
+                    } catch (e) {
+                      console.error("Failed to load initial storage", e);
+                    }
+                    // 👆 סוף קוד חדש 1
+
                     if (filteredContacts.length === 0) {
                       alert("לא נבחרו אנשי קשר לשליחה");
                       setIsSending(false);
@@ -822,6 +835,28 @@ export default function MessagesPage() {
                             // 1. עדכון בשרת (Contacts)
                             await updateContactsStatus(statusToUse, [contact.Contactid]);
 
+                             // 👇 קוד חדש 2: עדכון Storage מיידי (מדמה את השרת)
+                             try {
+                                // מציאת איש הקשר ברשימה המקומית ועדכון הסטטוס שלו
+                                const contactIndex = localContactsList.findIndex((c: any) => c.Contactid === contact.Contactid);
+                                if (contactIndex !== -1) {
+                                    // עדכון הסטטוס בזיכרון
+                                    localContactsList[contactIndex].Status = statusToUse;
+                                    localContactsList[contactIndex].status = statusToUse; // גיבוי למקרה של רגישות לאותיות
+
+                                    // שמירה חזרה ל-Storage - זה מה שגורם לטבלה להתעדכן מייד!
+                                    if (currentStorageData) {
+                                        await updateStorage({ 
+                                            ...currentStorageData, 
+                                            schoolsContacts: localContactsList 
+                                        });
+                                    }
+                                }
+                            } catch (err) {
+                                console.error("Error updating local storage immediately:", err);
+                            }
+                            // 👆 סוף קוד חדש 2
+
                             const isRep = contact.IsRepresentative === true ||
                               contact.IsRepresentive === true ||
                               contact.isRepresentative === true ||
@@ -863,8 +898,8 @@ export default function MessagesPage() {
 
                       // המתנה אקראית - רק אם לא הגענו לסוף וגם לא עצרנו
                       if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
-                        // === 🕒 זמן המתנה מקוצר: 15 עד 25 שניות ===
-                        const delay = Math.floor(Math.random() * (25000 - 15000 + 1) + 15000);
+                       // המתנה של בין 1 ל-3 שניות בלבד (בנוסף ל-30 שניות של השרת)
+                        const delay = Math.floor(Math.random() * (3000 - 1000 + 1) + 1000);
                         console.log(`⏳ Waiting ${(delay / 1000).toFixed(1)}s (Client) + Server Sync Time...`);
                         await sleep(delay);
                       }
@@ -873,42 +908,11 @@ export default function MessagesPage() {
                     // סיום התהליך
                     setIsSending(false);
 
-                    // סנכרון מלא בסוף - רק אם לא עצרנו באמצע
+                    // 👇 קוד חדש 3: הסרת סנכרון כפול בסוף והשארת הודעת סיום בלבד
                     if (!shouldStopRef.current) {
-                      console.log("\n🔄 Syncing data in background...");
-                      
-                      try {
-                        const [freshSchools, freshContacts] = await Promise.all([
-                          getAllSchools(),
-                          getAllContacts()
-                        ]);
-                        
-                        // עדכון ה-Storage הגלובלי שיפעיל את האירוע לשאר הטבלאות
-                        await updateStorage({
-                          Schools: freshSchools,
-                          schoolsContacts: freshContacts
-                        });
-
-                        const [updatedSchoolStatuses, updatedContactStatuses] = await Promise.all([
-                          getAllStatuses("Schools"),
-                          getAllStatuses("Contacts")
-                        ]);
-
-                        await updateStorage({
-                          SchoolStatuses: updatedSchoolStatuses,
-                          ContactsStatuses: updatedContactStatuses
-                        });
-
-                        setSchoolStatuses(updatedSchoolStatuses?.map(s => s.StatusName) || []);
-                        setContactStatuses(updatedContactStatuses?.map(s => s.StatusName) || []);
-
-                      } catch (e) {
-                        console.error("❌ Failed to sync storage:", e);
-                      }
-
-                      // === 🛠️ תיקון: שימוש במשתנה המקומי המדויק ===
                       alert(`תהליך השליחה הסתיים.\nהצלחות: ${localSuccessCount}`);
                     }
+                    // 👆 סוף קוד חדש 3
                   }}>
                   {isSending ? "שולח..." : pageText.sendMessages}
                 </Button>
