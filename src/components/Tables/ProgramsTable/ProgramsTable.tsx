@@ -22,7 +22,6 @@ import { FaExternalLinkAlt } from "react-icons/fa";
 import { CustomLinkDrive } from "../GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
 
-// הוספנו את saveNewPrograms כאן בייבוא
 import { deletePrograms, updateProgramsColumn, getAllProgramsData, createProgram, saveNewPrograms } from "@/db/programsRequests";
 import { getAllDistricts } from "@/db/generalrequests"; 
 
@@ -39,7 +38,7 @@ import { MultiSelectCellEditor } from "@/components/CustomSelect/MultiSelectCell
 import YearFilter from "./components/YearFilter";
 import StatusFilter from "./components/StatusFilter";
 import Redirect from "@/components/Auth/Components/Redirect";
-import { GoogleDriveAuthStatus } from "@/components/GoogleDriveAuthStatus";  // ← הוסף את זה
+import { GoogleDriveAuthStatus } from "@/components/GoogleDriveAuthStatus";
 
 // --- Styles & Formatters ---
 
@@ -106,7 +105,6 @@ const ProgramDetailsEditor = forwardRef((props: any, ref) => {
     }));
 
     const handleSave = async () => {
-        // אם זו שורה חדשה, רק נעדכן את הערך בגריד (השמירה תתבצע בכפתור הראשי)
         if (props.data.isNew) {
             props.node.setDataValue("ProgramName", name);
             props.node.setDataValue("ProgramLink", link);
@@ -193,7 +191,6 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
   const [isGridReady, setIsGridReady] = useState(false);   
   const [ignoreContextFilters, setIgnoreContextFilters] = useState(false);
   
-  // מצב חדש לניהול כפתור השמירה
   const [hasNewRows, setHasNewRows] = useState(false);
 
   const [colDefinition, setColDefs] = useState<ColDef[] | any>([]);
@@ -273,7 +270,7 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
 
   const onGridReady = useCallback(async (params: any) => {
     setIsGridReady(true);
-    setHasNewRows(false); // איפוס מצב שמירה בטעינה מחדש
+    setHasNewRows(false); 
     try {
         const [storageData, areasData] = await Promise.all([ getAllProgramsData(), getAllDistricts() ]);
         if (!storageData) return;
@@ -304,39 +301,44 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
 
         const getUniqueValues = (field: string) => [...new Set(enrichedPrograms.map((p: any) => p[field]).filter(Boolean))];
 
+        // --- עדכון רוחב עמודות וסדר ---
         const manualColumns = [
             { 
                 field: "select", 
                 headerName: "", 
                 checkboxSelection: true, 
                 headerCheckboxSelection: true, 
-                width: 50, 
+                width: 45,
                 pinned: "right",
                 lockPosition: true,
                 filter: false,
                 editable: false,
                 suppressMovable: true
             },
-            { field: "Programid", header: "מזהה", width: 90, editable: false, cellStyle: STYLES.CENTER },
-            { field: "ProgramName", header: "שם תוכנית", width: 200, special: "link" },
-            { field: "SchoolName", header: "שם בית ספר", width: 180, special: "school", editable: true },
-            { field: "Area", header: "אזור", width: 160, editable: true, cellStyle: STYLES.GEO_COL, cellEditor: RegionSelectEditor, cellEditorParams: { values: areaValues }, singleClickEdit: true, filterParams: { values: areaValues } },
-            { field: "CityName", colId: "City", header: "עיר", width: 120, cellStyle: STYLES.GEO_COL, filterParams: { values: getUniqueValues("CityName") } },
-            { field: "Year", header: "שנה", width: 110, special: "year" },
-            { field: "ChosenDay", header: "יום נבחר", width: 150, special: "days" },
-            { field: "Status", header: "סטטוס", width: 130, special: "status" },
-            { field: "SchoolsContact", header: "איש קשר", width: 180, special: "contact" },
-            { field: "Assigned_guide", header: "מדריך משובץ", width: 160, special: "guide" },
-            { field: "Grade", header: "שכבה", width: 100, cellStyle: STYLES.CENTER },
-            { field: "Days", header: "ימים", width: 120, cellStyle: STYLES.CENTER },
-            { field: "Weeks", header: "מספר שבועות", width: 110, cellStyle: STYLES.CENTER },
-            { field: "Product", header: "מוצר", width: 150 },
-            { field: "PricingPerPaidLesson", header: "מחיר לשיעור", width: 130, cellStyle: STYLES.FINANCE_COL },
-            { field: "PaidLessonNumbers", header: "שיעורים לתשלום", width: 150, cellStyle: STYLES.FINANCE_COL },
+            { field: "Programid", header: "מזהה", width: 50, editable: false, cellStyle: STYLES.CENTER },
+            // MOVED HERE: Order (הצעה)
+            { field: "Order", header: "הצעה", width: 65, special: "drive" }, 
+            { field: "ProgramName", header: "שם תוכנית", width: 100, special: "link" },
+            // MOVED HERE: Date (תאריך)
+            { field: "Date", header: "תאריך", width: 95, special: "date" },
+            { field: "SchoolName", header: "שם בית ספר", width: 210, special: "school", editable: true },
+            { field: "Area", header: "אזור", width: 70, editable: true, cellStyle: STYLES.GEO_COL, cellEditor: RegionSelectEditor, cellEditorParams: { values: areaValues }, singleClickEdit: true, filterParams: { values: areaValues } },
+            { field: "CityName", colId: "City", header: "עיר", width: 100, cellStyle: STYLES.GEO_COL, filterParams: { values: getUniqueValues("CityName") } },
+            { field: "Year", header: "שנה", width: 55, special: "year" },
+            { field: "ChosenDay", header: "יום נבחר", width: 65, special: "days" },
+            { field: "Status", header: "סטטוס", width: 85, special: "status" },
+            { field: "SchoolsContact", header: "איש קשר", width: 140, special: "contact" },
+            { field: "Assigned_guide", header: "מדריך משובץ", width: 60, special: "guide" },
+            { field: "Grade", header: "שכבה", width: 60, cellStyle: STYLES.CENTER },
+            { field: "Days", header: "ימים", width: 70, cellStyle: STYLES.CENTER },
+            { field: "Weeks", header: "מספר שבועות", width: 60, cellStyle: STYLES.CENTER },
+            { field: "Product", header: "מוצר", width: 70 },
+            { field: "PricingPerPaidLesson", header: "מחיר לשיעור", width: 70, cellStyle: STYLES.FINANCE_COL },
+            { field: "PaidLessonNumbers", header: "שיעורים לתשלום", width: 60, cellStyle: STYLES.FINANCE_COL },
             { 
                 field: "TotalAmountIncludingTaxes", 
                 header: "סה״כ כולל מע״מ", 
-                width: 150, 
+                width: 80, 
                 cellStyle: STYLES.FINANCE_COL,
                 editable: false, 
                 valueGetter: (params: any) => {
@@ -346,16 +348,14 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
                     return (price * lessons) + extra;
                 }
             },
-            { field: "FinalPrice", header: "מחיר לאחר הוצאות", width: 150 },
-            { field: "EstimatedExpenses", header: "הוצאות משוערות", width: 130 },
-            { field: "PendingMoney", header: "יתרה לגבייה", width: 130, cellStyle: STYLES.BALANCE_COL },
-            { field: "FreeLessonNumbers", header: "שיעורי בונוס", width: 130, cellStyle: STYLES.FINANCE_COL },
-            { field: "AdditionalPayments", header: "תשלומים נוספים", width: 130, cellStyle: STYLES.FINANCE_COL },
-            { field: "Notes", header: "הערות", width: 200 },
-            { field: "Details", header: "פרטים נוספים", width: 150, hide: true },
-            { field: "Order", header: "הצעה", width: 90, special: "drive" },
-            { field: "EstablishmentNumber", header: "סמל מוסד", width: 100 },
-            { field: "Date", header: "תאריך", width: 120, special: "date" },
+            { field: "FinalPrice", header: "מחיר לאחר הוצאות", width: 80 },
+            { field: "EstimatedExpenses", header: "הוצאות משוערות", width: 80 },
+            { field: "PendingMoney", header: "יתרה לגבייה", width: 70, cellStyle: STYLES.BALANCE_COL },
+            { field: "FreeLessonNumbers", header: "שיעורי בונוס", width: 60, cellStyle: STYLES.FINANCE_COL },
+            { field: "AdditionalPayments", header: "תשלומים נוספים", width: 80, cellStyle: STYLES.FINANCE_COL },
+            { field: "Notes", header: "הערות", width: 180 },
+            { field: "Details", header: "פרטים נוספים", width: 140, hide: true },
+            { field: "EstablishmentNumber", header: "סמל מוסד", width: 60 },
             { field: "Schoolid", header: "מזהה ביס", hide: true }, 
             { field: "EducationStage", header: "שלב חינוך", hide: true }
         ];
@@ -424,32 +424,26 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
     } catch (error) { console.error("Failed to load data:", error); }
   }, [SchoolIDs]);
 
-  // --- הוספת שורה חדשה: לוקאלית בלבד ---
   const handleAddRow = useCallback(() => {
-    // 1. עדכון ידני של המונה כדי למנוע את הבעיה של 614
     const nextId = (maxIndex.current || 0) + 1;
-    maxIndex.current = nextId; // עדכון מיידי של המונה
+    maxIndex.current = nextId; 
 
-    // 2. יצירת האובייקט המקומי עם דגל isNew
     const newRowData = { 
         Programid: nextId, 
         Year: selectedYear || "תשפד", 
         Status: defaultStatus || "חדש",
         CityName: null, 
         Area: null,
-        isNew: true // דגל שמסמן שזו שורה חדשה שטרם נשמרה ב-DB
+        isNew: true 
     };
 
-    // 3. הוספה לגריד
     gridRef.current?.api.applyTransaction({ 
         add: [newRowData], 
         addIndex: 0 
     });
     
-    // 4. הצגת כפתור שמירה
     setHasNewRows(true);
 
-    // 5. פוקוס ועריכה
     setTimeout(() => {
         gridRef.current?.api.ensureIndexVisible(0);
         gridRef.current?.api.setFocusedCell(0, 'SchoolName');
@@ -461,9 +455,7 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
 
   }, [selectedYear, defaultStatus]);
 
-  // --- שמירת השינויים (חדש) ---
   const onSaveChangeButtonClick = useCallback(async () => {
-      // איסוף כל השורות החדשות מהגריד
       const newRows: any[] = [];
       gridRef.current?.api.forEachNode((node) => {
           if (node.data.isNew) {
@@ -482,7 +474,6 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
           await saveNewPrograms(newRows);
           alert("נשמר בהצלחה!");
           
-          // רענון הנתונים מהשרת כדי לקבל את המצב העדכני והנקי
           onGridReady({});
       } catch (error) {
           console.error("Save failed:", error);
@@ -498,9 +489,8 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
     if (selectedData && selectedData.length > 0) {
         if(window.confirm(`האם למחוק ${selectedData.length} תוכניות?`)) {
             try {
-                // מחיקה של שורות שקיימות בדאטה בייס
                 const idsToDelete = selectedData
-                    .filter(row => !row.isNew) // רק שורות שאינן חדשות
+                    .filter(row => !row.isNew)
                     .map(row => Number(row.Programid))
                     .filter(id => !isNaN(id));
                 
@@ -508,11 +498,9 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
                     await deletePrograms(idsToDelete);
                 }
                 
-                // הסרה מהגריד (כולל שורות חדשות שעדיין לא נשמרו)
                 gridRef.current?.api.applyTransaction({ remove: selectedData });
                 setRowData(prev => prev.filter(p => !selectedData.some(s => s.Programid === p.Programid)));
                 
-                // בדיקה אם נשארו שורות חדשות כדי לעדכן את כפתור השמירה
                 let remainingNew = false;
                 gridRef.current?.api.forEachNode(n => { if (n.data.isNew) remainingNew = true; });
                 setHasNewRows(remainingNew);
@@ -526,7 +514,6 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
       const { colDef, data, oldValue, newValue } = event;
       if (oldValue === newValue) return;
       
-      // --- תיקון: אם השורה חדשה, לא לשמור לדאטה בייס עדיין ---
       if (data.isNew) {
           return;
       }
@@ -582,7 +569,6 @@ const checkDriveStatus = useCallback(async () => {
     <>
      <Navbar id="ProgramsNavBar" className="bg-[#12242E] flex justify-between items-center p-2 shadow-sm">
   
-  {/* 👈 צד שמאל - סטטוס Drive עם רקע כחול פסטל */}
   <div className="flex items-center">
     <div className="bg-blue-100 px-4 py-2 rounded-lg border border-blue-300 shadow-sm">
       <GoogleDriveAuthStatus
@@ -593,7 +579,6 @@ const checkDriveStatus = useCallback(async () => {
     </div>
   </div>
 
-  {/* 👉 צד ימין - כל הכפתורים */}
   <div className="flex flex-row-reverse items-center gap-2">
     <Redirect type={'Programs'} ScopeType={'Drive'} />
     

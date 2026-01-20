@@ -19,7 +19,8 @@ import { OAuthTokenResponseGoogle } from "@/app/googleCallback/page";
 
 export interface ExtendedLinkCell extends ICellRendererParams {
   AuthenticateActivate: (config: 'open' | 'delete') => (args) => {};
-  type: "Program" | "Guide"
+  type: "Program" | "Guide";
+  customDisplayText?: string; // <--- שינוי 1: הוספת השדה הזה
 }
 
 export const CustomLinkDrive = (props: ExtendedLinkCell) => {
@@ -40,9 +41,12 @@ export const CustomLinkDrive = (props: ExtendedLinkCell) => {
     if (value === "PoliceApproval") return !Boolean(props.data.PoliceApproval) ? "" : "משטרה";
     if (value === "Insurance") return !Boolean(props.data.Insurance) ? "" : "ביטוח";
     if (value === "Aggrement") return !Boolean(props.data.Aggrement) ? "" : "הסכם";
-    if (value === "CV") return !Boolean(props.data.CV) ? "" : "קורות חיים";
+    
+    // <--- שינוי 2: שימוש בטקסט המותאם אישית או ברירת מחדל "קוח"
+    if (value === "CV") return !Boolean(props.data.CV) ? "" : (props.customDisplayText || "קוח");
+    
     if (value === "Other_Documents") return !Boolean(props.data.Other_Documents) ? "" : "תעודה";
-  }, [props.colDef, props.data]);
+  }, [props.colDef, props.data, props.customDisplayText]); // הוספתי את props.customDisplayText לתלות
 
   function onChange(event: ChangeEvent<HTMLInputElement>): void {}
 
