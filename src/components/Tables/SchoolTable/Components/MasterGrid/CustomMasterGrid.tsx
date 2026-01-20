@@ -15,11 +15,10 @@ import { updateSchoolsColumn } from "@/db/schoolrequests";
 interface MasterGridRendererProps extends CustomCellRendererProps<School> {
   UpdateContactComponent: any;
   GoogleFunctions: any;
-  deleteContact?: (data: any[]) => Promise<void>; // 🆕 הוספת הטיפוס לפונקציית המחיקה
+  deleteContact?: (data: any[]) => Promise<void>;
 }
 
 export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, deleteContact, ...props }: MasterGridRendererProps) => {
-  // useContext צריך להיות ראשון!
   const { theme } = useContext(ThemeContext);
   
   const schoolApi = useRef<GridApi>(null);
@@ -94,9 +93,11 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
       <div
         id={"gridmaster-".concat(String(props.data.Schoolid))}
         className={theme === "dark-theme" ? "ag-theme-quartz-dark" : "ag-theme-quartz overflow-visible"}
-        style={{ width: "100%", height: "100px" }}
+        // 👇 שינוי: גובה קבוע של 60px (42 לשורה + 18 לגלילה)
+        style={{ width: "100%", height: "60px" }}
       >
         <AgGridReact
+          // 👇 מחקנו את domLayout="autoHeight" שגרם לרווח הענק
           rowData={row}
           columnDefs={coldefs}
           headerHeight={0}
@@ -108,6 +109,8 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
           onGridReady={(params) => schoolApi.current = params.api}
           onCellValueChanged={onCellValueChanged}
           getRowId={getRowId}
+          // 👇 מוודא שהפס גלילה יופיע רק כשבאמת צריך
+          scrollbarWidth={8} 
         />
 
         <div
@@ -120,7 +123,7 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
             SchoolApi={schoolApi} 
             setAllSchoolContacts={AllContacts}
             GoogleFunctions={GoogleFunctions}
-            deleteContact={deleteContact} // 🆕 העברת פונקציית המחיקה לטבלה הקטנה
+            deleteContact={deleteContact}
           />
         </div>
       </div>

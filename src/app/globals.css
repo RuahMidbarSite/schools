@@ -117,3 +117,32 @@
     font-size: 14px !important;
     color: #0d6efd !important; /* כחול בולט */
 }
+/* === תיקון רווחים בטבלה נפתחת (Ag-Grid Master Detail) === */
+
+/* 1. הסרת ריפוד ומרווח עליון מהשורה שנפתחת (הטבלה הפנימית) */
+.ag-theme-quartz .ag-full-width-row,
+.ag-theme-quartz-dark .ag-full-width-row {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+    border-top: none !important;
+    overflow: hidden !important; /* מונע גלישה אם יש */
+}
+
+/* 2. הסרת הגבול התחתון של השורה הראשית כשהיא פתוחה (כדי שתתחבר ויזואלית לילד) */
+.ag-theme-quartz .ag-row.ag-row-level-0.ag-row-expanded,
+.ag-theme-quartz-dark .ag-row.ag-row-level-0.ag-row-expanded {
+    border-bottom: none !important;
+    z-index: 2; /* מוודא שהשורה העליונה תהיה מעל השורה הנפתחת במקרה של חפיפה */
+}
+
+/* 3. וידוא שלא נוצר מרווח בתחתית שורות רגילות */
+.ag-theme-quartz .ag-row,
+.ag-theme-quartz-dark .ag-row {
+    margin-bottom: 0 !important;
+}
+
+/* 4. הסרת Focus Outline שעלול להופיע כלוחצים על השורה */
+.ag-theme-quartz .ag-full-width-container:focus,
+.ag-theme-quartz-dark .ag-full-width-container:focus {
+    outline: none !important;
+}

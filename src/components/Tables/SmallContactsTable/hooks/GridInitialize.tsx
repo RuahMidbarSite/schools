@@ -13,8 +13,6 @@ import CustomLink from "@/components/CellComponents/General/CustomLink";
 import { CustomLinkContact } from "../../GeneralFiles/GoogleContacts/CustonLinkContact";
 import CustomLinkContacts from "@/components/CellComponents/General/CustomLinkSchools";
 
-
-
 const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueFormatSchool, ValueFormatWhatsApp, setRowData, setColDefs, dataRowCount, rowCount, SchoolID, setAllContacts, allContactsCount, maxIndex) => {
   const { UpdateColumnsAfterCache } = useUpdateCacheColumn(AuthenticateActivate)
 
@@ -22,11 +20,14 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
     ([model, Roles, statuses]: [any, Role[], StatusContacts[]]) => {
       var colD = [
         ...model[0]?.map((value: any, index: any) => {
-          // no edit here..
+          // Contactid - מזהה אנשי קשר
           if (value === "Contactid") {
             return {
               field: value,
               headerName: model[1][index],
+              width: 80,
+              minWidth: 80,
+              maxWidth: 120,
               rowDrag: false,
               sortable: true,
               suppressMovable: true,
@@ -37,10 +38,15 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
               headerCheckboxSelectionCurrentPageOnly: true,
             };
           }
+          
+          // Status - סטטוס
           if (value === "Status") {
             return {
               field: value,
               headerName: model[1][index],
+              width: 100,
+              minWidth: 80,
+              maxWidth: 130,
               editable: true,
               singleClickEdit: true,
               cellEditor: CustomSelectCellEditor,
@@ -51,10 +57,14 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
             }
           }
 
+          // Cellphone - טלפון נייד
           if (value === "Cellphone") {
             return {
               field: value,
               headerName: model[1][index],
+              width: 130,
+              minWidth: 110,
+              maxWidth: 150,
               editable: true,
               singleClickEdit: true,
               cellEditor: "agTextCellEditor",
@@ -63,10 +73,14 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
             };
           }
 
+          // Email - מייל
           if (value === "Email") {
             return {
               field: value,
               headerName: model[1][index],
+              width: 180,
+              minWidth: 150,
+              maxWidth: 250,
               editable: true,
               singleClickEdit: true,
               cellEditor: "agTextCellEditor",
@@ -74,10 +88,15 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
               filter: "CustomFilter",
             };
           }
+          
+          // GoogleContactLink - גוגל
           if (value === "GoogleContactLink") {
             return {
               field: value,
               headerName: 'גוגל',
+              width: 120,
+              minWidth: 70,
+              maxWidth: 130,
               editable: true,
               cellEditor: "agTextCellEditor",
               cellRenderer: CustomLinkContact,
@@ -87,33 +106,48 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
               filter: false,
             };
           }
+          
+          // Profession - תפקיד
           if (value === "Profession") {
             return {
               headerName: model[1][index],
+              width: 120,
+              minWidth: 100,
+              maxWidth: 150,
               getColId: (params) => "Professions",
               editable: true,
               singleClickEdit: true,
               cellRenderer: "CustomMultiSelect",
             };
           }
+          
+          // IsRepresentive - האם נציג
           if (value === "IsRepresentive") {
             return {
               field: value,
               headerName: model[1][index],
+              width: 100,
+              minWidth: 90,
+              maxWidth: 130,
               editable: true,
               singleClickEdit: false,
               cellRenderer: 'agCheckboxCellRenderer',
               cellEditor: "agCheckboxCellEditor",
               cellEditorParams: {
-                initialValue: false, // or false
+                initialValue: false,
               },
               filter: "CustomFilter",
             };
           }
+          
+          // Role - תפקיד (אם זה שדה נפרד)
           if (value === "Role") {
             return {
               field: value,
               headerName: model[1][index],
+              width: 120,
+              minWidth: 100,
+              maxWidth: 150,
               editable: true,
               cellEditor: CustomSelectCellEditor,
               singleClickEdit: true,
@@ -121,12 +155,61 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
                 values: Roles.map((val) => val.RoleName),
                 valueListMaxWidth: 120
               },
-
             }
           }
+          
+          // FirstName - שם פרטי
+          if (value === "FirstName") {
+            return {
+              field: value,
+              headerName: model[1][index],
+              width: 120,
+              minWidth: 100,
+              maxWidth: 150,
+              editable: true,
+              singleClickEdit: true,
+              cellEditor: "agTextCellEditor",
+              filter: "CustomFilter",
+            };
+          }
+          
+          // LastName - שם משפחה
+          if (value === "LastName") {
+            return {
+              field: value,
+              headerName: model[1][index],
+              width: 120,
+              minWidth: 100,
+              maxWidth: 150,
+              editable: true,
+              singleClickEdit: true,
+              cellEditor: "agTextCellEditor",
+              filter: "CustomFilter",
+            };
+          }
+          
+          // Phone - טלפון רגיל
+          if (value === "Phone") {
+            return {
+              field: value,
+              headerName: model[1][index],
+              width: 130,
+              minWidth: 110,
+              maxWidth: 150,
+              editable: true,
+              singleClickEdit: true,
+              cellEditor: "agTextCellEditor",
+              filter: "CustomFilter",
+            };
+          }
+          
+          // Default - שאר השדות
           return {
             field: value,
             headerName: model[1][index],
+            width: 120,
+            minWidth: 100,
+            maxWidth: 180,
             editable: true,
             singleClickEdit: true,
             cellEditor: "agTextCellEditor",
@@ -134,9 +217,14 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
           };
         }),
       ];
+      
+      // SchoolId - מזהה בית ספר (מוסתר)
       const schoolId: Object = {
         field: "Schoolid",
         headerName: "מזהה בית ספר",
+        width: 150,
+        minWidth: 130,
+        maxWidth: 180,
         hide: true,
         editable: false,
         cellEditor: "agSelectCellEditor",
@@ -144,9 +232,14 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
         valueFormatter: ValueFormatSchool
       };
       colD[1] = schoolId;
+      
+      // WhatsApp Link - ווטסאפ
       const whatsappLink = {
         field: "WhatsppLink",
-        headerName: "וואטסאפ",
+        headerName: "ווטסאפ",
+        width: 80,
+        minWidth: 70,
+        maxWidth: 100,
         getColId: (params) => "WhatsappLink",
         editable: false,
         valueGetter: ValueFormatWhatsApp,
@@ -154,6 +247,7 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
         filter: false,
       };
       colD.splice(7, 0, whatsappLink);
+      
       return colD;
     },
     [AuthenticateActivate, ValueFormatSchool, ValueFormatWhatsApp, valueFormatCellPhone]
@@ -213,16 +307,12 @@ const useGridFunctions = (valueFormatCellPhone, AuthenticateActivate, ValueForma
             maxIndex.current = schoolsContacts.length > 0 ? Math.max(...schoolsContacts.map((contact) => contact.Contactid)) : 0
 
             updateStorage({ schoolsContacts: schoolsContacts, Tablemodel: model, Role: Roles, Schools: schools, ContactsStatuses: Statuses })
-
-
           })
         }
       })
     }, [GetDefaultDefinitions, SchoolID, allContactsCount, dataRowCount, getTableData, rowCount, setAllContacts, setColDefs, setRowData, maxIndex])
 
   return { onGridReady: onGridReady }
-
-
 }
 
 export default useGridFunctions

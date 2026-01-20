@@ -1,5 +1,5 @@
 "use client";
-import { School, ReligionSector, Cities, SchoolsContact, EducationStage, SchoolTypes, StatusSchools } from "@prisma/client"; // look at this type to know the fields in the table.
+import { School, ReligionSector, Cities, SchoolsContact, EducationStage, SchoolTypes, StatusSchools } from "@prisma/client";
 import {
   useState,
   useRef,
@@ -13,7 +13,7 @@ import {
 import { AgGridReact } from "ag-grid-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
+import "ag-grid-community/styles/ag-theme-quartz.css";
 
 import {
   getAllSchools,
@@ -25,8 +25,6 @@ import {
   GridReadyEvent,
 
 } from "ag-grid-community";
-
-
 
 import { getAllCities, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getEducationStages, getModelFields, getSchoolTypes } from "@/db/generalrequests";
 import {
@@ -40,14 +38,9 @@ import CustomSelectCellEditor from "@/components/CustomSelect/CustomSelectCellEd
 import ExpandMasterGridComponent from "../Components/MasterGrid/ExpandMasterGrid";
 import { getPrograms } from "@/db/programsRequests";
 
-
-
 const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, setRowData, rowCount, dataRowCount, setAllContacts, setAllPrograms, maxIndex): { GetDefaultDefinitions: any, onGridReady: any } => {
 
-
   const { UpdateColumnsAfterCache } = useUpdateCacheColumn()
-
-
 
   const GetDefaultDefinitions = useCallback(
     ([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes]: [ReligionSector[], Cities[], any, EducationStage[], StatusSchools[], SchoolsContact[], SchoolTypes[]]) => {
@@ -57,12 +50,12 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
+            width: 100,
             editable: true,
             cellEditor: CustomSelectCellEditor,
             cellEditorParams: {
               values: religion_sectors.map((val) => val.ReligionName),
             },
-
             filter: "CustomFilter",
           };
         }
@@ -70,13 +63,13 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
+            width: 100,
             editable: true,
             cellEditor: CustomSelectCellEditor,
             cellEditorParams: {
               values: cities.map((val) => val.CityName),
               valueListMaxWidth: 120
             },
-
             filter: "CustomFilter",
           };
         }
@@ -84,6 +77,7 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
+            width: 80,
             editable: true,
             cellEditor: CustomSelectCellEditor,
             cellEditorParams: {
@@ -97,13 +91,12 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
+            width: 100,
             cellRenderer: ExpandMasterGridComponent,
             cellRendererParams: {
               grid_expanded: false,
             },
             cellEditor: "agTextCellEditor",
-
-
             rowDrag: false,
             filter: false,
             checkboxSelection: true,
@@ -118,6 +111,7 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
+            width: 120,
             editable: true,
             cellEditor: CustomSelectCellEditor,
             singleClickEdit: true,
@@ -133,6 +127,7 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
+            width: 100,
             editable: true,
             cellEditor: CustomSelectCellEditor,
             singleClickEdit: true,
@@ -147,6 +142,7 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
+            width: 160,
             editable: false,
             cellRenderer: "RepresentiveComponent",
             cellRendererParams: {
@@ -164,29 +160,26 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
             headerName: model[1][index],
             editable: false,
             cellEditor: "agSelectCellEditor",
-
           }
         }
-
         if (value === "Date") {
           return {
             field: value,
             headerName: model[1][index],
+            width: 220,
             editable: true,
             singleClickEdit: true,
             cellDataType: 'date',
             cellEditor: CustomDateCellEditor,
             valueFormatter: valueFormatterDate,
             filter: "CustomFilter",
-
           }
-
         }
-
         if (value === "Remarks") {
           return {
             field: value,
             headerName: model[1][index],
+            width: 200,
             editable: true,
             cellEditor: "agTextCellEditor",
             filter: "CustomFilter",
@@ -197,6 +190,7 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
         return {
           field: value,
           headerName: model[1][index],
+          width: 150,
           editable: true,
           cellEditor: "agTextCellEditor",
           filter: "CustomFilter",
@@ -210,19 +204,17 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
 
   const getAllData = useCallback(() => {
     return Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getModelFields("School"), getEducationStages(), getAllStatuses("Schools"), getAllContacts(), getAllSchoolsTypes(), getPrograms()])
-
   }, [])
 
   const onGridReady = async (event: GridReadyEvent) => {
     getFromStorage().then(({ Schools, Religion, Cities, SchoolStatuses, schoolsContacts, SchoolTypes, Stages, Tablemodel, Programs }: DataType) => {
 
-      // if cached( assuming this page can't be affected by other pages.)
       if (Schools && Religion && Cities && SchoolStatuses && schoolsContacts && SchoolTypes && Stages && Tablemodel && Programs) {
         const colDef = GetDefaultDefinitions([Religion, Cities, Tablemodel, Stages, SchoolStatuses, schoolsContacts, SchoolTypes]);
         setColDefs(colDef);
         setRowData(Schools);
 
-        rowCount.current = Schools.length; // new row will be +1
+        rowCount.current = Schools.length;
         dataRowCount.current = rowCount.current;
         if (Schools.length === 0) {
           event.api.hideOverlay();
@@ -246,21 +238,12 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           setAllPrograms(programs)
           maxIndex.current = schools.length > 0 ? Math.max(...schools?.map((val) => val.Schoolid)):0
           updateStorage({ Schools: schools, Religion: religion_sectors, Cities: cities, SchoolStatuses: statuses, Stages: edustages, SchoolTypes: schoolTypes, schoolsContacts: contacts, Tablemodel: model, Programs: programs }).then((res) => console.log('updated succesfully'))
-
         }
       );
-
     })
-
-
-
   };
 
-
   return { GetDefaultDefinitions: GetDefaultDefinitions, onGridReady: onGridReady }
-
-
-
 }
 
 export default useGridFunctions
