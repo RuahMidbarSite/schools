@@ -65,7 +65,6 @@ import {
   getAllAssignedInstructors,
 } from "@/db/generalrequests";
 import { CustomMultiSelectCell } from "../GeneralFiles/Select/CustomMultiSelectCellRenderer";
-// ✅ הנתיב תוקן בגרסה הקודמת, שומרים עליו כך
 import { CustomMultiSelectCellEdit } from "../GeneralFiles/Select/CustomMultiSelect";
 import { CustomFilter } from "../GeneralFiles/Filters/CustomFilter";
 import { ChooseProfessions } from "../GuidesTable/components/CustomChooseProfessions";
@@ -207,13 +206,9 @@ export default function GuidesTable({
   }, []);
 
 
-  // --- UPDATED FUNCTION START ---
   const onAddRowToolBarClick = useCallback(() => {
-    // 1. ניקוי פילטרים
     onClearFilterButtonClick();
 
-    // 2. כפיית מיון יורד לפי Guideid
-    // זה מבטיח שהשורה החדשה (ID הכי גבוה) תהיה בראש הטבלה
     gridRef.current?.api.applyColumnState({
       state: [
         { colId: 'Guideid', sort: 'desc' }
@@ -223,7 +218,6 @@ export default function GuidesTable({
 
     const newId = maxIndex.current + 1;
 
-    // 3. הוספת השורה
     gridRef.current?.api.applyTransaction({
       add: [
         {
@@ -241,7 +235,6 @@ export default function GuidesTable({
     rowCount.current++;
     SetInTheMiddleOfAddingRows(true);
     
-    // activate buttons
     const element: any = document.getElementById("savechangesbutton");
     if (element !== null) {
       element.style.display = "block";
@@ -251,15 +244,12 @@ export default function GuidesTable({
       element_2.style.display = "block";
     }
 
-    // 4. מעבר לעמוד הראשון (שם נמצאת השורה החדשה בגלל המיון היורד)
     setTimeout(() => {
        gridRef.current?.api.paginationGoToFirstPage();
-       // אופציונלי: לוודא שהשורה הראשונה גלויה
        gridRef.current?.api.ensureIndexVisible(0);
     }, 100);
 
   }, [onClearFilterButtonClick]);
-  // --- UPDATED FUNCTION END ---
 
   const ValueFormatWhatsApp = useCallback((params) => {
     const { FirstName } = params.data;
@@ -274,10 +264,6 @@ export default function GuidesTable({
     return params?.data?.isAssigned ? "נציג" : "לא נציג"
   }, []);
 
-
-
-
-
   const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) =>
 
     <div className="max-w-[150px] max-h-[50px] overflow-y-hidden whitespace-nowrap text-ellipsis hover:text-clip truncate  hover:overflow-x-auto hover:whitespace-nowra">
@@ -287,7 +273,6 @@ export default function GuidesTable({
 
   const valueFormatCellPhone = useCallback((params) => {
     const { CellPhone }: { CellPhone: string } = params.data
-    // Remove the country code (+972) and hyphens (-) and zeros at the start.
     const formattedPhone = CellPhone?.replace('+972', '')
       .replace(/[-\s]/g, '')
       .replace(/^0/, '');
@@ -295,23 +280,80 @@ export default function GuidesTable({
 
   }, [])
 
-  /**
-   TODO:  Since the data we use is an array of objects and since javascript passes variables by reference, by modifing the useState array, we also modifty the original array.
-          We can perhaps simpify alot of stuff later by using this fact.
-          For example, in this case, even though our rowData is useState, because we pass the original object to other components,
-          by using node.setDataValue we update the internal ag grid array, which refrences the rowData object from useState, which references
-          the original object, changing the same object inside the components as well.
-
-   */
-
   const GetDefaultDefinitions = useCallback((model, cities, religions, professions, professions_model, instructors, areas, status) => {
+
+    // === 🛠️ הגדרת רוחב עמודות מהודקת (Fine-Tuning V3) ===
+    
+    // 1. עמודות שמתרחבות (Flex)
+    // הערות מקבלת משקל עצום כדי לקחת את כל השאריות
+    const columnFlex: { [key: string]: number } = {
+        Remarks: 12,        // 🔥 המלך החדש של הטבלה
+        Professions: 3,     
+        default: 1
+    };
+
+    // 2. רוחב קבוע (Fixed Pixels) - צמצום אגרסיבי לפי צילומי המסך
+    const columnFixedWidths: { [key: string]: number } = {
+        // מזהים וצ'קבוקסים
+        Guideid: 45,
+        isAssigned: 45,     
+        
+        // פרטים אישיים - צומצמו למינימום
+        FirstName: 75,      // שם פרטי
+        LastName: 75,       // משפחה
+        CellPhone: 90,      // טלפון (צפוף)
+        City: 75,           // יישוב
+        Area: 75,           // אזור
+        
+        // עמודות קטנות
+        Status: 55,         // סטטוס
+        HourlyPrice: 45,    // מחיר (ממש צפוף)
+        ReligiousSector: 65,// מגזר
+        Gender: 50,
+        
+        // אייקונים ומסמכים - צמצום נוסף
+        CV: 55,             // קוח
+        Documents: 70,      // מסמכים
+        PoliceApproval: 65, // אישור משטרה
+        Insurance: 45,      // ביטוח
+        Aggrement: 45,      // הסכם
+        Other_Documents: 70,// תעודות
+        
+        BirthDate: 90,
+        Tz: 90,
+        Email: 120
+    };
+
+    const minWidths: { [key: string]: number } = {
+        Remarks: 150, 
+        Professions: 100,
+        default: 40
+    };
 
     var coldef: Object[] = model[0].map((value: any, index: any) => {
 
+      // חישוב רוחב
+      const fixedWidth = columnFixedWidths[value];
+      const flexVal = fixedWidth ? undefined : (columnFlex[value] || columnFlex["default"]);
+      const minW = minWidths[value] || minWidths["default"];
+
+      // הגדרות בסיס
+      let baseColDef = {
+        field: value,
+        headerName: model[1][index],
+        editable: true,
+        filter: "CustomFilter",
+        singleClickEdit: true,
+        resizable: true,           
+        suppressSizeToFit: true,   
+        width: fixedWidth,
+        flex: flexVal,
+        minWidth: minW
+      };
+
       if (value === "Guideid") {
         return {
-          field: value,
-          headerName: model[1][index],
+          ...baseColDef,
           cellEditor: "agTextCellEditor",
           rowDrag: false,
           checkboxSelection: true,
@@ -319,13 +361,15 @@ export default function GuidesTable({
           headerCheckboxSelectionFilteredOnly: true,
           headerCheckboxSelectionCurrentPageOnly: true,
           lockVisible: true,
+          pinned: 'right', 
+          lockPosition: true,
+          width: 45,       
+          flex: undefined
         };
       }
       if (value === "FirstName") {
         return {
-          field: value,
-          headerName: model[1][index],
-          editable: true,
+          ...baseColDef,
           cellEditor: NamePhoneCellEditor,
           cellEditorParams: {
             AllGuides: instructors
@@ -334,64 +378,58 @@ export default function GuidesTable({
           cellRendererParams: {
             AllGuides: instructors
           },
-          filter: "CustomFilter",
-          singleClickEdit: true
         }
 
       }
       if (value === "Status") {
         return {
-          field: value,
-          headerName: model[1][index],
-          editable: true,
+          ...baseColDef,
           cellEditor: CustomSelectCellEditor,
           cellEditorParams: {
             values: status,
             valueListMaxWidth: 120,
           },
-          filter: "CustomFilter",
-          singleClickEdit: true
         };
       }
       if (value === "City") {
         return {
-          field: value,
-          headerName: model[1][index],
-          editable: true,
+          ...baseColDef,
           cellEditor: CustomSelectCellEditor,
           cellEditorParams: {
             values: cities,
             valueListMaxWidth: 120,
           },
-          filter: "CustomFilter",
-          singleClickEdit: true
         };
       }
       if (value === "Area") {
         return {
-          field: value,
-          headerName: model[1][index],
-          editable: true,
+          ...baseColDef,
           cellEditor: CustomSelectCellEditor,
           cellEditorParams: {
-            values: areas // I am speed running... fix this later
+            values: areas 
           },
-          filter: "CustomFilter",
-          singleClickEdit: true
         };
 
       }
       if (value === "ReligiousSector") {
         return {
-          field: value,
-          headerName: model[1][index],
-          editable: true,
+          ...baseColDef,
           cellEditor: CustomSelectCellEditor,
           cellEditorParams: {
             values: religions,
           },
-          filter: "CustomFilter",
-          singleClickEdit: true
+        };
+      }
+      if (value === "CV") {
+        return {
+          ...baseColDef,
+          cellRenderer: "CustomLinkDrive",
+          cellRendererParams: {
+            GoogleFunctions: AuthenticateActivate,
+            customDisplayText: "קוח" 
+          },
+          cellEditor: "agTextCellEditor",
+          editable: true, 
         };
       }
       if (
@@ -399,30 +437,27 @@ export default function GuidesTable({
         value === "PoliceApproval" ||
         value === "Insurance" ||
         value === "Aggrement" ||
-        value === "CV" || value === "Other_Documents"
+        value === "Other_Documents"
       ) {
         return {
-          field: value,
-          headerName: model[1][index],
-          editable: true,
+          ...baseColDef,
           cellRenderer: "CustomLinkDrive",
           cellRendererParams: {
             GoogleFunctions: AuthenticateActivate,
           },
           cellEditor: "agTextCellEditor",
+          editable: true, 
         };
       }
       if (value === "Professions") {
         return {
-          field: "Professions",
+          ...baseColDef,
           headerName: "מקצועות",
-          editable: true,
-          singleClickEdit: true,
           cellEditor: ChooseProfessions,
           cellRenderer: ProfCellRenderer,
         }
       }
-      // we are not using the database one... this is just for model ordering.
+      
       if (value === "WhatsApp") {
         return {
           field: "WhatsAppField",
@@ -436,40 +471,22 @@ export default function GuidesTable({
       }
       if (value === "CellPhone") {
         return {
-          field: value,
-          headerName: model[1][index],
-          editable: true,
+          ...baseColDef,
           cellEditor: "agTextCellEditor",
-          filter: "CustomFilter",
           valueGetter: valueFormatCellPhone,
-          singleClickEdit: true
         };
-
-
       }
       if (value === "isAssigned") {
         return {
-          field: value,
-          headerName: model[1][index],
+          ...baseColDef,
           editable: false,
           cellEditor: "agTextCellEditor",
-          filter: "CustomFilter",
           valueFormatter: ValueFormatAssigned,
         };
-
       }
 
-      return {
-        field: value,
-        headerName: model[1][index],
-        editable: true,
-        cellEditor: "agTextCellEditor",
-        filter: "CustomFilter",
-        singleClickEdit: true
-      };
+      return baseColDef;
     });
-
-
 
     return coldef
   }, [AuthenticateActivate, ProfCellRenderer, ValueFormatAssigned, ValueFormatWhatsApp, valueFormatCellPhone])
@@ -478,25 +495,19 @@ export default function GuidesTable({
   const onGridReady = async (params) => {
     getFromStorage().then(async ({ Guides, Cities, Areas, Religion, Professions, ProfessionsTablemodel, Tablemodel, GuidesStatuses, ColorCandidates, Candidates, AssignedGuides }: Required<DataType>) => {
       
-      // ----------- תיקון: הבטחת רשימת ערים עדכנית -----------
-      // אנו מגדירים משתנה חדש שיתחיל מה-Cache אבל יתעדכן מהשרת
       let currentCities = Cities;
 
       try {
-        // משיכת רשימת הערים העדכנית ביותר מהשרת
         const freshCities = await getAllCities();
         if (freshCities && freshCities.length > 0) {
             currentCities = freshCities;
-            // אופציונלי: עדכון ה-Cache כדי שהפעם הבאה תהיה מהירה יותר
             updateStorage({ Cities: freshCities });
         }
       } catch (e) {
         console.warn("Could not fetch fresh cities, using cache", e);
       }
-      // --------------------------------------------------------
 
       if (Guides && currentCities && Areas && Religion && Professions && ProfessionsTablemodel && Tablemodel && GuidesStatuses && ColorCandidates && Candidates && AssignedGuides) {
-        // שימוש ב-currentCities במקום ב-Cities מהסטורג'
         const colDef = GetDefaultDefinitions(Tablemodel, currentCities.map((val) => val.CityName), Religion.map((val) => val.ReligionName), Professions, ProfessionsTablemodel, Guides, Areas.map((val) => val.AreaName), GuidesStatuses.map((val) => val.StatusName))
         if (Guides.length == 0) {
           params.api.hideOverlay();
@@ -568,12 +579,6 @@ export default function GuidesTable({
         event.newValue,
         event.data.Guideid
       ).then(() => {
-
-
-        // TODO: add validation for columns
-
-        // update cache. O(N) ... maybe slow for large database, need to see when we update.
-        //TODO: check efficiency.
         if (typeof window !== "undefined") {
           const future_data: Guide[] = [];
           gridRef.current.api.forEachNode((node: any) => {
@@ -613,13 +618,11 @@ export default function GuidesTable({
   };
 
   const validateCellphone = (cellphone: string, numbers: string[]) => {
-    // Check if the cellphone contains only digits
     let isNumeric = /^\d+$/.test(cellphone);
     if (!isNumeric) {
       return false;
     }
 
-    // Check the length based on whether it starts with '0' or not
     if (cellphone.startsWith("0")) {
       return cellphone.length === 10;
     } else {
@@ -679,7 +682,6 @@ export default function GuidesTable({
 
     gridRef.current.api.forEachNode((node: any) => {
       future_data.push(node.data);
-      // only if it is a new row that is not in the database look at it.
       if (count < rowCount.current - dataRowCount.current) {
         newly_added.push(node.data);
       }
@@ -691,26 +693,16 @@ export default function GuidesTable({
 
     maxIndex.current = future_data.length > 0 ? Math.max(...future_data.map((guide) => guide.Guideid)):0
 
-    // for (let i = 0; i < n; i++) {
-    //   if (!validateFields(newly_added[i], rowCount.current + i, phoneNumbers)) {
-    //     return;
-    //   }
-    // }
     setDialogType("success");
     setDialogMessage("מדריכים נוספו בהצלחה");
     setOpen(true);
-    // only in this table i have created a field that does not exist in the real table.
-    // i think i am using the field, search for text and see.
     newly_added = newly_added.map((res) => { delete res['WhatsAppField']; return res }).sort((arg1, arg2) => arg1.Guideid - arg2.Guideid)
     setRowData((data) => [...data, ...newly_added])
-    // we need to update the professions here, else if we visited Assign page before the professions
-    // will be outdated.
     addInstructorsRows(newly_added).then((professions) => {
 
       updateStorage({ Guides: future_data, Professions: professions })
 
     })
-    // update the Row count in the database and hide the buttons.
     dataRowCount.current = rowCount.current;
     const element: any = document.getElementById("savechangesbutton");
     if (element !== null) {
@@ -720,7 +712,6 @@ export default function GuidesTable({
     if (element_2 !== null) {
       element_2.style.display = "none";
     }
-    // no longer in adding rows mode.
 
     SetInTheMiddleOfAddingRows(false);
     gridRef.current.api.deselectAll()
@@ -732,7 +723,6 @@ export default function GuidesTable({
     const prev_data: Guide[] = [];
     var count = 0
     gridRef.current.api.forEachNode((node: any) => {
-      // Right now, a new row is added at the top and forEachNode goes through the order that appears in the table.
       if (count >= rowCount.current - dataRowCount.current) {
         prev_data.push(node.data);
       }
@@ -742,10 +732,8 @@ export default function GuidesTable({
     
     setRowData(prev_data)
   
-    // update so that there is no more rows unaccounted for in the database.
     rowCount.current = dataRowCount.current;
 
-    // hide the buttons.
     const element: any = document.getElementById("savechangesbutton");
     if (element !== null) {
       element.style.display = "none";
@@ -765,11 +753,8 @@ export default function GuidesTable({
       .getSelectedRows()
       .map((val: Guide) => val.Guideid);
 
-    // this is what will remain after the deletion.
     const updated_data: Guide[] = [];
 
-
-    // what are the ids in big schoolstable that are not deleted - we need that to reorder the table.
     let id_range: number[] = []
     for (let index = 1; index <= dataRowCount.current; index++) {
       if (ids.includes(index)) {
@@ -795,14 +780,11 @@ export default function GuidesTable({
     })
     ])
 
-    // update the amount of rows
     dataRowCount.current -= ids.length;
     rowCount.current -= ids.length;
-    // update the checked amount.
     setAmount(0);
 
     gridRef.current.api.deselectAll()
-    // hide delete button.
     const element: any = document.getElementById("savedeletions");
     if (element !== null) {
       element.style.display = "none";
@@ -815,7 +797,6 @@ export default function GuidesTable({
 
   const onSelectionChange = useCallback(
     (event: SelectionChangedEvent) => {
-      // hide or show the delete button
       const selectedRowsAmount: number = event.api.getSelectedRows().length
       setAmount(selectedRowsAmount)
       const element: any = document.getElementById("savedeletions");
@@ -952,10 +933,8 @@ export default function GuidesTable({
 
   };
 
-  // 🔥 פונקציות חדשות עבור Google Drive Status
   const checkDriveStatus = useCallback(async () => {
     try {
-      // שליחת type=guides לאימות
       const response = await fetch('/api/google-drive/check-status?type=guides');
       if (!response.ok) {
         return { isConnected: false };
@@ -969,7 +948,6 @@ export default function GuidesTable({
 
   const onDisconnectDrive = useCallback(async () => {
     try {
-      // שליחת type=guides לניתוק
       await fetch('/api/google-drive/disconnect', {
         method: 'POST',
         headers: {
@@ -1062,8 +1040,6 @@ export default function GuidesTable({
           onInput={onFilterTextBoxChanged}
         />
 
-        {/* ✅ מיקום חדש - בצד שמאל הקיצוני */}
-        {/* ה-DIV העוטף דוחף את עצמו שמאלה באמצעות mr-auto (בגלל flex-row-reverse) ונותן את הרקע הסגול */}
         <div className="mr-auto bg-[#E6E6FA] rounded-md p-1 flex items-center">
           <GoogleDriveAuthStatus 
             type="Guides"
@@ -1147,4 +1123,4 @@ export default function GuidesTable({
         setColState={setColState} />
     </>
   );
-} 
+}

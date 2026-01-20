@@ -13,13 +13,18 @@ import { AgGridReact } from "ag-grid-react";
 
 import {
   CellKeyDownEvent,
+  ICellRendererParams,
 } from "ag-grid-community";
 import Spinner from "react-bootstrap/Spinner";
 
-// ייבוא פונקציית המחיקה מהשרת
+// ייבוא פונקציית המחיקה וטעינה מהשרת
 import {
   deleteContactsRows,
+  getAllContacts,
 } from "@/db/contactsRequests";
+
+import { getModelFields, getAllStatuses, getRoles } from "@/db/generalrequests";
+import CustomSelectCellEditor from "@/components/CustomSelect/CustomSelectCellEditor";
 
 import CustomWhatsAppRenderer from "../../CellComponents/General/CustomWhatsAppRenderer";
 import CustomLink from "../../CellComponents/General/CustomLink";
@@ -39,10 +44,9 @@ import useErrorValidationComponents from "./hooks/ErrorValidationComponents";
 import useExternalUpdate from "./hooks/ExternalUpdateAgGridComponents";
 import useToolBarFunctions from "./hooks/ToolBarFunctions";
 import useGridEvents from "./hooks/GridEvents";
-import useGridFunctions from "./hooks/GridInitialize";
 import ToolBar from "@/components/Tables/ContactsTable/hooks/ToolBarComponent";
 import useColumnComponent from "./hooks/ColumnComponent";
-import { useStorageSync, getCacheVersion, getFromStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
+import { useStorageSync, getCacheVersion, getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
 
 export default function ContactsTable() {
   const gridRef: any = useRef<AgGridReact>(null);
@@ -60,7 +64,7 @@ export default function ContactsTable() {
 
   const [rowData, setRowData] = useState<SchoolsContact[]>(null);
 
-  const [colDefinition, setColDefs] = useState<columnsDefinition>(null);
+  const [colDefinition, setColDefs] = useState<any>(null);
 
   const [open, setOpen] = useState(false);
   const [dialogType, setDialogType] = useState("");
@@ -89,7 +93,175 @@ export default function ContactsTable() {
 
   const maxIndex = useRef<number>(0)
 
-  const { onGridReady } = useGridFunctions(valueFormatCellPhone, AuthenticateActivate, ValueFormatSchool, ValueFormatWhatsApp, setRowData, setColDefs, dataRowCount, rowCount, maxIndex)
+  // === 🛠️ הגדרת עמודות מעודכנת ===
+  const GetDefaultDefinitions = useCallback((model, roles, statuses) => {
+    
+    // 1. הגדרות Flex - רק הערות מקבלת גמישות
+    const columnFlex: { [key: string]: number } = {
+        Remarks: 1,         // 🔥 תופס את כל המקום שמתפנה
+        default: 0          // כל השאר קבועים
+    };
+
+    // 2. הגדרות רוחב קבוע
+    const columnFixedWidths: { [key: string]: number } = {
+        Contactid: 85,        
+        
+        // 🔻 שינויים לפי הבקשה האחרונה
+        Email: 220,           // ✅ הוגדל כפול (היה 80-110)
+        
+        IsRepresentative: 50, // ✅ צומצם למינימום
+        SchoolId: 60,         // ✅ צומצם דרסטית
+        
+        FirstName: 80,
+        LastName: 80,
+        
+        Role: 130,            
+        
+        Cellphone: 95,
+        Phone: 95,
+        
+        GoogleContactLink: 110,
+        Status: 70,
+        WhatsApp: 50,
+    };
+
+    const minWidths: { [key: string]: number } = {
+        Remarks: 150,
+        Role: 100,
+        // ביטול מינימום לעמודות הצרות
+        default: 40 
+    };
+
+    var coldef: Object[] = model[0].map((value: any, index: any) => {
+      
+      const headerName = model[1][index];
+      
+      // חישוב רוחב
+      const fixedWidth = columnFixedWidths[value];
+      const flexVal = columnFlex[value] !== undefined ? columnFlex[value] : undefined; 
+      const minW = minWidths[value] || minWidths["default"];
+
+      let colDef: any = {
+        field: value,
+        headerName: headerName,
+        editable: true,
+        filter: "CustomFilter",
+        resizable: true,
+        suppressSizeToFit: true,
+        width: fixedWidth,
+        flex: flexVal,
+        minWidth: minW,
+        singleClickEdit: true
+      };
+
+      if (value === "Contactid") {
+        colDef.cellEditor = "agTextCellEditor";
+        colDef.checkboxSelection = true;
+        colDef.headerCheckboxSelection = true;
+        colDef.lockVisible = true;
+        colDef.pinned = 'right';
+        
+        colDef.wrapHeaderText = true;
+        colDef.autoHeaderHeight = true;
+      }
+      // הגדרות כותרת לעמודות הצרות
+      else if (value === "IsRepresentative" || value === "SchoolId") {
+         colDef.wrapHeaderText = true;
+         colDef.autoHeaderHeight = true;
+      }
+      else if (value === "FirstName" || value === "LastName") {
+         colDef.cellEditor = "agTextCellEditor";
+      }
+      else if (value === "Role") {
+         colDef.cellEditor = CustomSelectCellEditor;
+         colDef.cellEditorParams = { values: roles };
+      }
+      else if (value === "Status") {
+         colDef.cellEditor = CustomSelectCellEditor;
+         colDef.cellEditorParams = { values: statuses };
+      }
+      else if (value === "GoogleContactLink") {
+         colDef.cellRenderer = "CustomLinkContact";
+         colDef.cellRendererParams = { GoogleFunctions: AuthenticateActivate };
+         colDef.editable = false;
+      }
+      else if (value === "WhatsApp") {
+         colDef.field = "WhatsAppField"; 
+         colDef.hide = true;
+         colDef.headerName = 'וואטסאפ';
+         colDef.editable = false;
+         colDef.cellRenderer = CustomWhatsAppRenderer;
+         colDef.valueGetter = ValueFormatWhatsApp;
+      }
+      else if (value === "Cellphone" || value === "Phone") {
+         colDef.valueGetter = valueFormatCellPhone;
+      }
+      
+      return colDef;
+    });
+
+    return coldef;
+  }, [AuthenticateActivate, ValueFormatWhatsApp, valueFormatCellPhone]);
+
+
+  const onGridReady = async (params) => {
+    
+    getFromStorage().then(async ({ schoolsContacts, Tablemodel, Role, ContactsStatuses }: any) => {
+      
+      let contactsData = schoolsContacts || [];
+      let modelData = Tablemodel;
+      let rolesData = Role || [];
+      let statusesData = ContactsStatuses || [];
+
+      if (!contactsData.length || !modelData || !rolesData.length) {
+         try {
+            const [contacts, model, roles, statuses] = await Promise.all([
+                getAllContacts(),
+                getModelFields("SchoolsContact"), 
+                getRoles(),
+                getAllStatuses("Contacts")
+            ]);
+            
+            contactsData = contacts;
+            modelData = model;
+            rolesData = roles;
+            statusesData = statuses;
+
+            updateStorage({ 
+                schoolsContacts: contacts, 
+                Tablemodel: model, 
+                Role: roles,
+                ContactsStatuses: statuses
+            });
+
+         } catch (e) {
+             console.error("Failed to fetch contacts data", e);
+         }
+      }
+
+      if (contactsData && modelData) {
+          const rolesList = rolesData.map((r: any) => r.RoleName);
+          const statusList = statusesData.map((s: any) => s.StatusName);
+
+          const colDef = GetDefaultDefinitions(modelData, rolesList, statusList);
+          
+          if (contactsData.length === 0) {
+            params.api.hideOverlay();
+          }
+
+          setRowData(contactsData);
+          setColDefs(colDef);
+          
+          rowCount.current = contactsData.length;
+          dataRowCount.current = contactsData.length;
+          
+          if (contactsData.length > 0) {
+             const maxId = Math.max(...contactsData.map((c: any) => c.Contactid));
+             maxIndex.current = isNaN(maxId) ? 0 : maxId;
+          }
+      }
+    });
+  };
 
   const { onAddRowToolBarClick, onClearFilterButtonClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onFilterTextBoxChanged } = useToolBarFunctions(gridRef, rowCount, dataRowCount, SetInTheMiddleOfAddingRows, validateFields, setDialogType, setDialogMessage, setOpen, setAmount, modifiedRowRef, maxIndex)
 
@@ -97,16 +269,14 @@ export default function ContactsTable() {
 
   const { WindowManager } = useColumnComponent(columnWindowOpen, setColumnWindowOpen, colDefinition, gridRef, colState, setColState)
 
-  // 🛠️ פונקציה מתוקנת למחיקה: שולחת רק מזהים (IDs) ולא אובייקטים
   const handleDeleteRows = useCallback(async () => {
     if (!gridRef.current || !gridRef.current.api) return;
 
     const selectedNodes = gridRef.current.api.getSelectedNodes();
     
-    // ✅ התיקון הקריטי: חילוץ ה-Contactid בלבד
     const selectedIds = selectedNodes
       .map(node => node.data.Contactid)
-      .filter(id => id !== undefined && id !== null); // סינון ערכים לא תקינים
+      .filter(id => id !== undefined && id !== null); 
     
     if (selectedIds.length === 0) return;
 
@@ -114,18 +284,10 @@ export default function ContactsTable() {
     if (!isConfirmed) return;
 
     try {
-      console.log("🚀 Sending delete request for IDs:", selectedIds);
-      
-      // שליחת מערך של מספרים בלבד לשרת
       await deleteContactsRows(selectedIds);
-
-      console.log("✅ Server delete success");
-
-      // עדכון ה-UI: הסרת השורות מהטבלה ללא רענון עמוד
       const rowsToRemove = selectedNodes.map(node => node.data);
       gridRef.current.api.applyTransaction({ remove: rowsToRemove });
       
-      // איפוס בחירה
       gridRef.current.api.deselectAll();
       setAmount(0);
       
@@ -135,7 +297,6 @@ export default function ContactsTable() {
     }
   }, [setAmount]);
 
-  // פונקציה לרענון נתונים מה-Storage (ללא רענון עמוד)
   const refreshContactsFromStorage = useCallback(async () => {
     try {
       const storageData = await getFromStorage()
@@ -151,11 +312,9 @@ export default function ContactsTable() {
     }
   }, [setRowData])
   
-  // האזנה לשינויים ב-Storage
   useEffect(() => {
     if (!mounted) return
     
-    // בדיקה ש-Hook קיים כדי למנוע שגיאות
     if (typeof useStorageSync !== 'function') return;
 
     const cleanup = useStorageSync((updatedKeys, version) => {
@@ -180,9 +339,6 @@ export default function ContactsTable() {
       });
 
       if (!response.ok) throw new Error('Failed to disconnect');
-      
-      console.log("Disconnected successfully");
-      // הסרנו את ה-reload כדי למנוע לופים
       alert("התנתקת בהצלחה. אנא רענן את הדף ידנית במידת הצורך.");
       
     } catch (error) {

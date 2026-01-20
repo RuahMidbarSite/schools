@@ -236,6 +236,36 @@ export default function MessagesPage() {
   }, [options]);
 
   const onGridReady = async () => {
+    
+    // === 🛠️ הגדרת יחסי רוחב (Flex) להתאמה למסך ===
+    // ערך גבוה יותר = העמודה תקבל יותר מקום
+    const columnFlex: { [key: string]: number } = {
+        SchoolName: 2,         // שם בית ספר - רחב פי 2
+        Remarks: 1.5,          // הערות - קצת יותר רחב
+        CalculatedPhone: 1.3,  // טלפון
+        Representive: 1.2,     // נציג
+        City: 1.2,             // עיר
+        
+        // עמודות צרות - יקבלו פחות מקום
+        Symbol: 0.8,
+        RepresentativeID: 0.7,
+        Date: 0.8,
+        SchoolType: 0.9,
+        ReligiousSector: 0.9,
+        EducationStage: 0.9,
+        Status: 1,
+
+        default: 1             // ברירת מחדל
+    };
+
+    // גבול תחתון לרוחב כדי שלא יימעכו לגמרי
+    const minWidths: { [key: string]: number } = {
+        SchoolName: 120,
+        CalculatedPhone: 100,
+        Remarks: 100,
+        default: 60
+    };
+
     const getPhoneValue = (params: any, contactsList: any[]) => {
       if (!contactsList || contactsList.length === 0 || !params.data) return "";
       const data = params.data;
@@ -281,6 +311,10 @@ export default function MessagesPage() {
 
         const colDefsBuilder: any[] = Tablemodel[0]?.map((value: any, index: any) => {
           const headerName = Tablemodel[1][index];
+          
+          // חישוב גמישות ורוחב מינימלי
+          const flexVal = columnFlex[value] || columnFlex["default"];
+          const minW = minWidths[value] || minWidths["default"];
 
           // הגדרות עמודה בסיסיות
           let colDef: any = {
@@ -288,6 +322,9 @@ export default function MessagesPage() {
             headerName: headerName,
             editable: true,
             filter: true,
+            flex: flexVal,       // <--- המפתח להתאמה לרוחב המסך
+            minWidth: minW,      // מונע מעיכה מוגזמת
+            resizable: true
           };
 
           if (value === "ReligiousSector") {
@@ -309,6 +346,10 @@ export default function MessagesPage() {
           else if (value === "Schoolid") {
             colDef.cellEditor = "agTextCellEditor";
             colDef.rowDrag = true;
+            colDef.pinned = 'right'; // קיבוע מזהה לצד ימין
+            colDef.lockPosition = true;
+            colDef.width = 65;       // רוחב קבוע רק למזהה
+            delete colDef.flex;      // המזהה לא צריך להיות גמיש
           }
           else {
              colDef.cellEditor = "agTextCellEditor";
@@ -317,13 +358,11 @@ export default function MessagesPage() {
           // === 🟢 צביעת הסטטוס בירוק ===
           if (headerName === "סטטוס" || value === "Status" || value === "status") {
              colDef.cellStyle = (params: any) => {
-                // חילוץ המחרוזת הנכונה מתוך אובייקט הסטטוס (אם הוא אובייקט)
                 const currentStatusObj = newStatusRef.current;
                 const statusValue = (currentStatusObj && typeof currentStatusObj === 'object' && 'value' in currentStatusObj) 
                                     ? currentStatusObj.value 
                                     : currentStatusObj;
                 
-                // בדיקת התאמה מדויקת
                 if (params.value && statusValue && String(params.value) === String(statusValue)) {
                      return { backgroundColor: '#198754', color: 'white', fontWeight: 'bold' };
                 }
@@ -339,7 +378,9 @@ export default function MessagesPage() {
           headerName: "טלפון נייד",
           valueGetter: (params) => getPhoneValue(params, schoolsContacts),
           filter: true,
-          width: 150
+          flex: columnFlex["CalculatedPhone"], // גמיש
+          minWidth: minWidths["CalculatedPhone"],
+          resizable: true
         });
 
         setColDefs(colDefsBuilder);
@@ -363,11 +404,17 @@ export default function MessagesPage() {
             const colDefsBuilder: any[] = modelData[0]?.map((value: any, index: any) => {
                 const headerName = modelData[1][index];
                 
+                const flexVal = columnFlex[value] || columnFlex["default"];
+                const minW = minWidths[value] || minWidths["default"];
+
                 let colDef: any = {
                     field: value, 
                     headerName: headerName, 
                     editable: true, 
-                    filter: true
+                    filter: true,
+                    flex: flexVal,
+                    minWidth: minW,
+                    resizable: true
                 };
 
                 if (value === "ReligiousSector") {
@@ -390,7 +437,7 @@ export default function MessagesPage() {
                     colDef.cellEditor = "agTextCellEditor";
                 }
 
-                 // === 🟢 אותו תיקון גם כאן ===
+                 // === 🟢 סטטוס ===
                 if (headerName === "סטטוס" || value === "Status" || value === "status") {
                     colDef.cellStyle = (params: any) => {
                         const currentStatusObj = newStatusRef.current;
@@ -405,7 +452,13 @@ export default function MessagesPage() {
                     };
                  }
                  
-                 if (value === "Schoolid") colDef.rowDrag = true;
+                 if (value === "Schoolid") {
+                    colDef.rowDrag = true;
+                    colDef.pinned = 'right';
+                    colDef.lockPosition = true;
+                    colDef.width = 65;
+                    delete colDef.flex;
+                 }
 
                 return colDef;
             }) || [];
@@ -415,7 +468,9 @@ export default function MessagesPage() {
                 headerName: "טלפון נייד",
                 valueGetter: (params) => getPhoneValue(params, contactsData),
                 filter: true,
-                width: 150
+                flex: columnFlex["CalculatedPhone"],
+                minWidth: minWidths["CalculatedPhone"],
+                resizable: true
             });
 
             setColDefs(colDefsBuilder);
