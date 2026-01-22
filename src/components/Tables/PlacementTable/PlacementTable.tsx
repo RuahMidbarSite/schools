@@ -52,13 +52,12 @@ import useColumnEffects from "./hooks/ColumnEffects";
 import { useExternalEffect } from "../GeneralFiles/Hooks/ExternalUseEffect";
 import useColumnHook from "../ContactsTable/hooks/ColumnHooks";
 
-// --- תוספות חדשות עבור התפריטים שהועברו ---
+// --- Imports for Menus ---
 import CustomSelectNoComp from "../PlacementTable/components/CustomSelectNoComp";
 import YearSelect from "@/components/Tables/PlacementTable/components/YearSelect";
 import StatusSelect from "@/components/Tables/PlacementTable/components/StatusSelect";
 import { useYear } from "@/context/YearContext";
 import { useStatus } from "@/context/StatusContext";
-// ------------------------------------------
 
 const rightDefaultCol: any = [
   { field: "Guideid", headerName: "מספר מדריך", rowDrag: true },
@@ -79,8 +78,8 @@ const rightDefaultCol: any = [
 ];
 const leftDefaultCol: any = rightDefaultCol
 
-const releventFieldsRight: string[] = ["Guideid", "FirstName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
-const releventFieldsLeft: string[] = ["Guideid", "FirstName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
+const releventFieldsRight: string[] = ["Guideid", "FirstName", "LastName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
+const releventFieldsLeft: string[] = ["Guideid", "FirstName", "LastName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
 
 export default function PlacementTable() {
   console.log("PlacementTable Loaded");
@@ -97,7 +96,6 @@ export default function PlacementTable() {
   const [rightColDef, setRightColDef]: [any, any] = useState([]);
 
   // left is placed instructors, right is instructors
-  // using null as first value will show the loading circle inside the table.
   const [leftRowData, setLeftRowData] = useState(null);
   const [rightRowData, setRightRowData] = useState(null);
   const LeftgridRef = useRef<AgGridReact>(null);
@@ -107,40 +105,31 @@ export default function PlacementTable() {
   // Global States related to data
   const [CurrentProgram, setCurrentProgram]: [{ label: string, value: number }, any] = useState({ label: '', value: -1 })
 
-  // --- States עבור שדות הסינון החדשים ---
+  // --- Search & AI States ---
   const [leftSearchText, setLeftSearchText] = useState("");
   const [rightSearchText, setRightSearchText] = useState("");
   
-  // --- State עבור כפתור ה-AI והגדרות הסינון ---
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiRadius, setAiRadius] = useState(10); // ברירת מחדל 10 ק"מ
-  const [aiCount, setAiCount] = useState(1);   // ברירת מחדל מועמד 1
-  // --------------------------------------
+  const [aiRadius, setAiRadius] = useState(10);
+  const [aiCount, setAiCount] = useState(1);
 
-  // --- States שהועברו מ-ProgramModule ---
+  // --- Context States ---
   const selectedYear = useYear().selectedYear
   const defaultStatus = useStatus().defaultStatus
 
   const [FilterYear, setFilterYear] = useState<{ label: string, value: any }>({ label: selectedYear ? selectedYear : "הכל", value: selectedYear ? selectedYear : undefined })
   const [FilterStatus, setFilterStatus] = useState<{ label: string, value: any }>({ label: defaultStatus ? defaultStatus : "הכל", value: defaultStatus ? defaultStatus : undefined })
-  // --------------------------------------
 
-  // this is a lazy hack for onDragStop not detecting changes. Later will fix it probably.
   const ProgramID = useRef(-1)
   
-  // עדכון ה-Ref כשהתוכנית משתנה (חשוב ל-AI)
+  // Ensure ProgramID ref is always synced with state
   useEffect(() => {
       ProgramID.current = CurrentProgram.value;
   }, [CurrentProgram.value]);
 
-  // these are used for filters...
   const [FilterProf, setFilterProf]: [{ eng_value: string, value: string, active: boolean }[], any] = useState([])
-
   const [FilterAreas, setFilterAreas]: [{ eng_value: string, value: string, active: boolean }[], any] = useState([])
-
   const [AllFilters, setAllFilters] = useState<PlacementFilter[]>([])
-
-
 
   const [Professions, setProfessions] = useState<Profession[]>([])
   const [Areas, setAreas] = useState<Areas[]>([])
@@ -149,11 +138,8 @@ export default function PlacementTable() {
 
   const { theme } = useContext(ThemeContext)
 
-
   const [AllGuides, setAllGuides] = useState<Guide[]>()
 
-
-  // the one below are for the tool bar
   const [All_Assigned_Guides, setAllAssignedGuides] = useState<Assigned_Guide[]>()
   const [All_Assigned_Guides_Details, setAllAssignedGuides_Details] = useState<Guide[]>()
 
@@ -180,7 +166,6 @@ export default function PlacementTable() {
   // save columns sate  
   const [colState, setColState]: any = useState([])
 
-
   const { updateColStateFromCache, updateColState } = useColumnEffects(RightgridRef, colState, setColState, rightColDef, LeftgridRef, leftColDef)
 
   useExternalEffect(updateColStateFromCache, [rightColDef, leftColDef])
@@ -203,11 +188,8 @@ export default function PlacementTable() {
         if (ids.includes(params.data.Guideid)) {
           p.node.isDraggable = false
           return false
-
         }
-
       }
-
     }
     if (CurrentProgram.value === -1) {
       return false
@@ -219,7 +201,7 @@ export default function PlacementTable() {
   }, [All_Assigned_Guides, CurrentProgram])
 
 
-  // *** פונקציה לעדכון ידני של צבע ללא דריסה ***
+  // Manual Color Change
   const handleManualColorChange = useCallback((guideId: number, programId: number, newHexColor: string) => {
       setAllColorCandidates(prevColors => {
           const safePrev = prevColors || [];
@@ -284,13 +266,12 @@ export default function PlacementTable() {
       if (value === "WhatsApp") {
         return {
           field: "WhatsAppField",
-          headerName: "שם פרטי", // fast solution 
+          headerName: "שם פרטי", 
           editable: false,
           cellRenderer: "CustomWhatsAppRenderer",
           valueGetter: ValueFormatWhatsApp,
           filter: CustomFilter
         }
-
       }
       if (value === "isAssigned") {
         return {
@@ -299,18 +280,33 @@ export default function PlacementTable() {
           headername: model[1][index],
           editable: false,
           filter: CustomFilter
-
         }
       }
+      
+      // Fixed CV Link
       if (value === "CV") {
         return {
           field: value,
           headerName: model[1][index],
-          cellRenderer: "SimpleLink",
           editable: false,
-          filter: CustomFilter
+          filter: CustomFilter,
+          cellRenderer: (params: ICellRendererParams) => {
+             if (!params.value) return "";
+             return (
+               <a 
+                 href={params.value} 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+                 style={{ textDecoration: 'underline', color: 'blue', cursor: 'pointer' }}
+                 onClick={(e) => e.stopPropagation()} 
+               >
+                 קוח
+               </a>
+             );
+          }
         }
       }
+
       return {
         field: value,
         editable: false,
@@ -330,13 +326,11 @@ export default function PlacementTable() {
             Colors: colors, 
             AllColorCandidates: colorcandidates,
             onColorChange: handleManualColorChange,
-            // *** Left side: No Clear Option ***
             canClear: false 
         }, 
         checkboxSelection: true, 
         headerCheckboxSelection: true, 
         rowDrag: rowDragCheck,
-        // *** קיבוע רוחב ***
         width: 105, 
         minWidth: 105, 
         maxWidth: 105,
@@ -353,15 +347,30 @@ export default function PlacementTable() {
       if (!releventFieldsRight.includes(value)) {
         return { field: value, hide: true }
       }
+      
       if (value === "CV") {
         return {
           field: value,
           headerName: model[1][index],
-          cellRenderer: "SimpleLink",
           editable: false,
-          filter: CustomFilter
+          filter: CustomFilter,
+          cellRenderer: (params: ICellRendererParams) => {
+             if (!params.value) return "";
+             return (
+               <a 
+                 href={params.value} 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+                 style={{ textDecoration: 'underline', color: 'blue', cursor: 'pointer' }}
+                 onClick={(e) => e.stopPropagation()}
+               >
+                 קוח
+               </a>
+             );
+          }
         }
       }
+
       if (value === "FirstName") {
         return {
           field: value,
@@ -392,7 +401,6 @@ export default function PlacementTable() {
           valueGetter: ValueFormatWhatsApp,
           filter: CustomFilter
         }
-
       }
       if (value == "Guideid") {
         return {
@@ -412,7 +420,6 @@ export default function PlacementTable() {
           headername: model[1][index],
           editable: false,
           filter: CustomFilter
-
         }
       }
       return {
@@ -432,7 +439,6 @@ export default function PlacementTable() {
             Colors: colors, 
             AllColorCandidates: colorcandidates,
             onColorChange: handleManualColorChange,
-            // *** Right side: Allow Clear Option ***
             canClear: true 
         }, 
         rowDrag: rowDragCheck, 
@@ -445,6 +451,7 @@ export default function PlacementTable() {
   }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, ValueFormatWhatsApp, handleManualColorChange])
 
 
+  // --- onGridReady ---
   const onGridReady = useCallback(async (
     side: string,
     params: GridReadyEvent<any, any>
@@ -462,11 +469,14 @@ export default function PlacementTable() {
           const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(Tablemodel, Colors, ColorCandidates)
           const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(Tablemodel, Colors, ColorCandidates)
           setLeftColDef(coldefleft !== null ? coldefleft : [])
-          setAllGuides(Guides != null ? Guides : [])
-
+// 🔥 תיקון: סנן כפילויות מ-Guides
+    const uniqueGuides = Guides.filter((guide, index, self) => 
+      index === self.findIndex((t) => t.Guideid === guide.Guideid)
+    );
+    setAllGuides(uniqueGuides != null ? uniqueGuides : [])
           setRightColDef(coldef)
           setProfessions(Professions)
-          setAllPrograms(Programs)
+          setAllPrograms(Programs) 
           setAllSchools(Schools)
           setAllYears(Years)
           setAllDistances(Distances)
@@ -488,7 +498,7 @@ export default function PlacementTable() {
 
           setAreas(Areas)
 
-          setRightRowData(Guides != null ? Guides : [])
+    setRightRowData(uniqueGuides != null ? uniqueGuides : [])
         } else {
 
           Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts()])
@@ -496,10 +506,15 @@ export default function PlacementTable() {
               const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates)
               const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates)
               setLeftColDef(coldefleft)
-              setAllGuides(guides != null ? guides : [])
-              setRightColDef(coldef)
-              setProfessions(professions)
-              setAllPrograms(programs)
+// 🔥 תיקון: סנן כפילויות מ-guides
+      const uniqueGuides = guides.filter((guide, index, self) => 
+  index === self.findIndex((t) => t.Guideid === guide.Guideid)
+);
+setAllGuides(uniqueGuides != null ? uniqueGuides : [])
+      
+setRightColDef(coldef)
+setProfessions(professions)
+              setAllPrograms(programs) 
               setAllSchools(schools)
               setAllYears(years)
               setAllDistances(distances)
@@ -520,7 +535,7 @@ export default function PlacementTable() {
               setAllAssignedGuides_Details(assigned_details)
 
 
-              setRightRowData(guides != null ? guides : [])
+      setRightRowData(uniqueGuides != null ? uniqueGuides : [])
               updateStorage({
                 Professions: professions, Schools: schools,
                 Programs: programs, Candidates: candidates, AssignedGuides: assigned_guides,
@@ -528,22 +543,22 @@ export default function PlacementTable() {
                 ProgramsStatuses: statuses, Distances: distances, Cities: cities, Guides: guides, Filters: [], Areas: areas
               })
             })
-
         }
-
       })
     }
   }, [GetDefaultDefinitionsLeft, GetDefaultDefinitionsRight]);
 
-  // --- Helper Functions to Handle Logic Cleanly ---
+  // --- Helper Functions ---
 
   // Handle Right -> Left (Assign)
   const handleAssignCandidate = useCallback((data: Guide) => {
       const GRAY_HEX = "#D3D3D3";
 
-      // *** בדיקת כפילויות לפני הוספה ***
+      // *** בדיקת תקינות ראשונית ***
+      if (!data || !data.Guideid) return;
+
       if (AllCandidates && AllCandidates.some(c => c.Guideid === data.Guideid && c.Programid === ProgramID.current)) {
-          return; // המועמד כבר קיים
+          return; 
       }
 
       setAllColorCandidates(prevColors => {
@@ -561,6 +576,11 @@ export default function PlacementTable() {
       const updated_candidates = AllCandidates ? [...AllCandidates, new_candidate_to_assign as Guides_ToAssign] : [new_candidate_to_assign as Guides_ToAssign];
       
       const new_candidate_detail = AllGuides.find((guide) => guide.Guideid === data.Guideid);
+      
+      // *** התיקון הנוסף: הגנה מפני מועמדים לא קיימים ***
+      if (!new_candidate_detail) return; 
+      // *************************************************
+
       const updated_details = AllCandidates_Details ? [...AllCandidates_Details, new_candidate_detail] : [new_candidate_detail];
 
       setAllCandidates(updated_candidates);
@@ -600,16 +620,13 @@ export default function PlacementTable() {
 
   }, [AllCandidates, AllCandidates_Details]);
 
-  // ------------------------------------------------
-
-  // --- פונקציית AI משודרגת עם הגנה מפני קריסה ---
+  // --- AI Search (Fixed) ---
   const handleAISearch = async () => {
     if (CurrentProgram.value === -1) {
         alert("⚠️ אנא בחר תוכנית מהרשימה לפני הפעלת ה-AI");
         return;
     }
     
-    // בדיקת תקינות נתוני תוכנית למניעת שגיאת שרת
     const prog = AllPrograms.find(p => p.Programid === CurrentProgram.value);
     if (!prog?.CityName || !prog?.ProgramName) {
         alert("⚠️ לתוכנית שנבחרה חסר שם עיר או שם תוכנית. לא ניתן לבצע התאמה.");
@@ -627,11 +644,10 @@ export default function PlacementTable() {
     const progCityName = prog.CityName;
     const progCityObj = AllCities.find(c => c.CityName === progCityName);
 
-    // 1. קודם כל, נחשב את המרחק לכולם ונכין את האובייקטים
     let potentialCandidates = AllGuides.filter(g => 
       !AllCandidates?.some(c => c.Guideid === g.Guideid && c.Programid === CurrentProgram.value)
     ).map(guide => {
-        let distance = -1; // -1 = אין מידע בטבלה
+        let distance = -1; 
         
         if (guide.City === progCityName) {
             distance = 0; 
@@ -657,7 +673,6 @@ export default function PlacementTable() {
         };
     });
 
-    // 2. סינון קריטי לפי בחירת המשתמש (aiRadius)
     if (aiRadius > 0) {
        potentialCandidates = potentialCandidates.filter(c => {
           if (c.dbDistance === -1) return false; 
@@ -665,7 +680,6 @@ export default function PlacementTable() {
        });
     }
 
-    // 3. מיון לפי מרחק (מהקרוב לרחוק) לפני החיתוך - קריטי לאיכות התוצאות
     potentialCandidates.sort((a, b) => {
         if (a.dbDistance === -1) return 1;
         if (b.dbDistance === -1) return -1;
@@ -678,12 +692,9 @@ export default function PlacementTable() {
         return;
     }
 
-    // 4. חיתוך ל-60 מועמדים בלבד (במקום 150) כדי למנוע קריסת שרת (500 Error)
     const finalPayload = potentialCandidates.slice(0, 60);
-    console.log(`Sending ${finalPayload.length} best candidates to AI...`);
 
     try {
-        // --- תחילת התיקון: בניית Prompt עבור השרת ---
         const aiPrompt = `
         תפקידך לשמש כעוזר לשיבוץ מדריכים.
         עליך לבחור את ${aiCount} המועמדים המתאימים ביותר.
@@ -708,19 +719,16 @@ export default function PlacementTable() {
       const response = await fetch("/api/route-placement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ✅ התיקון: שליחת הנתונים בתוך שדה 'prompt' כפי שה-API מצפה
         body: JSON.stringify({
           prompt: aiPrompt 
         }),
       });
-      // --- סוף התיקון ---
 
       if (!response.ok) {
           throw new Error(`Server Error: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log("🤖 [AI Response Data]:", data);
       
       if (data.matches && Array.isArray(data.matches) && data.matches.length > 0) {
          let addedCount = 0;
@@ -731,7 +739,11 @@ export default function PlacementTable() {
              if (guide) {
                  handleAssignCandidate(guide);
                  rightApi?.applyTransaction({ remove: [guide] });
-                 leftApi?.applyTransaction({ add: [guide] });
+                 
+                 // FIX: Assign Unique ID for Grid (Prevent Crash)
+                 const guideWithId = { ...guide, uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` };
+                 leftApi?.applyTransaction({ add: [guideWithId] });
+                 
                  names.push(guide.FirstName + " " + guide.LastName);
                  addedCount++;
              }
@@ -754,10 +766,9 @@ export default function PlacementTable() {
         setIsAiLoading(false); 
     }
   };
-  // ------------------------------------------------
 
 
-  // This activates when dragging between tables.
+  // --- onDragStop (Fixed with Unique ID) ---
   const onDragStop = useCallback(
     (params: RowDragEndEvent, side: string, AllCandidates, AllColorCandidates) => {
       if (ProgramID.current !== -1 && AllCandidates && AllColorCandidates) {
@@ -774,9 +785,15 @@ export default function PlacementTable() {
         if (side === "Right") {
           /** When we move from right to left (Assign). */
           handleAssignCandidate(data);
+          
+          // FIX: Add Unique ID to prevent crash
+          const dataWithId = { ...data, uiUniqueId: `${data.Guideid}_${ProgramID.current}` };
+          leftApi!.applyTransaction({ add: [dataWithId] })
+          
         } else {
           /** Moving from left to right (Unassign): */
           handleUnassignCandidate(data);
+          rightApi!.applyTransaction({ add: [data] })
         }
 
       }
@@ -784,8 +801,6 @@ export default function PlacementTable() {
 
     [ProgramID, leftApi, rightApi, handleAssignCandidate, handleUnassignCandidate]
   );
-
-
 
 
   const addGridDropZone = useCallback(
@@ -796,12 +811,9 @@ export default function PlacementTable() {
       });
       api.removeRowDropZone(dropZoneParams);
       api.addRowDropZone(dropZoneParams);
-
-
     },
     [rightApi, leftApi, onDragStop, AllCandidates, AllColorCandidates]
   );
-
 
 
   useEffect(() => {
@@ -810,20 +822,16 @@ export default function PlacementTable() {
       addGridDropZone("Left", leftApi);
       setLoadedDropZone(true)
     }
-
-
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addGridDropZone, leftApi, rightApi, CurrentProgram]);
+
 
   // Set the left data when program is changed.
   useEffect(() => {
 
     const updateDragAndColor = (): [any, any] => {
-
       const Right_Coldef: ColDef<any>[] = rightColDef
       const Left_Coldef: ColDef<any>[] = leftColDef
-      // we want to re-render the color component for both the cell renderer, the program and the drag which needs to be activated again.
+      
       const color_col_left = { 
           field: 'color', 
           headerName: "צבע", 
@@ -854,7 +862,7 @@ export default function PlacementTable() {
               Colors: Colors, 
               AllColorCandidates: AllColorCandidates,
               onColorChange: handleManualColorChange,
-              canClear: true // *** HERE IT IS: Passed as True to Right Table ***
+              canClear: true 
           }, 
           rowDrag: true, 
           filter: CustomFilter 
@@ -863,11 +871,9 @@ export default function PlacementTable() {
       var updated_left_coldef = [color_col_left, ...LeftCol_withoutcolor]
 
       var RightCol_withoutcolor = Right_Coldef.filter((colDef) => colDef.field !== "color")
-
       var updated_right_coldef = [color_col_right, ...RightCol_withoutcolor]
 
       return [updated_left_coldef, updated_right_coldef]
-
     }
 
 
@@ -875,106 +881,96 @@ export default function PlacementTable() {
       if (CurrentProgram && CurrentProgram.value !== -1) {
         const Right_Coldef: ColDef<any>[] = right
         const Left_Coldef: ColDef<any>[] = left
-        // we want to re-render the color component for both the cell renderer, the program and the drag which needs to be activated again.
+        
         const distance_col_left = { field: 'distance', headerName: "מרחק", editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter }
         const distance_col_right = { field: 'distance', headerName: "מרחק", editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter }
+        
         var LeftCol = Left_Coldef.map((coldef) => {
-          if (coldef.field === "distance") {
-            return distance_col_left
-          }
+          if (coldef.field === "distance") return distance_col_left
           return coldef
-
         })
         var RightCol = Right_Coldef.map((coldef) => {
-          if (coldef.field === "distance") {
-            return distance_col_right
-          }
+          if (coldef.field === "distance") return distance_col_right
           return coldef
-
         })
         setLeftColDef(LeftCol)
         setRightColDef(RightCol)
-
       }
-
-
-    }
-    const updateLeftTable = () => {
-      if (AllCandidates && AllCandidates_Details && CurrentProgram && CurrentProgram.value !== -1) {
-        const program_guides = AllCandidates.filter((res) => res.Programid === CurrentProgram.value)
-        const ids = program_guides.map((res) => res.Guideid)
-        const guides = AllCandidates_Details.filter((res) => ids.includes(res.Guideid))
-        let rest_of_guides = AllGuides.filter((res) => !ids.includes(res.Guideid))
-
-        const all_assigned_ids = All_Assigned_Guides.filter((g) => g.Programid === CurrentProgram.value).map((val) => val.Guideid)
-        rest_of_guides = rest_of_guides.filter((g) => !!!all_assigned_ids.includes(g.Guideid))
-        
-        // *** ניקוי כפילויות לפני הצגה בטבלה השמאלית ***
-        const uniqueGuides = guides.filter((guide, index, self) =>
-            index === self.findIndex((t) => t.Guideid === guide.Guideid)
-        )
-
-        setLeftRowData(uniqueGuides)
-        setRightRowData(rest_of_guides)
-        const [left, right] = updateDragAndColor()
-        updateDistances(left, right)
-        ProgramID.current = CurrentProgram.value
-
-
-
-
-      }
-
     }
 
+    // החלף את הפונקציה updateLeftTable בשורה 460 בקוד שלך
+// עם הקוד הזה:
+
+const updateLeftTable = () => {
+  if (AllCandidates && AllCandidates_Details && CurrentProgram && CurrentProgram.value !== -1) {
+    
+    // 🔥 תיקון 1: השתמש ב-Set למניעת כפילויות ב-IDs
+    const program_guides = AllCandidates.filter((res) => res.Programid === CurrentProgram.value)
+    const uniqueIds = [...new Set(program_guides.map((res) => res.Guideid))]
+    const guides = AllCandidates_Details.filter((res) => uniqueIds.includes(res.Guideid))
+    
+    // 🔥 תיקון 2: סנן כפילויות מ-AllGuides לפני שימוש
+    const uniqueAllGuides = AllGuides.filter((guide, index, self) => 
+      index === self.findIndex((t) => t.Guideid === guide.Guideid)
+    );
+    
+    let rest_of_guides = uniqueAllGuides.filter((res) => !uniqueIds.includes(res.Guideid))
+
+    const all_assigned_ids = All_Assigned_Guides
+      .filter((g) => g.Programid === CurrentProgram.value)
+      .map((val) => val.Guideid)
+    
+    rest_of_guides = rest_of_guides.filter((g) => !all_assigned_ids.includes(g.Guideid))
+    
+    const uniqueGuides = guides.map(guide => ({
+      ...guide,
+      uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` 
+    }));
+
+    setLeftRowData(uniqueGuides)
+    setRightRowData(rest_of_guides)
+    const [left, right] = updateDragAndColor()
+    updateDistances(left, right)
+    ProgramID.current = CurrentProgram.value
+  }
+}
     updateLeftTable()
 
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [AllCandidates, AllCandidates_Details, CurrentProgram, rowDragCheck, AllColorCandidates, All_Assigned_Guides, handleManualColorChange])
 
 
 
   const getRowId = useCallback(
     (side: string, params: GetRowIdParams<Guide>): string => {
-      // Instructor assign
+      // Left Side (Assignments) - Uses Unique ID to prevent crash
       if (side === "Left") {
+        if ((params.data as any).uiUniqueId) {
+            return (params.data as any).uiUniqueId;
+        }
+        if (CurrentProgram && CurrentProgram.value !== -1) {
+            return `${params.data.Guideid}_${CurrentProgram.value}`;
+        }
         return params.data.Guideid.toString();
       } else {
+        // Right Side (List) - Uses GuideID
         return params.data.Guideid.toString();
       }
     },
-    []
+    [CurrentProgram]
   );
 
-  // ************ CHANGED HERE FOR DEBUGGING BORDERS ************
   const getToolBar = useCallback(() => {
-
-
     return (
-
-      //  <div className="flex justify-between">
-
-      // <Button variant="primary">
-      //   <SiGooglemaps />
-      // </Button> 
-
-      <Container fluid={true} className="border-4 border-red-600 p-2"> {/* RED: Main Container */}
-        
-        {/* שינינו כאן את הקונטיינר ל-flex flex-col כדי שנוכל לערום את האלמנטים אחד מתחת לשני */}
-        <div className="max-w-[50%] float-right border-4 border-blue-600 flex flex-col p-2" > {/* BLUE: Filters (Right side) */}
-          
-          {/* 1. כפתורי מקצועות */}
+      <Container fluid={true} className="border-4 border-red-600 p-2"> 
+        <div className="max-w-[50%] float-right border-4 border-blue-600 flex flex-col p-2" > 
           <Row>
               <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </Row>
 
-          {/* 2. כפתורי אזורים - הוספנו מרווח עליון */}
           <div className="mt-4">
               <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </div>
 
-          {/* 3. שלושת התפריטים (תוכנית, סטטוס, שנה) - בשורה חדשה עם מרווח */}
           <Row className="mt-4 rtl d-flex justify-content-between">
             <Col>
                <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
@@ -991,7 +987,7 @@ export default function PlacementTable() {
 
         </div>
 
-        <div className="border-4 border-green-600"> {/* GREEN: Program Module (Left side) */}
+        <div className="border-4 border-green-600"> 
         <ProgramModule
           setCurrentProgram={setCurrentProgram} CurrentProgram={CurrentProgram} LeftGridApi={leftApi}
           RightGridApi={rightApi} SelectedRows={SelectedRows} setAssigned_guides={setAllAssignedGuides}
@@ -999,7 +995,6 @@ export default function PlacementTable() {
           AllSchools={AllSchools} AllContacts={AllContacts} All_Assigned_Guides={All_Assigned_Guides}
           All_Assigned_Guides_Details={All_Assigned_Guides_Details} setAllAssignedGuides={setAllAssignedGuides}
           setAllAssignedGuides_Details={setAllAssignedGuides_Details} AllYears={AllYears} AllStatuses={AllStatuses} setAllCandidates={setAllCandidates} setAllCandidates_Details={setAllCandidates_Details}
-          // *** העברת הפרופס של הצבעים גם מכאן ***
           AllColorCandidates={AllColorCandidates}
           setAllColorCandidates={setAllColorCandidates}
         />
@@ -1012,38 +1007,27 @@ export default function PlacementTable() {
     return true
   }, [])
 
-  // THIS IS THE UPDATED FUNCTION
   const doesExternalFilterPassRight = useCallback((node: IRowNode<Guide>): boolean => {
     if (!node.data) return true;
 
-    // 1. קבלת הפילטרים הפעילים
     const activeProfFilters = FilterProf.filter(f => f.active).map(f => f.value);
     const activeAreaFilters = FilterAreas.filter(f => f.active).map(f => f.value);
 
-    // נכין את הנתונים מהשורה
     const rowProfessions = node.data.Professions 
       ? node.data.Professions.split(",").map(p => p.trim()) 
       : [];
     const rowArea = node.data.Area;
 
-    // 2. לוגיקה למקצועות:
-    // אם אין פילטרים פעילים למקצוע - מעבירים הכל (true).
-    // אם יש - בודקים האם למדריך יש אחד מהמקצועות שנבחרו.
     let profPass = true;
     if (activeProfFilters.length > 0) {
        profPass = rowProfessions.some(p => activeProfFilters.includes(p));
     }
 
-    // 3. לוגיקה לאזורים:
-    // אם אין פילטרים פעילים לאזור - מעבירים הכל (true).
-    // אם יש - בודקים האם למדריך יש אחד מהמקצועות שנבחרו.
     let areaPass = true;
     if (activeAreaFilters.length > 0) {
       areaPass = activeAreaFilters.includes(rowArea);
     }
 
-    // 4. החזרה סופית: גם מקצוע וגם אזור צריכים לעבור (AND)
-    // הערה: אם קטגוריה מסוימת לא סוננה, היא תחזיר true ולכן לא תשפיע לרעה.
     return profPass && areaPass;
 
   }, [FilterProf, FilterAreas])
@@ -1056,10 +1040,6 @@ export default function PlacementTable() {
     </div>, [])
 
   const doesExternalFilterPassLeft = useCallback((node: IRowNode<Guide>): boolean => {
-    if (node.data) {
-      return true
-
-    }
     return true
   }, [])
 
@@ -1079,7 +1059,6 @@ export default function PlacementTable() {
 
   const onRowDoubleClick = useCallback((event: RowDoubleClickedEvent<Guide, any>, side: string): void => {
     if (ProgramID.current !== -1 && AllCandidates && AllColorCandidates) {
-      // we add the draggable in  rowDragCheck of ag grid.
       if (typeof (event.node as any).isDraggable !== "undefined" && !(event.node as any).isDraggable) {
         return
       }
@@ -1091,25 +1070,20 @@ export default function PlacementTable() {
       };
 
       api!.applyTransaction(transaction)
-      // if added to assign
+      
       if (side === "Right") {
         handleAssignCandidate(data);
-        leftApi!.applyTransaction({ add: [data] })
+        
+        // FIX: Add Unique ID to prevent crash
+        const dataWithId = { ...data, uiUniqueId: `${data.Guideid}_${ProgramID.current}` };
+        leftApi!.applyTransaction({ add: [dataWithId] })
+        
       } else {
-        /**
-        Moving from left to right:
-        */
         handleUnassignCandidate(data);
         rightApi!.applyTransaction({ add: [data] })
       }
 
     }
-
-
-
-
-
-
 
   }, [AllCandidates, AllColorCandidates, leftApi, rightApi, AllCandidates_Details, AllGuides, handleAssignCandidate, handleUnassignCandidate])
 
@@ -1117,7 +1091,6 @@ export default function PlacementTable() {
   const onSelectionChanged = useCallback((event: SelectionChangedEvent<Guide>): void => {
     setSelectedRows(event.api.getSelectedRows())
   }, [])
-  // this is now always true since a guide can be assigned to multiple programs.
   const isRowSelectable = (node: RowNode<Guide>) => {
     return true
 
@@ -1182,7 +1155,6 @@ export default function PlacementTable() {
     </div>
   );
 
-  // --- פונקציות טיפול בשינוי קלט בחיפוש ---
   const onRightSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setRightSearchText(value);
@@ -1198,7 +1170,6 @@ export default function PlacementTable() {
       leftApi.setGridOption('quickFilterText', value);
     }
   };
-  // ---------------------------------------
 
   return (
     <Suspense >
@@ -1206,20 +1177,16 @@ export default function PlacementTable() {
       <div className="flex">
 
         {/* --- צד שמאל: מועמדים --- */}
-        <div className="w-1/2 border-4 border-orange-500 flex flex-col"> {/* ORANGE: Left Table Column */}
+        <div className="w-1/2 border-4 border-orange-500 flex flex-col"> 
           
-          {/* Header Container - שורה אחת לכותרת ולחיפוש */}
-          {/* שינוי כאן: הצמדה לימין עם flex-end ורווח gap-3 */}
           <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
             
-            {/* שדה החיפוש מופיע ראשון כדי להיות משמאל לכותרת */}
             <input
               type="text"
               className="form-control"
               placeholder="סינון..."
               value={leftSearchText}
               onChange={onLeftSearchChange}
-              // הקטנת רוחב השדה ל-200 פיקסלים
               style={{ direction: 'rtl', width: '200px', height: '35px' }}
             />
             
@@ -1230,13 +1197,10 @@ export default function PlacementTable() {
         </div>
 
         {/* --- צד ימין: מדריכים --- */}
-        <div className="w-1/2 border-4 border-purple-500 flex flex-col"> {/* PURPLE: Right Table Column */}
+        <div className="w-1/2 border-4 border-purple-500 flex flex-col"> 
           
-          {/* Header Container - שורה אחת לכותרת ולחיפוש */}
-          {/* שינוי כאן: הצמדה לימין עם flex-end ורווח gap-3 */}
           <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
             
-            {/* 1. תפריט טווח (משמאל) */}
             <select
                 className="form-select form-select-sm"
                 style={{ width: '100px', direction: 'rtl' }}
@@ -1253,7 +1217,6 @@ export default function PlacementTable() {
                 <option value={0}>ללא הגבלה</option>
             </select>
 
-            {/* 2. תפריט כמות (משמאל) */}
             <select
                 className="form-select form-select-sm"
                 style={{ width: '70px', direction: 'rtl' }}
@@ -1267,8 +1230,6 @@ export default function PlacementTable() {
                 ))}
             </select>
 
-
-            {/* --- הוספת כפתור AI בטוח (בכותרת) --- */}
             <Button 
                 variant="success" 
                 size="sm" 
@@ -1276,20 +1237,17 @@ export default function PlacementTable() {
                 disabled={isAiLoading}
                 className="d-flex align-items-center gap-1 shadow-sm"
                 title="שיבוץ אוטומטי עפ'י נתוני התוכנית"
-                style={{ zIndex: 10, position: 'relative' }} // ווידוא לחיצות
+                style={{ zIndex: 10, position: 'relative' }} 
             >
                 {isAiLoading ? <Spinner size="sm" animation="border" /> : <span>✨ AI</span>}
             </Button>
-            {/* --------------------------- */}
 
-            {/* שדה החיפוש מופיע ראשון כדי להיות משמאל לכותרת */}
             <input
               type="text"
               className="form-control"
               placeholder="סינון..."
               value={rightSearchText}
               onChange={onRightSearchChange}
-              // הקטנת רוחב השדה ל-200 פיקסלים
               style={{ direction: 'rtl', width: '200px', height: '35px' }}
             />
 
@@ -1301,4 +1259,4 @@ export default function PlacementTable() {
       </div>
     </Suspense>
   );
-}
+} 
