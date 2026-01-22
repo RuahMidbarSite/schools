@@ -6,25 +6,28 @@ import { useCallback } from "react";
 const useFolderFunctions = () => {
 
 
-const  searchFolder = useCallback((folderName, parentId,config)=> {
-  const query = [
-    `name='${folderName}'`,
-    "mimeType='application/vnd.google-apps.folder'",
-    parentId ? `'${parentId}' in parents` : " 'root' in parents",
-    
-  ].join(" and ");
+const searchFolder = useCallback((folderName, parentId, config) => {
+    // תיקון: החלפת גרש בודד (') בגרש עם לוכסן (\') כדי לא לשבור את השאילתה
+    const escapedFolderName = folderName.replace(/'/g, "\\'");
 
-  return gapi.client.drive.files.list({
-    q: query,
-    fields: 'files(id, name)',
-    spaces: 'drive',
-    access_token: config.token,
-    key: config.developerKey
-  }).then((response) => {
-    const files = response.result.files;
-    return files.length > 0 ? files[0].id : null; // Return folder ID if found
-  });
-},[])
+    const query = [
+      `name='${escapedFolderName}'`,
+      "mimeType='application/vnd.google-apps.folder'",
+      parentId ? `'${parentId}' in parents` : " 'root' in parents",
+
+    ].join(" and ");
+
+    return gapi.client.drive.files.list({
+      q: query,
+      fields: 'files(id, name)',
+      spaces: 'drive',
+      access_token: config.token,
+      key: config.developerKey
+    }).then((response) => {
+      const files = response.result.files;
+      return files.length > 0 ? files[0].id : null; // Return folder ID if found
+    });
+  }, [])
 const  createFolder = useCallback((folderName, parentId,config) =>{
   return gapi.client.drive.files.create({
     resource: {

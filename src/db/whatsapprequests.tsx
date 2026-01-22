@@ -1,108 +1,108 @@
-  // whatsapprequests.tsx - פונקציה מעודכנת לשליחת הודעות
+"use server";
 
 const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || "http://localhost:3994";
 
 export async function sendMessageViaWhatsApp(
-  message1: string,
-  message2: string,
-  file: File | null,
-  phoneNumber: string,
-  countryCode: string = "972",
-  patternId?: number
+  formData: FormData
 ): Promise<{ success: boolean; error?: string }> {
-  console.log("\n=== 📤 sendMessageViaWhatsApp Called ===");
-  console.log("⏰ Time:", new Date().toISOString());
-  console.log("📞 Phone:", phoneNumber);
-  console.log("🌍 Country code:", countryCode);
-  console.log("💬 Message 1:", message1?.substring(0, 50));
-  console.log("💬 Message 2:", message2?.substring(0, 50) || "empty");
-  console.log("📎 File:", file?.name || "no file");
-  console.log("🆔 Pattern ID:", patternId || "none");
+  console.log("\n=== 📤 sendMessageViaWhatsApp Called (Base64 Fix) ===");
   
   try {
-    // Prepare phone number
-    let fullPhoneNumber = phoneNumber;
+    const phoneNumber = formData.get("PhoneNumber") as string;
+    const message1 = formData.get("Message_1") as string;
+    const message2 = formData.get("Message_2") as string;
+    const patternId = formData.get("PatternID") as string;
     
-    // Remove any existing country code
+    const file = formData.get("file") as File | null;
+    const countryCode = formData.get("CountryCode") as string || "972";
+
+    if (!phoneNumber) {
+        return { success: false, error: "Missing phone number" };
+    }
+
+    // 1. נרמול מספר הטלפון
+    let fullPhoneNumber = phoneNumber;
     if (fullPhoneNumber.startsWith(countryCode)) {
       fullPhoneNumber = fullPhoneNumber.substring(countryCode.length);
     }
-    
-    // Remove any non-digits
-    fullPhoneNumber = fullPhoneNumber.replace(/\D/g, '');
-    
-    // Add country code and @c.us
+    fullPhoneNumber = fullPhoneNumber.replace(/\D/g, ''); 
     fullPhoneNumber = `${countryCode}${fullPhoneNumber}@c.us`;
     
-    console.log("📱 Full phone number:", fullPhoneNumber);
+    // 2. בניית FormData חדש לשליחה לשרת Express
+    const apiFormData = new FormData();
+    apiFormData.append("PhoneNumber", fullPhoneNumber);
 
-    // Prepare FormData
-    const formData = new FormData();
-    formData.append("PhoneNumber", fullPhoneNumber);
+    if (message1) apiFormData.append("Message_1", message1);
+    if (message2) apiFormData.append("Message_2", message2);
+    if (patternId) apiFormData.append("PatternID", patternId);
 
-    if (message1 && message1.trim()) {
-      console.log("➕ Adding Message_1");
-      formData.append("Message_1", message1);
+    // === תיקון קריטי: המרת שם הקובץ ל-Base64 ===
+    if (file && file.size > 0) {
+      console.log(`📎 Processing file: ${file.name} | Size: ${file.size}`);
+      
+      // 1. יצירת "קוד סודי" (Base64) לשם הקובץ בעברית - זה מונע שיבושים
+      const fileNameBase64 = Buffer.from(file.name, 'utf8').toString('base64');
+      apiFormData.append("FileNameBase64", fileNameBase64);
+
+      // זיהוי סוג קובץ
+      let mimeType = file.type || 'application/octet-stream';
+      
+      // המרה ל-Buffer ואז ל-Blob
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const blob = new Blob([buffer], { type: mimeType });
+      
+      // 2. שליחת הקובץ עצמו עם שם זמני באנגלית (כדי לא לבלבל את הרשת)
+      // השרת יקבל את השם האמיתי מהשדה FileNameBase64 שצירפנו למעלה
+      apiFormData.append("file", blob, "temp_file.bin");
+      
+    } else {
+      console.log("📎 No file attached.");
     }
 
-    if (message2 && message2.trim()) {
-      console.log("➕ Adding Message_2");
-      formData.append("Message_2", message2);
-    }
-
-    if (file) {
-      console.log("➕ Adding file:", file.name, `(${file.size} bytes)`);
-      formData.append("file", file);
-    }
-
-    if (patternId) {
-      console.log("➕ Adding PatternID:", patternId);
-      formData.append("PatternID", patternId.toString());
-    }
-
-    // Send request
+    // 3. שליחה לשרת ה-Express
     const url = `${WHATSAPP_SERVER_URL}/SendMessage`;
-    console.log("🌐 Sending POST to:", url);
-    console.log("⏰ Time:", new Date().toISOString());
-
+    
     const response = await fetch(url, {
       method: "POST",
-      body: formData,
+      body: apiFormData, 
     });
 
-    console.log("📥 Response status:", response.status);
-    console.log("📥 Response ok:", response.ok);
-    console.log("⏰ Time:", new Date().toISOString());
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Server Error Response:", errorText);
+      throw new Error(`Server error ${response.status}: ${errorText}`);
+    }
 
     const data = await response.json();
-    console.log("📦 Response data:", data);
-
-    if (!response.ok) {
-      const errorMsg = data.message || `Server error ${response.status}`;
-      console.error("❌ Server error:", errorMsg);
-      return {
-        success: false,
-        error: errorMsg,
-      };
-    }
 
     if (data.status === "Success") {
       console.log("✅ Message sent successfully!");
-      console.log("📊 Message count:", data.messageCount);
       return { success: true };
     } else {
-      console.error("❌ Unexpected response:", data);
-      return {
-        success: false,
-        error: data.message || "Unknown error",
-      };
+      console.error("❌ API returned false status:", data);
+      return { success: false, error: data.message || "Unknown error" };
     }
+
   } catch (error: any) {
     console.error("❌ sendMessageViaWhatsApp Error:", error);
-    console.log("⏰ Error time:", new Date().toISOString());
-    return {
-      success: false,
-      error: error.message || "Network error",
-    };
+    return { success: false, error: error.message || "Network error" };
+  }
+}
+
+export async function savePatternFile(id: number, file: File | null) {
+  if (!file) return { success: true };
+  console.log(`💾 Saving file for pattern ${id}: ${file.name}`);
+  // כאן אפשר להוסיף לוגיקה לשמירת קובץ תבנית אם צריך בעתיד
+  return { success: true }; 
+}
+
+export async function deletePatternFile(patternId: number) {
+  const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || "http://localhost:3994";
+  try {
+    await fetch(`${WHATSAPP_SERVER_URL}/DeletePatternFile/${patternId}`, { method: 'DELETE' });
+    return { success: true };
+  } catch (e) {
+    return { success: false };
   }
 }

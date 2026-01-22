@@ -368,30 +368,50 @@ app.post(
         }
       }
 
-      if (req.file) {
-        console.log("📎 Processing uploaded file:", req.file.originalname);
+    if (req.file) {
+        console.log("📎 Processing uploaded file...");
         
-        // ✅ תיקון שם קובץ בעברית
-        const fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
-        
-        const media = new MessageMedia(
-          req.file.mimetype,
-          req.file.buffer.toString("base64"),
-          fileName,
-          req.file.size
-        );
-        
-        console.log("📤 Sending uploaded file...");
-        const response = await client.sendMessage(chatId, media, {
-          sendSeen: false
-        });
-        
-        responses.push(response);
-        messageCount++;
-        console.log("✅ Uploaded file sent!");
-        
-        // המתן קצת
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        if (req.file.size === 0) {
+            console.error("❌ Error: Received file with 0 bytes!");
+        } else {
+            let fileName = "file.bin"; // ברירת מחדל
+
+            // ✅ תיקון סופי: פענוח שם הקובץ מ-Base64
+            // הקוד הזה לוקח את הרצף המוצפן ומחזיר אותו לעברית תקנית
+            if (req.body.FileNameBase64) {
+    try {
+        // דיקוד Base64 שתומך בעברית (תואם ל-btoa+encodeURIComponent)
+        const decoded = Buffer.from(req.body.FileNameBase64, 'base64').toString('binary');
+        fileName = decodeURIComponent(escape(decoded));
+        console.log(`🏷️ Decoded Hebrew Filename: ${fileName}`);
+    } catch (e) {
+        console.error("❌ Base64 decode failed, using fallback");
+        fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+    }
+}
+            // גיבוי למקרה שהשדה לא הגיע
+            else {
+                fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+            }
+
+            const media = new MessageMedia(
+              req.file.mimetype,
+              req.file.buffer.toString("base64"),
+              fileName, // כאן נכנס השם המתוקן והמפעונח
+              req.file.size
+            );
+            
+            console.log("📤 Sending uploaded file with name:", fileName);
+            const response = await client.sendMessage(chatId, media, {
+              sendSeen: false
+            });
+            
+            responses.push(response);
+            messageCount++;
+            console.log("✅ Uploaded file sent!");
+            
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
       }
 
       // 3️⃣ שלח הודעה שנייה (אם יש) - רק אחרי שהקובץ נשלח!

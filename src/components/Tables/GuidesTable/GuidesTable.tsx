@@ -370,16 +370,41 @@ export default function GuidesTable({
       if (value === "FirstName") {
         return {
           ...baseColDef,
+          // ביטול עריכה בקליק אחד - חובה כדי שהקישור יעבוד
+          singleClickEdit: false, 
+          
           cellEditor: NamePhoneCellEditor,
           cellEditorParams: {
             AllGuides: instructors
           },
-          cellRenderer: NamePhoneCellRenderer,
-          cellRendererParams: {
-            AllGuides: instructors
-          },
-        }
+          cellRenderer: (params: any) => {
+            if (!params.value) return "";
+            if (!params.data || !params.data.CellPhone) return params.value;
 
+            // לוגיקת וואטסאפ
+            let phone = params.data.CellPhone.replace(/\D/g, '');
+            if (phone.startsWith('0')) {
+              phone = '972' + phone.substring(1);
+            }
+            const whatsappUrl = `whatsapp://send?phone=${phone}`;
+
+            return (
+              <a 
+                href={whatsappUrl}
+                style={{ 
+                  textDecoration: "underline", 
+                  color: "#2563eb", 
+                  cursor: "pointer",
+                  display: "inline-block",
+                  width: "100%" // מוודא שהקישור תופס את המקום
+                }}
+                // אין צורך יותר ב-stopPropagation כי ביטלנו את singleClickEdit
+              >
+                {params.value}
+              </a>
+            );
+          }
+        };
       }
       if (value === "Status") {
         return {
@@ -420,7 +445,7 @@ export default function GuidesTable({
           },
         };
       }
-      if (value === "CV") {
+     if (value === "CV") {
         return {
           ...baseColDef,
           cellRenderer: "CustomLinkDrive",
@@ -428,10 +453,10 @@ export default function GuidesTable({
             GoogleFunctions: AuthenticateActivate,
             customDisplayText: "קוח" 
           },
-          cellEditor: "agTextCellEditor",
-          editable: true, 
+          editable: false, // זה המפתח: מונע פתיחת עריכה
         };
       }
+      // כנ"ל לגבי שאר המסמכים...
       if (
         value === "Documents" ||
         value === "PoliceApproval" ||
@@ -446,7 +471,7 @@ export default function GuidesTable({
             GoogleFunctions: AuthenticateActivate,
           },
           cellEditor: "agTextCellEditor",
-          editable: true, 
+          editable: false, 
         };
       }
       if (value === "Professions") {
@@ -566,6 +591,9 @@ export default function GuidesTable({
 
 
   };
+  const getRowId = useCallback((params: GetRowIdParams) => {
+      return String(params.data.Guideid);
+    }, []);
 
   const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
 
@@ -811,8 +839,9 @@ export default function GuidesTable({
 
   const isRowSelectable = (rowNode: any) => !InTheMiddleOfAddingRows;
 
-  const components = useMemo(
+const components = useMemo(
     () => ({
+      // החזרנו את זה למצב המקורי והתקין:
       CustomLinkDrive: (props) => <CustomLinkDrive {...props} AuthenticateActivate={AuthenticateActivate} type={"Guide"} />,
       CustomMultiSelectCellRenderer: CustomMultiSelectCell,
       CustomMultiSelect: CustomMultiSelectCellEdit,
@@ -1055,6 +1084,7 @@ export default function GuidesTable({
           style={{ width: "100%", height: "1000px" }}
         >
           <AgGridReact
+            getRowId={getRowId}
             noRowsOverlayComponent={CustomNoRowsOverlay}
             ref={gridRef}
             rowData={rowData}

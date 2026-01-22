@@ -23,15 +23,14 @@ import { CustomLinkDrive } from "../GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
 
 import { deletePrograms, updateProgramsColumn, getAllProgramsData, createProgram, saveNewPrograms } from "@/db/programsRequests";
-import { getAllDistricts } from "@/db/generalrequests"; 
-
+import { getAllDistricts, getAllGuides, getAllAssignedInstructors } from "@/db/generalrequests";
 import { ThemeContext } from "@/context/Theme/Theme";
 import { YearContext } from "@/context/YearContext";
 import { StatusContext } from "@/context/StatusContext";
 
 import { SchoolChoosing } from "./components/SchoolChoosing";
 import { RepresentiveComponent } from "./components/CustomRepresentive";
-import { AssignedGuidesColumn } from "./components/AssignedGuidesColumn";
+import  AssignedGuidesColumn from "./components/AssignedGuidesColumn";
 import CustomSelectCellEditor from "@/components/CustomSelect/CustomSelectCellEditor";
 import { MultiSelectCellEditor } from "@/components/CustomSelect/MultiSelectCellEditor";
 
@@ -272,7 +271,15 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
     setIsGridReady(true);
     setHasNewRows(false); 
     try {
-        const [storageData, areasData] = await Promise.all([ getAllProgramsData(), getAllDistricts() ]);
+const [storageData, areasData, guidesData, assignedGuidesData] = await Promise.all([
+    getAllProgramsData(), 
+    getAllDistricts(),
+    getAllGuides(),              // <--- חדש
+    getAllAssignedInstructors()  // <--- חדש
+]);        // --- הוסף את השורה הזו: ---
+        console.log("DEBUG PARENT: AssignedGuides", storageData.AssignedGuides); 
+        console.log("DEBUG PARENT: Guides", storageData.Guides); 
+        // -------------------------
         if (!storageData) return;
 
         const rawPrograms = storageData.Programs || [];
@@ -332,6 +339,17 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             { field: "Grade", header: "שכבה", width: 60, cellStyle: STYLES.CENTER },
             { field: "Days", header: "ימים", width: 70, cellStyle: STYLES.CENTER },
             { field: "Weeks", header: "מספר שבועות", width: 60, cellStyle: STYLES.CENTER },
+            { 
+                field: "LessonsPerDay", // <--- השינוי: L גדולה
+                header: "שיעורים ביום", 
+                width: 110, 
+                editable: true,
+                cellEditor: CustomSelectCellEditor, 
+                cellEditorParams: { 
+                    values: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"] 
+                },
+                cellStyle: STYLES.CENTER
+            },
             { field: "Product", header: "מוצר", width: 70 },
             { field: "PricingPerPaidLesson", header: "מחיר לשיעור", width: 70, cellStyle: STYLES.FINANCE_COL },
             { field: "PaidLessonNumbers", header: "שיעורים לתשלום", width: 60, cellStyle: STYLES.FINANCE_COL },
@@ -401,7 +419,9 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
             
             if (col.special === "school") return { 
                 ...base, 
-                cellRenderer: SchoolChoosing, 
+                cellEditor: SchoolChoosing, 
+                cellEditorPopup: false,
+                cellEditorParams: { AllSchools: storageData.Schools },
                 cellRendererParams: { AllSchools: storageData.Schools },
             };
             
@@ -415,11 +435,25 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
                 return { ...base, cellEditor: CustomSelectCellEditor, cellEditorParams: { values: yearValues }, filter: YearFilter, filterParams: { values: yearValues } };
             }
             if (col.special === "days") return { ...base, cellEditor: MultiSelectCellEditor, cellEditorPopup: true, cellEditorParams: { values: ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'] }, valueFormatter: arrayToStringFormatter };
-            if (col.special === "guide") return { ...base, cellRenderer: AssignedGuidesColumn, cellRendererParams: { guides: storageData.Guides || [], assigned_guides: storageData.AssignedGuides || [] } };
+if (col.special === "guide") {
+    return { 
+        ...base, 
+        cellRenderer: AssignedGuidesColumn, 
+        cellRendererParams: { 
+            guides: guidesData || [],               // שימוש במשתנה החדש שהבאנו
+            assigned_guides: assignedGuidesData || [] // שימוש במשתנה החדש שהבאנו
+        } 
+    };
+}
             if (col.special === "date") return { ...base, cellEditor: 'agDateCellEditor', valueFormatter: dateFormatter };
 
             return base;
         });
+       // החלף את ה-Log הקודם בזה:
+console.log("SANITY CHECK VALUES:", JSON.stringify({ 
+    GuidesCount: guidesData?.length, 
+    AssignedCount: assignedGuidesData?.length
+}));
         setColDefs(colDef);
     } catch (error) { console.error("Failed to load data:", error); }
   }, [SchoolIDs]);
@@ -455,11 +489,22 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
 
   }, [selectedYear, defaultStatus]);
 
-  const onSaveChangeButtonClick = useCallback(async () => {
+const onSaveChangeButtonClick = useCallback(async () => {
       const newRows: any[] = [];
       gridRef.current?.api.forEachNode((node) => {
           if (node.data.isNew) {
-              newRows.push(node.data);
+              const cleanRow = { ...node.data };
+
+              // תיקון קריטי: המרת lessonsPerDay ל-LessonsPerDay ומספר
+              if (cleanRow.lessonsPerDay !== undefined) {
+                  cleanRow.LessonsPerDay = Number(cleanRow.lessonsPerDay);
+                  delete cleanRow.lessonsPerDay; 
+              }
+              if (cleanRow.LessonsPerDay !== undefined && cleanRow.LessonsPerDay !== null) {
+                   cleanRow.LessonsPerDay = Number(cleanRow.LessonsPerDay);
+              }
+
+              newRows.push(cleanRow);
           }
       });
 
@@ -467,13 +512,10 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
           console.log("No new rows to save.");
           return;
       }
-
-      console.log("Saving new rows...", newRows);
       
       try {
           await saveNewPrograms(newRows);
           alert("נשמר בהצלחה!");
-          
           onGridReady({});
       } catch (error) {
           console.error("Save failed:", error);
@@ -523,6 +565,12 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
       try {
           let valueToSave = newValue;
 
+          // תיקון: המרה למספר עבור שדות מספריים
+          if (colDef.field === "LessonsPerDay") {
+              valueToSave = Number(valueToSave);
+          }
+          // סוף תיקון
+
           if (valueToSave instanceof Date) {
               valueToSave = valueToSave.toISOString();
           } 
@@ -531,12 +579,14 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
           }
 
           if (valueToSave === undefined || valueToSave === null) valueToSave = "";
+          // שינוי קטן: לא להפוך למחרוזת אם זה אמור להיות מספר
           if (Array.isArray(valueToSave)) valueToSave = valueToSave.join(", "); 
 
           await updateProgramsColumn(colDef.field === "Area" ? "District" : colDef.field, valueToSave, data.Programid);
       } catch (error) { 
           event.node.setDataValue(colDef.field, oldValue); 
           console.error("Update failed:", error);
+          alert("שגיאה בעדכון הנתונים. ודא שהערך תקין.");
       }
   }, []);
 const checkDriveStatus = useCallback(async () => {

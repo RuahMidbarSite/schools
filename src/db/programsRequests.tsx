@@ -36,19 +36,27 @@ export const saveNewPrograms = async (programs: any[]) => {
   "use server";
   try {
     const promises = programs.map((p) => {
-        // ניקוי וסידור הנתונים (כמו ב-createProgram)
         const dataToSave = { ...p };
         
-        // מחיקת שדות עזר של הקליינט
         delete dataToSave.isNew; 
         
-        // מיפוי שדות
         if (dataToSave.Area) dataToSave.District = dataToSave.Area;
         delete dataToSave.Area; 
         
+        // --- תיקון: טיפול ב lessonsPerDay ---
+        if (dataToSave.lessonsPerDay !== undefined) {
+             const val = parseInt(dataToSave.lessonsPerDay);
+             dataToSave.LessonsPerDay = isNaN(val) ? null : val;
+             delete dataToSave.lessonsPerDay;
+        }
+        if (dataToSave.LessonsPerDay !== undefined && dataToSave.LessonsPerDay !== null) {
+            const val = parseInt(dataToSave.LessonsPerDay);
+             dataToSave.LessonsPerDay = isNaN(val) ? null : val;
+        }
+        // ------------------------------------
+
         if (!dataToSave.CityName) dataToSave.CityName = null;
 
-        // וידוא שדות חובה
         const baseData = {
             Programid: dataToSave.Programid,
             Year: dataToSave.Year || "תשפד",
@@ -95,12 +103,16 @@ export const updateProgramsColumn = async (ColumnName: string, newValue: any, ke
 
   let dbColumnName = ColumnName;
   if (ColumnName === "Area") dbColumnName = "District";
+  // תיקון: מיפוי ידני לשם תקין
+  if (ColumnName === "lessonsPerDay") dbColumnName = "LessonsPerDay"; 
 
   let valueToSave = newValue;
   if (Array.isArray(newValue)) valueToSave = newValue.join(", ");
   if (dbColumnName === "Order" && (valueToSave === "" || valueToSave === undefined)) valueToSave = null;
 
+  // תיקון: הוספת LessonsPerDay (אות גדולה) לרשימת המספרים
   const intFields = ["Weeks", "LessonsPerDay", "PaidLessonNumbers", "PricingPerPaidLesson", "FreeLessonNumbers", "AdditionalPayments"];
+  
   if (intFields.includes(dbColumnName)) {
       if (valueToSave === "" || valueToSave === null || valueToSave === undefined) valueToSave = null; 
       else {
@@ -123,7 +135,6 @@ export const updateProgramsColumn = async (ColumnName: string, newValue: any, ke
       throw error; 
   }
 };
-
 // --- שליפת נתונים ---
 export const getPrograms = async (): Promise<Program[]> => {
   "use server";
