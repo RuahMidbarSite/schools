@@ -215,6 +215,7 @@ model Payments {
   SchoolName   String?
   ProgramName  String?
   Amount       Int?
+  Year         String?
 }
 
 model ReligionSector {
@@ -332,6 +333,7 @@ model PendingPayments {
   ProgramName  String?
   Amount       Int?
   CheckDate    DateTime?          
+  Year         String?
 }
 
 model ProductTypes {

@@ -45,7 +45,7 @@ export const PaymentsTable = () => {
     adminF: "מנהלנית"
   }), [])
 
-  const PaymentsRowCount = useRef(0);
+  //const PaymentsRowCount = useRef(0);
   
   // State definitions
   const [schoolsData, setSchoolsData] = useState<School[]>([]);
@@ -358,27 +358,45 @@ export const PaymentsTable = () => {
     }
   }, [pendingPaymentsData])
 
-  const handleMoveRow = useCallback(() => {
-    if (pendingPaymentsData.length === 0) return
-    const selectedNodes = pendingPaymentsGridRef.current.api.getSelectedNodes();
-    if (!selectedNodes) return
-    const selectedRow = selectedNodes[0].data;
-    const newRow: Payments = {
-      Objectid: undefined, Id: PaymentsRowCount.current + 1, Programid: selectedRow.Programid,
-      Issuer: selectedRow.Issuer, SchoolName: selectedSchool.SchoolName, ProgramName: selectedRow.ProgramName, 
-      Amount: selectedRow.Amount, Year: selectedRow.Year 
-    }
-    addPaymentsRow(newRow)
+  const handleMoveRow = useCallback(async () => {
+  if (pendingPaymentsData.length === 0) return;
+  const selectedNodes = pendingPaymentsGridRef.current.api.getSelectedNodes();
+  if (!selectedNodes || selectedNodes.length === 0) return;
+  
+  const selectedRow = selectedNodes[0].data;
+  
+  const newRow: any = {
+    Programid: selectedRow.Programid,
+    Issuer: selectedRow.Issuer, 
+    SchoolName: selectedSchool.SchoolName, 
+    ProgramName: selectedRow.ProgramName, 
+    Amount: selectedRow.Amount, 
+    Year: selectedRow.Year 
+  }
+  
+  try {
+    console.log("Moving payment row:", newRow);
+    const savedRow = await addPaymentsRow(newRow);
+    console.log("Received from server:", savedRow);
+    
     setPaymentsData((prevRowData) => {
-      const updated = [...prevRowData, newRow];
-      updateStorage({ Payments: updated })
+      const updated = [...prevRowData, savedRow];
+      updateStorage({ Payments: updated });
       return updated; 
     });
-    const updatedRowData = pendingPaymentsData.filter((row) => row.Id != selectedRow.Id);
-    deletePendingPaymentRow(selectedRow.Id);
-    setPendingPaymentsData(updatedRowData)
-    updateStorage({ PendingPayments: updatedRowData })
-  }, [pendingPaymentsData, selectedSchool])
+    
+    await deletePendingPaymentRow(selectedRow.Id);
+    const updatedRowData = pendingPaymentsData.filter((row) => row.Id !== selectedRow.Id);
+    setPendingPaymentsData(updatedRowData);
+    updateStorage({ PendingPayments: updatedRowData });
+    
+  } catch (error) {
+    console.error("Error moving payment row:", error);
+    setDialogMessage(`שגיאה בהעברת התשלום: ${error.message || error}`);
+    setDialogType("error");
+    setDialogOpen(true);
+  }
+}, [pendingPaymentsData, selectedSchool]);
 
   const isInChosenRoles = useCallback((role: string) => {
     if (!role) return false;
@@ -586,29 +604,94 @@ export const PaymentsTable = () => {
       });
     }, [selectedPrograms]);
 
-  const onPaymentsAddRowToolBarClick = useCallback(() => {
-    const rowCount = PaymentsData.length
-    if (!selectedSchool) { setDialogMessage("!אנא בחר בית ספר"); setDialogType("error"); setDialogOpen(true); return; }
-    const paymentsRow: any = { 
-        Objectid: undefined, Id: rowCount + 1, SchoolName: selectedSchool.SchoolName, 
-        Amount: 0, ProgramName: selectedPrograms[0].ProgramName,
-        Year: selectedYear 
-    }
-    addPaymentsRow(paymentsRow);
-    setPaymentsData((prevData) => { const updated = [...prevData, paymentsRow]; updateStorage({ Payments: updated }); return updated; });
-  }, [PaymentsData, selectedSchool, selectedPrograms, selectedYear]);
+ const onPaymentsAddRowToolBarClick = useCallback(async () => {
+  if (!selectedSchool) { 
+    setDialogMessage("!אנא בחר בית ספר"); 
+    setDialogType("error"); 
+    setDialogOpen(true); 
+    return; 
+  }
+  
+  if (!selectedPrograms || selectedPrograms.length === 0) {
+    setDialogMessage("!אין תוכניות זמינות לבית ספר זה"); 
+    setDialogType("error"); 
+    setDialogOpen(true); 
+    return;
+  }
 
-  const onPendingPaymentsAddRowToolBarClick = useCallback(() => {
-    if (!selectedSchool) { setDialogMessage("נא בחר בית ספר!"); setDialogType("error"); setDialogOpen(true); return; }
-    const rowCount = pendingPaymentsData.length
-    const pendingPaymentsRow: PendingPayments = { 
-        Objectid: undefined, Programid: selectedPrograms[0].Programid, Id: rowCount + 1, 
-        Amount: 0, ProgramName: selectedPrograms[0].ProgramName, Issuer: "", Date: undefined, CheckDate: undefined,
-        Year: selectedYear 
-    }
-    addPendingPaymentsRow(pendingPaymentsRow);
-    setPendingPaymentsData((prevData) => { const updated = [...prevData, pendingPaymentsRow]; updateStorage({ PendingPayments: updated }); return updated; });
-  }, [pendingPaymentsData.length, selectedPrograms, selectedSchool, selectedYear]);
+  const firstProgram = selectedPrograms[0];
+  
+  const paymentsRow: any = { 
+    SchoolName: selectedSchool.SchoolName, 
+    Amount: 0, 
+    ProgramName: firstProgram.ProgramName,
+    Programid: firstProgram.Programid,
+    Issuer: "",
+    Year: selectedYear || "תשפ\"ה"
+  }
+  
+  try {
+    console.log("Sending payment row:", paymentsRow);
+    const savedRow = await addPaymentsRow(paymentsRow);
+    console.log("Received from server:", savedRow);
+    
+    setPaymentsData((prevData) => { 
+      const updated = [...prevData, savedRow]; 
+      updateStorage({ Payments: updated }); 
+      return updated; 
+    });
+  } catch (error) {
+    console.error("Error adding payment row:", error);
+    setDialogMessage(`שגיאה בשמירת התשלום: ${error.message || error}`);
+    setDialogType("error");
+    setDialogOpen(true);
+  }
+}, [selectedSchool, selectedPrograms, selectedYear]);
+
+  const onPendingPaymentsAddRowToolBarClick = useCallback(async () => {
+  if (!selectedSchool) { 
+    setDialogMessage("!נא בחר בית ספר"); 
+    setDialogType("error"); 
+    setDialogOpen(true); 
+    return; 
+  }
+  
+  if (!selectedPrograms || selectedPrograms.length === 0) {
+    setDialogMessage("!אין תוכניות זמינות לבית ספר זה"); 
+    setDialogType("error"); 
+    setDialogOpen(true); 
+    return;
+  }
+
+  const firstProgram = selectedPrograms[0];
+  
+  const pendingPaymentsRow: any = { 
+    Programid: firstProgram.Programid, 
+    Amount: 0, 
+    ProgramName: firstProgram.ProgramName, 
+    Issuer: "", 
+    Date: undefined, 
+    CheckDate: undefined,
+    Year: selectedYear || "תשפ\"ה"
+  }
+  
+  try {
+    console.log("Sending pending payment row:", pendingPaymentsRow);
+    const savedRow = await addPendingPaymentsRow(pendingPaymentsRow);
+    console.log("Received from server:", savedRow);
+    
+    setPendingPaymentsData((prevData) => { 
+      const updated = [...prevData, savedRow]; 
+      updateStorage({ PendingPayments: updated }); 
+      return updated; 
+    });
+  } catch (error) {
+    console.error("Error adding pending payment row:", error);
+    setDialogMessage(`שגיאה בשמירת התשלום הממתין: ${error.message || error}`);
+    setDialogType("error");
+    setDialogOpen(true);
+  }
+}, [selectedPrograms, selectedSchool, selectedYear]);
 
   const onSchoolSelectionChanged = useCallback(async (event: any) => {
     const selectedNodes = event.api.getSelectedNodes();

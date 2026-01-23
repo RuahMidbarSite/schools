@@ -23,7 +23,8 @@ import { CustomLinkDrive } from "../GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
 
 import { deletePrograms, updateProgramsColumn, getAllProgramsData, createProgram, saveNewPrograms } from "@/db/programsRequests";
-import { getAllDistricts, getAllGuides, getAllAssignedInstructors } from "@/db/generalrequests";
+import { getAllDistricts, getAllGuides, getAllAssignedInstructors, getPayments } from "@/db/generalrequests";
+
 import { ThemeContext } from "@/context/Theme/Theme";
 import { YearContext } from "@/context/YearContext";
 import { StatusContext } from "@/context/StatusContext";
@@ -267,20 +268,31 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
     setIgnoreContextFilters(true);
   }, []);
 
-  const onGridReady = useCallback(async (params: any) => {
+ const onGridReady = useCallback(async (params: any) => {
     setIsGridReady(true);
     setHasNewRows(false); 
     try {
-const [storageData, areasData, guidesData, assignedGuidesData] = await Promise.all([
-    getAllProgramsData(), 
-    getAllDistricts(),
-    getAllGuides(),              // <--- חדש
-    getAllAssignedInstructors()  // <--- חדש
-]);        // --- הוסף את השורה הזו: ---
-        console.log("DEBUG PARENT: AssignedGuides", storageData.AssignedGuides); 
-        console.log("DEBUG PARENT: Guides", storageData.Guides); 
-        // -------------------------
+        // טעינת נתוני תשלומים בנוסף לשאר הנתונים
+        const [storageData, areasData, guidesData, assignedGuidesData, paymentsData] = await Promise.all([
+            getAllProgramsData(), 
+            getAllDistricts(),
+            getAllGuides(),              
+            getAllAssignedInstructors(),
+            getPayments() // <--- הוספת פונקציית הטעינה כאן
+        ]);        
+
         if (!storageData) return;
+
+        // יצירת מפה לחישוב מהיר של סך התשלומים לכל תוכנית
+       const paymentsMap = new Map();
+if (paymentsData) {
+    paymentsData.forEach((p: any) => {
+        // יצירת מפתח ייחודי המשלב את מספר התוכנית והשנה
+        const key = `${p.Programid}_${p.Year}`; 
+        const current = paymentsMap.get(key) || 0;
+        paymentsMap.set(key, current + (p.Amount || 0));
+    });
+}
 
         const rawPrograms = storageData.Programs || [];
         const schools = storageData.Schools || [];
@@ -292,10 +304,14 @@ const [storageData, areasData, guidesData, assignedGuidesData] = await Promise.a
             if (areaName) schoolAreaMap.set(s.id || s.Schoolid, areaName);
         });
 
-        const enrichedPrograms = rawPrograms.map((p: any) => ({
-            ...p,
-            Area: p.District || p.Area || schoolAreaMap.get(p.Schoolid) || ""
-        }));
+        // הצמדת סך התשלומים לכל אובייקט תוכנית
+       const enrichedPrograms = rawPrograms.map((p: any) => {
+    const key = `${p.Programid}_${p.Year}`;
+    return {
+        ...p,
+        totalPaid: paymentsMap.get(key) || 0 // סכימה רק של מה ששולם בשנה הזו
+    };
+});
 
         const initialData = (SchoolIDs && SchoolIDs.length > 0) 
             ? enrichedPrograms.filter((p: any) => SchoolIDs.includes(p.Schoolid))
@@ -305,6 +321,7 @@ const [storageData, areasData, guidesData, assignedGuidesData] = await Promise.a
         setAllSchools(schools);
         setAllContacts(storageData.schoolsContacts || []);
         maxIndex.current = rawPrograms.length > 0 ? Math.max(...rawPrograms.map((p: any) => p.Programid)) : 0;
+// המשך הפונקציה (הגדרת manualColumns) להלן...
 
         const getUniqueValues = (field: string) => [...new Set(enrichedPrograms.map((p: any) => p[field]).filter(Boolean))];
 
@@ -368,8 +385,25 @@ const [storageData, areasData, guidesData, assignedGuidesData] = await Promise.a
             },
             { field: "FinalPrice", header: "מחיר לאחר הוצאות", width: 80 },
             { field: "EstimatedExpenses", header: "הוצאות משוערות", width: 80 },
-            { field: "PendingMoney", header: "יתרה לגבייה", width: 70, cellStyle: STYLES.BALANCE_COL },
-            { field: "FreeLessonNumbers", header: "שיעורי בונוס", width: 60, cellStyle: STYLES.FINANCE_COL },
+{ 
+                field: "PendingMoney", 
+                header: "יתרה לגבייה", 
+                width: 70, 
+                cellStyle: STYLES.BALANCE_COL,
+                editable: false,
+                valueGetter: (params: any) => {
+                    const data = params.data;
+                    const price = Number(data.PricingPerPaidLesson) || 0;
+                    const lessons = Number(data.PaidLessonNumbers) || 0;
+                    const extra = Number(data.AdditionalPayments) || 0;
+                    const totalExpected = (price * lessons) + extra;
+                    const paid = Number(data.totalPaid) || 0;
+                    return totalExpected - paid;
+                },
+                valueFormatter: (params: any) => {
+                    return params.value !== undefined ? params.value.toLocaleString() + ' ₪' : '';
+                }
+            },            { field: "FreeLessonNumbers", header: "שיעורי בונוס", width: 60, cellStyle: STYLES.FINANCE_COL },
             { field: "AdditionalPayments", header: "תשלומים נוספים", width: 80, cellStyle: STYLES.FINANCE_COL },
             { field: "Notes", header: "הערות", width: 180 },
             { field: "Details", header: "פרטים נוספים", width: 140, hide: true },
