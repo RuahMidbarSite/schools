@@ -368,44 +368,70 @@ export default function GuidesTable({
         };
       }
       if (value === "FirstName") {
-        return {
-          ...baseColDef,
-          // ביטול עריכה בקליק אחד - חובה כדי שהקישור יעבוד
-          singleClickEdit: false, 
-          
-          cellEditor: NamePhoneCellEditor,
-          cellEditorParams: {
-            AllGuides: instructors
-          },
-          cellRenderer: (params: any) => {
-            if (!params.value) return "";
-            if (!params.data || !params.data.CellPhone) return params.value;
+  return {
+    ...baseColDef,
+    singleClickEdit: false, // 👈 חשוב! מונע עריכה אוטומטית
+    cellEditor: NamePhoneCellEditor,
+    cellEditorParams: {
+      AllGuides: instructors
+    },
+    cellRenderer: (params: any) => {
+      if (!params.value) return "";
+      if (!params.data || !params.data.CellPhone) return params.value;
 
-            // לוגיקת וואטסאפ
-            let phone = params.data.CellPhone.replace(/\D/g, '');
-            if (phone.startsWith('0')) {
-              phone = '972' + phone.substring(1);
-            }
-            const whatsappUrl = `whatsapp://send?phone=${phone}`;
-
-            return (
-              <a 
-                href={whatsappUrl}
-                style={{ 
-                  textDecoration: "underline", 
-                  color: "#2563eb", 
-                  cursor: "pointer",
-                  display: "inline-block",
-                  width: "100%" // מוודא שהקישור תופס את המקום
-                }}
-                // אין צורך יותר ב-stopPropagation כי ביטלנו את singleClickEdit
-              >
-                {params.value}
-              </a>
-            );
-          }
-        };
+      let phone = params.data.CellPhone.replace(/\D/g, '');
+      if (phone.startsWith('0')) {
+        phone = '972' + phone.substring(1);
       }
+      const whatsappUrl = `whatsapp://send?phone=${phone}`;
+
+      return (
+        <div 
+          style={{ 
+            display: "flex",
+            alignItems: "center",
+            width: "100%",
+            height: "100%",
+            padding: "0 4px"
+          }}
+          onDoubleClick={(e) => {
+            // לחיצה כפולה על הרקע - נכנס לעריכה
+            if (e.target === e.currentTarget) {
+              params.api.startEditingCell({
+                rowIndex: params.node.rowIndex,
+                colKey: 'FirstName'
+              });
+            }
+          }}
+        >
+          <a 
+            href={whatsappUrl}
+            onClick={(e) => {
+              // מונע לחלוטין כניסה לעריכה
+              e.preventDefault();
+              e.stopPropagation();
+              // פותח את WhatsApp
+              window.open(whatsappUrl, '_blank');
+            }}
+            onDoubleClick={(e) => {
+              // מונע כניסה לעריכה גם בלחיצה כפולה
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            style={{ 
+              textDecoration: "underline", 
+              color: "#2563eb", 
+              cursor: "pointer",
+              display: "inline-block"
+            }}
+          >
+            {params.value}
+          </a>
+        </div>
+      );
+    }
+  };
+}
       if (value === "Status") {
         return {
           ...baseColDef,
@@ -596,33 +622,78 @@ export default function GuidesTable({
     }, []);
 
   const onCellValueChanged = useCallback((event: CellValueChangedEvent) => {
+  modifiedRowRef.current = event.data;
+  
+  if (event.oldValue === event.newValue) {
+    return;
+  }
 
-    modifiedRowRef.current = event.data
-    if (event.oldValue === event.newValue) {
+  // בדיקה אם השדה המעודכן הוא טלפון
+  if (event.column.getColId() === "CellPhone") {
+    const newPhone = event.newValue;
+    const currentRowId = event.data.Guideid;
+    
+    // בדיקת פורמט טלפון
+    if (newPhone && !validateCellphone(newPhone, [])) {
+      setDialogType("validationError");
+      setDialogMessage("מספר טלפון לא תקין");
+      setOpen(true);
+      
+      // החזרת הערך הישן ישירות ב-data בלי לעורר event
+      setTimeout(() => {
+        event.data.CellPhone = event.oldValue;
+        gridRef.current.api.refreshCells({
+          rowNodes: [event.node],
+          columns: ['CellPhone'],
+          force: true
+        });
+      }, 0);
       return;
     }
-    if (!InTheMiddleOfAddingRows) {
-      updateInstructorsColumn(
-        event.column.getColId(),
-        event.newValue,
-        event.data.Guideid
-      ).then(() => {
-        if (typeof window !== "undefined") {
-          const future_data: Guide[] = [];
-          gridRef.current.api.forEachNode((node: any) => {
-            future_data.push(node.data);
-          });
-
-          updateStorage({ Guides: future_data })
-
-
-        }
-      })
-
+    
+    // בדיקת כפילות
+    let isDuplicate = false;
+    gridRef.current.api.forEachNode((node) => {
+      if (node.data.Guideid !== currentRowId && 
+          node.data.CellPhone === newPhone) {
+        isDuplicate = true;
+      }
+    });
+    
+    if (isDuplicate) {
+      setDialogType("validationError");
+      setDialogMessage("מספר טלפון זה כבר קיים במערכת");
+      setOpen(true);
+      
+      // החזרת הערך הישן ישירות ב-data בלי לעורר event
+      setTimeout(() => {
+        event.data.CellPhone = event.oldValue;
+        gridRef.current.api.refreshCells({
+          rowNodes: [event.node],
+          columns: ['CellPhone'],
+          force: true
+        });
+      }, 0);
+      return;
     }
+  }
 
-
-  }, [InTheMiddleOfAddingRows]);
+  if (!InTheMiddleOfAddingRows) {
+    updateInstructorsColumn(
+      event.column.getColId(),
+      event.newValue,
+      event.data.Guideid
+    ).then(() => {
+      if (typeof window !== "undefined") {
+        const future_data: Guide[] = [];
+        gridRef.current.api.forEachNode((node: any) => {
+          future_data.push(node.data);
+        });
+        updateStorage({ Guides: future_data });
+      }
+    });
+  }
+}, [InTheMiddleOfAddingRows]);
 
   const onCellEditingStopped = (event: CellEditingStoppedEvent) => {
 
@@ -693,59 +764,117 @@ export default function GuidesTable({
 
 
   const onSaveChangeButtonClick = useCallback(() => {
-    gridRef.current.api.stopEditing();
-    const colAmount: number = rowCount.current - dataRowCount.current;
-
-    var future_data: Guide[] = [];
-    var newly_added: Guide[] = [];
-    var count = 0;
-
-    const phoneNumbers = []
-    gridRef.current.api.forEachNode((node) => {
-      if (node.data?.CellPhone !== modifiedRowRef.current?.CellPhone) {
-        phoneNumbers.push(node.data.CellPhone)
+  gridRef.current.api.stopEditing();
+  
+  const phoneNumbers = new Set<string>();
+  const newRowsPhones: string[] = [];
+  let hasError = false;
+  
+  // איסוף כל מספרי הטלפון הקיימים
+  gridRef.current.api.forEachNode((node, index) => {
+    if (index >= rowCount.current - dataRowCount.current) {
+      // שורה חדשה
+      const phone = node.data.CellPhone;
+      
+      // בדיקת שדות חובה
+      if (!node.data.FirstName) {
+        setDialogType("validationError");
+        setDialogMessage(`אנא מלא שם פרטי בשורה ${index + 1}`);
+        setOpen(true);
+        hasError = true;
+        return;
       }
-
-    })
-
-    gridRef.current.api.forEachNode((node: any) => {
-      future_data.push(node.data);
-      if (count < rowCount.current - dataRowCount.current) {
-        newly_added.push(node.data);
+      
+      if (!phone) {
+        setDialogType("validationError");
+        setDialogMessage(`אנא מלא טלפון בשורה ${index + 1}`);
+        setOpen(true);
+        hasError = true;
+        return;
       }
-
-      count++;
-    });
-
-    future_data = future_data.sort((arg1, arg2) => arg1.Guideid - arg2.Guideid)
-
-    maxIndex.current = future_data.length > 0 ? Math.max(...future_data.map((guide) => guide.Guideid)):0
-
-    setDialogType("success");
-    setDialogMessage("מדריכים נוספו בהצלחה");
-    setOpen(true);
-    newly_added = newly_added.map((res) => { delete res['WhatsAppField']; return res }).sort((arg1, arg2) => arg1.Guideid - arg2.Guideid)
-    setRowData((data) => [...data, ...newly_added])
-    addInstructorsRows(newly_added).then((professions) => {
-
-      updateStorage({ Guides: future_data, Professions: professions })
-
-    })
-    dataRowCount.current = rowCount.current;
-    const element: any = document.getElementById("savechangesbutton");
-    if (element !== null) {
-      element.style.display = "none";
+      
+      // בדיקת פורמט
+      if (!validateCellphone(phone, [])) {
+        setDialogType("validationError");
+        setDialogMessage(`מספר טלפון לא תקין בשורה ${index + 1}`);
+        setOpen(true);
+        hasError = true;
+        return;
+      }
+      
+      newRowsPhones.push(phone);
+    } else {
+      // שורה קיימת
+      if (node.data.CellPhone) {
+        phoneNumbers.add(node.data.CellPhone);
+      }
     }
-    const element_2: any = document.getElementById("cancelchangesbutton");
-    if (element_2 !== null) {
-      element_2.style.display = "none";
+  });
+  
+  if (hasError) return;
+  
+  // בדיקת כפילות בין השורות החדשות לקיימות
+  for (let i = 0; i < newRowsPhones.length; i++) {
+    const phone = newRowsPhones[i];
+    
+    if (phoneNumbers.has(phone)) {
+      setDialogType("validationError");
+      setDialogMessage(`מספר טלפון ${phone} כבר קיים במערכת`);
+      setOpen(true);
+      return;
     }
-
-    SetInTheMiddleOfAddingRows(false);
-    gridRef.current.api.deselectAll()
-    setAmount(0)
-
-  }, []);
+    
+    // בדיקת כפילות בתוך השורות החדשות עצמן
+    if (newRowsPhones.indexOf(phone) !== i) {
+      setDialogType("validationError");
+      setDialogMessage(`מספר טלפון ${phone} מופיע יותר מפעם אחת`);
+      setOpen(true);
+      return;
+    }
+  }
+  
+  // אם הכל תקין, המשך עם השמירה
+  const future_data: Guide[] = [];
+  const newly_added: Guide[] = [];
+  let count = 0;
+  
+  gridRef.current.api.forEachNode((node: any) => {
+    future_data.push(node.data);
+    if (count < rowCount.current - dataRowCount.current) {
+      newly_added.push(node.data);
+    }
+    count++;
+  });
+  
+  future_data.sort((arg1, arg2) => arg1.Guideid - arg2.Guideid);
+  maxIndex.current = future_data.length > 0 ? 
+    Math.max(...future_data.map((guide) => guide.Guideid)) : 0;
+  
+  setDialogType("success");
+  setDialogMessage("מדריכים נוספו בהצלחה");
+  setOpen(true);
+  
+  const cleanNewlyAdded = newly_added
+    .map((res) => { delete res['WhatsAppField']; return res; })
+    .sort((arg1, arg2) => arg1.Guideid - arg2.Guideid);
+  
+  setRowData((data) => [...data, ...cleanNewlyAdded]);
+  
+  addInstructorsRows(cleanNewlyAdded).then((professions) => {
+    updateStorage({ Guides: future_data, Professions: professions });
+  });
+  
+  dataRowCount.current = rowCount.current;
+  
+  const saveBtn = document.getElementById("savechangesbutton");
+  const cancelBtn = document.getElementById("cancelchangesbutton");
+  if (saveBtn) saveBtn.style.display = "none";
+  if (cancelBtn) cancelBtn.style.display = "none";
+  
+  SetInTheMiddleOfAddingRows(false);
+  gridRef.current.api.deselectAll();
+  setAmount(0);
+}, []);
 
   const onCancelChangeButtonClick = useCallback(() => {
     const prev_data: Guide[] = [];
@@ -991,92 +1120,95 @@ const components = useMemo(
   
   return (
     <>
-      <Navbar
-        id="SchoolNavBar"
-        className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%]  flex-row-reverse"
-      >
-        <LoadingOverlay />
-        
-        <Redirect type={'Guides'} ScopeType={'Drive'} />
-        
-        
-        <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute">בטל סינון</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded mr-1 ml-1"
-            onClick={onClearFilterButtonClick}
-          >
-            <FcCancel className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
+     <Navbar
+  id="SchoolNavBar"
+  className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%]  flex-row-reverse"
+  suppressHydrationWarning
+>
+  <LoadingOverlay />
+  
+  <div suppressHydrationWarning>
+    <Redirect type={'Guides'} ScopeType={'Drive'} />
+  </div>
+  
+  
+  <OverlayTrigger
+    placement={"top"}
+    overlay={<Tooltip className="absolute">ביטול סינון</Tooltip>}
+  >
+    <button
+      className="hover:bg-[#253d37] rounded mr-1 ml-1"
+      onClick={onClearFilterButtonClick}
+    >
+      <FcCancel className="w-[37px] h-[37px]" />
+    </button>
+  </OverlayTrigger>
 
-        <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute">ניהול עמודות</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded mr-1 ml-1"
-            onClick={() => setColumnWindowOpen(true)}
-          >
-            <FcAddColumn className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
+  <OverlayTrigger
+    placement={"top"}
+    overlay={<Tooltip className="absolute">ניהול עמודות</Tooltip>}
+  >
+    <button
+      className="hover:bg-[#253d37] rounded mr-1 ml-1"
+      onClick={() => setColumnWindowOpen(true)}
+    >
+      <FcAddColumn className="w-[37px] h-[37px]" />
+    </button>
+  </OverlayTrigger>
 
-        <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute">הוסף שורה</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37]  rounded mr-1 ml-1"
-            onClick={onAddRowToolBarClick}
-          >
-            <FcAddRow className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
+  <OverlayTrigger
+    placement={"top"}
+    overlay={<Tooltip className="absolute">הוסף שורה</Tooltip>}
+  >
+    <button
+      className="hover:bg-[#253d37]  rounded mr-1 ml-1"
+      onClick={onAddRowToolBarClick}
+    >
+      <FcAddRow className="w-[37px] h-[37px]" />
+    </button>
+  </OverlayTrigger>
 
-        <button
-          id="cancelchangesbutton"
-          onClick={onCancelChangeButtonClick}
-          className="hover:bg-slate-500 bg-slate-600 rounded mr-[100px] text-white border-solid hidden "
-        >
-          בטל שינויים
-        </button>
+  <button
+    id="cancelchangesbutton"
+    onClick={onCancelChangeButtonClick}
+    className="hover:bg-slate-500 bg-slate-600 rounded mr-[100px] text-white border-solid hidden "
+  >
+    בטל שינויים
+  </button>
 
-        <button
-          id="savechangesbutton"
-          onClick={onSaveChangeButtonClick}
-          className="hover:bg-rose-700 bg-rose-800 rounded mr-[50px] text-white  border-solid hidden "
-        >
-          שמור שינויים{" "}
-        </button>
+  <button
+    id="savechangesbutton"
+    onClick={onSaveChangeButtonClick}
+    className="hover:bg-rose-700 bg-rose-800 rounded mr-[50px] text-white  border-solid hidden "
+  >
+    שמור שינויים{" "}
+  </button>
 
-        <button
-          id="savedeletions"
-          onClick={onSaveDeletions}
-          className="hover:bg-green-700 bg-green-800 rounded mr-[50px] text-white  border-solid hidden  "
-        >
-          מחק {checkedAmount} שורות
-        </button>
+  <button
+    id="savedeletions"
+    onClick={onSaveDeletions}
+    className="hover:bg-green-700 bg-green-800 rounded mr-[50px] text-white  border-solid hidden  "
+  >
+    מחק {checkedAmount} שורות
+  </button>
 
-        <input
-          className={theme === "dark-theme" ? "text-right  bg-gray-900 text-white  border-solid w-[200px] h-[40px] p-2 mr-1" :
-            "text-right  bg-white text-gray-500  border-solid w-[200px] h-[40px] p-2 mr-1"}
-          type="text"
-          id="filter-text-box"
-          placeholder="חיפוש"
-          onInput={onFilterTextBoxChanged}
-        />
+  <input
+    className={theme === "dark-theme" ? "text-right  bg-gray-900 text-white  border-solid w-[200px] h-[40px] p-2 mr-1" :
+      "text-right  bg-white text-gray-500  border-solid w-[200px] h-[40px] p-2 mr-1"}
+    type="text"
+    id="filter-text-box"
+    placeholder="חיפוש"
+    onInput={onFilterTextBoxChanged}
+  />
 
-        <div className="mr-auto bg-[#E6E6FA] rounded-md p-1 flex items-center">
-          <GoogleDriveAuthStatus 
-            type="Guides"
-            checkAuthStatus={checkDriveStatus}
-            onDisconnect={onDisconnectDrive}
-          />
-        </div>
-      </Navbar>
+  <div className="mr-auto bg-[#E6E6FA] rounded-md p-1 flex items-center" suppressHydrationWarning>
+    <GoogleDriveAuthStatus 
+      type="Guides"
+      checkAuthStatus={checkDriveStatus}
+      onDisconnect={onDisconnectDrive}
+    />
+  </div>
+</Navbar>
       <Suspense>
         <div
           id="grid-1"
