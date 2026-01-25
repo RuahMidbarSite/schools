@@ -1,5 +1,5 @@
 // ====================================
-// WhatsApp.ts - תיקון מלא עם זיהוי Session פגום
+// WhatsApp.ts - פשוט וברור: יש חיבור? לא צריך QR
 // ====================================
 
 import { Client, LocalAuth } from "whatsapp-web.js";
@@ -8,175 +8,100 @@ import fs from "fs";
 
 const GlobalClient = global as unknown as { client: Client };
 
-let isClientReady = false;
-let isInitializing = false;
-let hasSession = false;
 let lastQrCode: string | null = null;
-let isFullyReady = false;
+let qrResolve: ((qr: string) => void) | null = null;
 
-// 🔥 NEW: מונה QR - אם יש יותר מדי, Session פגום
-let qrCount = 0;
-let firstQrTime: number | null = null;
-let sessionDeletedThisRun = false; // מונע מחיקה כפולה
-
-let resolveReady: ((value: boolean) => void) | null = null;
-let resolveQr: ((qr: string) => void) | null = null;
-let resolveAuthenticated: ((value: boolean) => void) | null = null;
-
-let readyPromise: Promise<boolean>;
-let qrPromise: Promise<string>;
-let authenticatedPromise: Promise<boolean>;
-
-const resetPromises = () => {
-  console.log("📄 Resetting promises...");
-  readyPromise = new Promise((resolve) => { resolveReady = resolve; });
-  qrPromise = new Promise((resolve) => { resolveQr = resolve; });
-  authenticatedPromise = new Promise((resolve) => { resolveAuthenticated = resolve; });
-  console.log("✅ Promises reset complete");
-};
-
-resetPromises();
-
-// 🔥 פונקציה למחיקת Session פגום - עם טיפול ב-Windows permissions
-const deleteCorruptedSession = async (): Promise<boolean> => {
-  if (sessionDeletedThisRun) {
-    console.log("⚠️ Session already deleted in this run, skipping");
-    return false;
-  }
-
-  console.log("\n🗑️ DELETING CORRUPTED SESSION...");
-  const dataPath = path.join(process.cwd(), 'WhatsAppData');
+// ========================================
+// פונקציה פשוטה: האם יש חיבור אמיתי?
+// ========================================
+const isActuallyConnected = async (): Promise<boolean> => {
+  if (!GlobalClient.client) return false;
   
   try {
-    // שלב 1: הרוג את ה-Client
-    if (GlobalClient.client) {
-      try {
-        console.log("🔪 Destroying client...");
-        await GlobalClient.client.destroy();
-        console.log("✅ Client destroyed");
-      } catch (err) {
-        console.log("⚠️ Error destroying client:", err);
-      }
-      GlobalClient.client = undefined as any;
-    }
-
-    // שלב 2: המתן ל-Puppeteer לשחרר את הקבצים (קריטי ב-Windows!)
-    console.log("⏳ Waiting 3 seconds for file handles to release...");
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // שלב 3: מחק את התיקייה עם Retry
-    if (fs.existsSync(dataPath)) {
-      let deleted = false;
-      let attempts = 0;
-      const maxAttempts = 5;
-      
-      while (!deleted && attempts < maxAttempts) {
-        attempts++;
-        try {
-          console.log(`🗑️ Deletion attempt ${attempts}/${maxAttempts}...`);
-          fs.rmSync(dataPath, { recursive: true, force: true });
-          deleted = true;
-          console.log("✅ Session directory deleted!");
-        } catch (err: any) {
-          if (err.code === 'EPERM' && attempts < maxAttempts) {
-            console.log(`⚠️ Permission denied, retrying in 2 seconds...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          } else {
-            throw err;
-          }
-        }
-      }
-      
-      if (!deleted) {
-        console.error("❌ Failed to delete session after 5 attempts");
-        console.log("⚠️ MANUAL ACTION REQUIRED:");
-        console.log(`   1. Stop the server (Ctrl+C)`);
-        console.log(`   2. Delete: ${dataPath}`);
-        console.log(`   3. Restart the server`);
-        return false;
-      }
-    }
+    const state = await Promise.race([
+      GlobalClient.client.getState(),
+      new Promise<string>((_, reject) => 
+        setTimeout(() => reject(new Error("timeout")), 3000)
+      )
+    ]);
     
-    hasSession = false;
-    qrCount = 0;
-    firstQrTime = null;
-    sessionDeletedThisRun = true;
-    isClientReady = false;
-    isInitializing = false;
-    isFullyReady = false;
+    const connected = state === 'CONNECTED';
+    console.log(`🔍 Connection check: ${connected} (state: ${state})`);
+    return connected;
     
-    console.log("✅ Session cleanup complete!");
-    return true;
-  } catch (err) {
-    console.error("❌ Error deleting session:", err);
-    console.log("\n⚠️ MANUAL ACTION REQUIRED:");
-    console.log(`   1. Stop the server (Ctrl+C)`);
-    console.log(`   2. Delete: ${dataPath}`);
-    console.log(`   3. Restart the server`);
+  } catch (err: any) {
+    console.log(`🔍 Connection check: false (error: ${err.message})`);
     return false;
   }
 };
 
-const GetClientOrInitialize = async () => {
-  console.log("\n=== 🚀 GetClientOrInitialize Called ===");
-  console.log("⏰ Time:", new Date().toISOString());
+// ========================================
+// בדיקה: האם יש Session בקבצים?
+// ========================================
+const hasSessionFiles = (): boolean => {
+  const sessionPath = path.join(process.cwd(), 'WhatsAppData', 'session-1');
   
-  // אם Client קיים, בדוק אם הוא עובד
-  if (GlobalClient.client) {
-    console.log("♻️ Client exists - checking state...");
-    
-    try {
-      const statePromise = GlobalClient.client.getState();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("State check timeout")), 5000)
-      );
-      
-      const state = await Promise.race([statePromise, timeoutPromise]) as string;
-      console.log("📊 State:", state);
-      
-      if (state === 'CONNECTED') {
-        console.log("✅ Client connected!");
-        return GlobalClient.client;
-      }
-      
-      console.log("⚠️ Client not connected - resetting");
-      await resetClient();
-      
-    } catch (err: any) {
-      console.log("⚠️ Error checking state:", err.message);
-      await resetClient();
-    }
-  }
+  if (!fs.existsSync(sessionPath)) return false;
   
-  // אם מאתחל, המתן
-  if (isInitializing) {
-    console.log("⏳ Initializing, waiting...");
-    let attempts = 0;
-    while (isInitializing && attempts < 120) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      attempts++;
-      if (attempts % 10 === 0) console.log(`⏳ ${attempts}s...`);
-    }
-    if (isClientReady && GlobalClient.client) return GlobalClient.client;
+  try {
+    const files = fs.readdirSync(sessionPath);
+    const hasFiles = files.length > 5; // לפחות כמה קבצים חשובים
+    console.log(`📁 Session files: ${files.length} files (valid: ${hasFiles})`);
+    return hasFiles;
+  } catch (err) {
+    return false;
   }
+};
 
-  console.log("🆕 Creating new WhatsApp client...");
-  isInitializing = true;
-  isFullyReady = false;
-  qrCount = 0;
-  firstQrTime = null;
+// ========================================
+// מחיקת Session
+// ========================================
+const deleteSession = async (): Promise<void> => {
+  console.log("\n🗑️  Deleting session...");
+  const dataPath = path.join(process.cwd(), 'WhatsAppData');
+  
+  // סגור client קודם
+  if (GlobalClient.client) {
+    try {
+      const pupBrowser = (GlobalClient.client as any).pupBrowser;
+      if (pupBrowser) {
+        await pupBrowser.close().catch(() => {});
+      }
+      await GlobalClient.client.destroy().catch(() => {});
+      console.log("✅ Client destroyed");
+    } catch (err: any) {
+      console.log("⚠️  Client cleanup:", err.message);
+    }
+    GlobalClient.client = undefined as any;
+  }
+  
+  // המתן לשחרור קבצים
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  // מחק קבצים
+  if (fs.existsSync(dataPath)) {
+    try {
+      fs.rmSync(dataPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 1000 });
+      console.log("✅ Session files deleted");
+    } catch (err: any) {
+      console.error("❌ Failed to delete session:", err.message);
+      throw err;
+    }
+  }
+  
+  lastQrCode = null;
+};
+
+// ========================================
+// יצירת Client חדש
+// ========================================
+const createNewClient = async (): Promise<Client> => {
+  console.log("\n🔧 Creating new WhatsApp client...");
   
   const dataPath = path.join(process.cwd(), 'WhatsAppData');
-  console.log("📁 Data path:", dataPath);
-  
   if (!fs.existsSync(dataPath)) {
     fs.mkdirSync(dataPath, { recursive: true });
   }
-  
-  const sessionPath = path.join(dataPath, 'session-1');
-  const hasExistingSession = fs.existsSync(sessionPath);
-  console.log(`📂 Existing session: ${hasExistingSession}`);
-  hasSession = hasExistingSession;
   
   const client = new Client({
     authStrategy: new LocalAuth({
@@ -201,239 +126,218 @@ const GetClientOrInitialize = async () => {
       type: "remote",
     },
   });
-
-  resetPromises();
-
+  
   // ========================================
-  // 🔥 EVENT: QR Code - זיהוי Session פגום
+  // EVENT: QR - פשוט שומר ומחזיר
   // ========================================
-  client.on("qr", async (qr) => {
-    qrCount++;
-    const now = Date.now();
-    
-    if (qrCount === 1) {
-      firstQrTime = now;
-      console.log("\n📱 QR Code received (#1)");
-    } else {
-      const timeSinceFirst = (now - (firstQrTime || now)) / 1000;
-      console.log(`\n📱 QR Code received (#${qrCount}) - ${timeSinceFirst.toFixed(1)}s since first`);
-    }
-    
+  client.on("qr", (qr) => {
+    console.log("\n📱 QR Code generated");
     console.log("⏰ Time:", new Date().toISOString());
     lastQrCode = qr;
     
-    // 🔥 אם יש Session אבל עדיין מקבלים QR - Session פגום!
-    if (hasSession && qrCount === 1) {
-      console.log("⚠️ WARNING: Session exists but got QR - SESSION IS CORRUPTED!");
-      console.log("🗑️ Attempting to delete corrupted session...");
-      
-      // הרס את ה-Client קודם
-      try {
-        await client.destroy();
-        console.log("✅ Client destroyed before deletion");
-      } catch (err) {
-        console.log("⚠️ Error destroying client:", err);
-      }
-      
-      const deleted = await deleteCorruptedSession();
-      
-      if (!deleted) {
-        console.log("❌ COULD NOT DELETE SESSION AUTOMATICALLY");
-        console.log("⚠️ Please manually delete the WhatsAppData folder and restart");
-        isInitializing = false;
-        return;
-      }
-      
-      // אם נמחק בהצלחה - אל תנסה לאתחל מחדש אוטומטית
-      // תן למשתמש לראות את ההודעה ולהפעיל מחדש
-      console.log("✅ Session deleted successfully!");
-      console.log("🔄 Please restart the server for a clean start");
-      isInitializing = false;
-      return;
-    }
-    
-    // 🔥 אם קיבלנו 3+ QR בתוך דקה - משהו לא בסדר
-    if (qrCount >= 3 && firstQrTime && (now - firstQrTime) < 60000) {
-      console.log("🚨 ERROR: Got 3+ QR codes within 1 minute!");
-      console.log("🗑️ This indicates a problem - deleting session...");
-      
-      await deleteCorruptedSession();
-      
-      console.log("🔄 Please restart the server manually");
-      return;
-    }
-    
-    hasSession = false;
-    isFullyReady = false;
-    
-    authenticatedPromise = new Promise((resolve) => {
-      resolveAuthenticated = resolve;
-    });
-    
-    if (resolveQr) {
-      resolveQr(qr);
-      console.log("✅ QR promise resolved");
+    // 🔥 FIX: תמיד resolve את ה-QR מיד
+    if (qrResolve) {
+      console.log("✅ Resolving QR promise");
+      qrResolve(qr);
+      qrResolve = null;
+    } else {
+      console.log("⚠️  QR generated but no resolver waiting");
     }
   });
-
+  
   // ========================================
   // EVENT: Authenticated
   // ========================================
   client.on("authenticated", () => {
-    console.log("\n🔓 Authenticated!");
+    console.log("\n✅ Authenticated!");
     console.log("⏰ Time:", new Date().toISOString());
-    hasSession = true;
-    qrCount = 0; // איפוס מונה
-    sessionDeletedThisRun = false; // איפוס דגל
-    
-    if (resolveAuthenticated) {
-      resolveAuthenticated(true);
-      console.log("✅ Authenticated promise resolved");
-    }
-    
-    setTimeout(() => {
-      if (!isClientReady) {
-        console.log("⚡ Marking as ready");
-        isClientReady = true;
-        isInitializing = false;
-        if (resolveReady) resolveReady(true);
-      }
-      
-      setTimeout(() => {
-        isFullyReady = true;
-        console.log("🎯 FULLY READY!");
-      }, 5000);
-      
-    }, 15000);
   });
-
+  
   // ========================================
   // EVENT: Ready
   // ========================================
   client.on("ready", () => {
-    console.log("\n✅ WhatsApp READY!");
+    console.log("\n✅ WhatsApp Client Ready!");
     console.log("⏰ Time:", new Date().toISOString());
-    isClientReady = true;
-    isInitializing = false;
-    hasSession = true;
-    qrCount = 0;
-    sessionDeletedThisRun = false;
-    
-    if (resolveReady) {
-      resolveReady(true);
-    }
-    
-    setTimeout(() => {
-      isFullyReady = true;
-      console.log("🎯 FULLY READY!");
-    }, 3000);
   });
-
+  
   // ========================================
   // EVENT: State Change
   // ========================================
   client.on("change_state", (state) => {
-    console.log("🔄 State:", state, "| Time:", new Date().toISOString());
-    
-    if (state === 'CONNECTED') {
-      isClientReady = true;
-      isInitializing = false;
-      hasSession = true;
-      
-      if (resolveReady) resolveReady(true);
-      
-      setTimeout(() => {
-        isFullyReady = true;
-        console.log("🎯 FULLY READY!");
-      }, 3000);
-    }
-    
-    if (state === 'CONFLICT' || state === 'UNPAIRED') {
-      console.log("⚠️ Conflict/Unpaired - resetting");
-      resetClient();
-    }
+    console.log(`🔄 State changed: ${state}`);
   });
-
+  
   // ========================================
-  // EVENT: Auth Failure
+  // EVENT: Auth Failure - מחק Session פגום
   // ========================================
   client.on("auth_failure", async (msg) => {
     console.log("\n❌ Auth failure:", msg);
-    console.log("⏰ Time:", new Date().toISOString());
-    
-    // Session פגום - מחק אותו
-    await deleteCorruptedSession();
-    
-    hasSession = false;
-    isClientReady = false;
-    isInitializing = false;
-    isFullyReady = false;
-    resetPromises();
+    await deleteSession();
   });
-
+  
   // ========================================
-  // EVENT: Disconnected
+  // EVENT: Disconnected - מחק Session אם LOGOUT
   // ========================================
-  client.on("disconnected", (reason) => {
-    console.log("\n🔌 Disconnected:", reason);
-    console.log("⏰ Time:", new Date().toISOString());
-    isClientReady = false;
-    isInitializing = false;
-    hasSession = false;
-    isFullyReady = false;
-    qrCount = 0;
-    resetPromises();
+  client.on("disconnected", async (reason) => {
+    console.log("\n❌ Disconnected:", reason);
+    
+    const reasonStr = String(reason);
+    if (reasonStr === 'LOGOUT' || reasonStr.includes('NAVIGATION')) {
+      console.log("🗑️  Logout detected - deleting session");
+      await deleteSession();
+    }
   });
-
-  console.log("🚀 Initializing...");
+  
+  console.log("🚀 Initializing client...");
   await client.initialize();
+  
   GlobalClient.client = client;
-  console.log("✅ Initialization started");
+  console.log("✅ Client initialized");
   
   return client;
 };
 
-const isReady = () => {
-  const ready = isClientReady && isFullyReady && GlobalClient.client !== undefined;
-  console.log(`🔍 isReady: ${ready} (clientReady: ${isClientReady}, fullyReady: ${isFullyReady}, exists: ${GlobalClient.client !== undefined})`);
-  return ready;
-};
-
-const hasStoredSession = () => hasSession;
-const getLastQr = () => lastQrCode;
-
-const resetClient = async () => {
-  console.log("\n🔄 Resetting client...");
+// ========================================
+// הפונקציה הראשית - הלוגיקה הפשוטה!
+// ========================================
+const GetClientOrInitialize = async () => {
+  console.log("\n=== 🎯 GetClientOrInitialize ===");
+  console.log("⏰ Time:", new Date().toISOString());
   
+  // 1️⃣ יש client קיים? בדוק אם הוא מחובר
   if (GlobalClient.client) {
-    try {
-      await GlobalClient.client.destroy();
-      console.log("✅ Client destroyed");
-    } catch (err) {
-      console.error("❌ Error:", err);
+    console.log("📌 Checking existing client...");
+    const connected = await isActuallyConnected();
+    
+    if (connected) {
+      console.log("✅ Already connected - returning client");
+      return GlobalClient.client;
     }
+    
+    console.log("❌ Client exists but not connected - will recreate");
+    await deleteSession();
   }
   
-  isClientReady = false;
-  isInitializing = false;
-  hasSession = false;
-  lastQrCode = null;
-  isFullyReady = false;
-  qrCount = 0;
-  firstQrTime = null;
-  resetPromises();
-  
-  console.log("✅ Reset complete");
+  // 2️⃣ אין client - צור חדש
+  return await createNewClient();
 };
 
+// 🔥 מנגנון נעילה למניעת קריאות מרובות
+let isInitializing = false;
+let initPromise: Promise<{ result: 'ready' | 'qr', qr?: string }> | null = null;
+
+// ========================================
+// Initialize - הלוגיקה הפשוטה!
+// ========================================
+const Initialize = async (): Promise<{ result: 'ready' | 'qr', qr?: string }> => {
+  console.log("\n=== 🚀 Initialize ===");
+  
+  // 🔒 אם כבר מאתחלים - חכה לתהליך הקיים
+  if (isInitializing && initPromise) {
+    console.log("⏳ Already initializing - waiting for existing process...");
+    return initPromise;
+  }
+  
+  // 🔒 נעל את התהליך
+  isInitializing = true;
+  
+  initPromise = (async () => {
+    try {
+      // 1️⃣ בדוק אם כבר מחובר
+      const connected = await isActuallyConnected();
+      if (connected) {
+        console.log("✅ Already connected!");
+        return { result: 'ready' as const };
+      }
+      
+      // 2️⃣ יש Session בקבצים? נסה להשתמש בו
+      const hasSession = hasSessionFiles();
+      
+      if (hasSession) {
+        console.log("📁 Found session files - trying to load...");
+        
+        // צור client שיטען את ה-Session
+        await GetClientOrInitialize();
+        
+        // חכה עד 15 שניות בלבד לחיבור (לא 45!)
+        console.log("⏳ Waiting up to 15s for session to connect...");
+        const startTime = Date.now();
+        
+        while (Date.now() - startTime < 15000) { // 🔥 שינוי מ-45 ל-15 שניות
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const nowConnected = await isActuallyConnected();
+          if (nowConnected) {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.log(`✅ Connected after ${elapsed}s!`);
+            return { result: 'ready' as const };
+          }
+          
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          if (elapsed % 5 === 0) { // 🔥 לוג כל 5 שניות במקום 10
+            console.log(`⏳ Still waiting... (${elapsed}s)`);
+          }
+        }
+        
+        console.log("⏱️  Session load timeout after 15s - deleting and creating fresh");
+        await deleteSession();
+      }
+      
+      // 3️⃣ אין Session תקין - צור חדש וחכה ל-QR
+      console.log("📱 Creating fresh session - waiting for QR...");
+      
+      // 🔥 FIX: הגדר את qrResolve **לפני** יצירת Client!
+      const qrPromise = new Promise<string>((resolve) => {
+        qrResolve = resolve;
+        console.log("✅ QR resolver ready - waiting for QR event...");
+      });
+      
+      const timeoutPromise = new Promise<string>((_, reject) => 
+        setTimeout(() => reject(new Error("QR timeout")), 30000)
+      );
+      
+      // עכשיו צור את ה-Client (הוא יפעיל את ה-event 'qr')
+      console.log("🔧 Creating client (this will trigger QR event)...");
+      const createPromise = GetClientOrInitialize();
+      
+      // המתן ל-QR או timeout
+      const qr = await Promise.race([qrPromise, timeoutPromise]);
+      console.log("✅ QR Code ready!");
+      
+      // וודא שה-Client גם נוצר
+      await createPromise;
+      
+      return { result: 'qr' as const, qr };
+      
+    } catch (err: any) {
+      console.error("❌ Failed to initialize:", err.message);
+      
+      // אולי בינתיים התחבר?
+      const connected = await isActuallyConnected();
+      if (connected) {
+        return { result: 'ready' as const };
+      }
+      
+      throw new Error("Failed to initialize WhatsApp");
+      
+    } finally {
+      // 🔓 שחרר את הנעילה
+      isInitializing = false;
+      initPromise = null;
+    }
+  })();
+  
+  return initPromise;
+};
+
+// ========================================
+// Export הפונקציות
+// ========================================
 export {
   GetClientOrInitialize,
-  qrPromise as QrPromise,
-  readyPromise,
-  authenticatedPromise,
-  isReady,
-  hasStoredSession,
-  getLastQr,
-  resetClient,
-  resetPromises
+  Initialize,
+  isActuallyConnected as isReady,
+  hasSessionFiles as hasStoredSession,
+  deleteSession as resetClient
 };

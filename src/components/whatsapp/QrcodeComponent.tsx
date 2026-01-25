@@ -3,7 +3,11 @@
 import { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from "react";
 import { usePathname } from 'next/navigation';
 
-const QrCode = forwardRef((props, ref) => {
+interface QrCodeRef {
+  checkConnection: () => Promise<boolean>;
+}
+
+const QrCode = forwardRef<QrCodeRef>((props, ref) => {
   const currentRoute = usePathname();
   const relevantRoutes = useMemo(() => ["/messagesForm", "/placementsPage"], []);
 
@@ -15,228 +19,175 @@ const QrCode = forwardRef((props, ref) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
   
-  const emitRequest = useRef(false);
+  const initRef = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994';
 
-  // Generate QR Code on canvas
+  // בדיקה אוטומטית בטעינה - פעם אחת בלבד
   useEffect(() => {
-    if (qrCodeData && canvasRef.current) {
-      const QRCode = require('qrcode');
-      
-      QRCode.toCanvas(
-        canvasRef.current,
-        qrCodeData,
-        {
-          width: 300,
-          margin: 2,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-          }
-        },
-        (error: any) => {
-          if (error) {
-            console.error('❌ QR generation error:', error);
-            setErrorMessage('שגיאה ביצירת קוד QR');
-          } else {
-            console.log('✅ QR Code generated');
-          }
-        }
-      );
+    if (relevantRoutes.includes(currentRoute) && !initRef.current) {
+      initRef.current = true;
+      console.log("Checking connection...");
+      checkAndInitialize();
     }
-  }, [qrCodeData]);
+  }, [currentRoute]);
 
-  // Expose checkConnection method to parent
-  useImperativeHandle(ref, () => ({
-    checkConnection: async () => {
-      console.log("\n=== 🔍 checkConnection Called ===");
-      console.log("⏰ Time:", new Date().toISOString());
+  const checkAndInitialize = async () => {
+    const connected = await simpleConnectionCheck();
+    if (!connected) {
+      await RequestSession();
+    } else {
+      setAuthenticated(true);
+      setShowAuthentication(true);
+    }
+  };
+
+  // בדיקה פשוטה - האם מחובר?
+  const simpleConnectionCheck = async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`${SERVER_URL}/status`, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000)
+      });
       
-      if (emitRequest.current) {
-        console.log("⏳ Request in progress, waiting...");
-        for (let i = 0; i < 120; i++) { // 2 minutes max
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          if (!emitRequest.current) {
-            console.log("✅ Previous request completed");
-            break;
-          }
-          if (i % 10 === 0) {
-            console.log(`⏳ Still waiting... ${i} seconds`);
+      if (res.ok) {
+        const data = await res.json();
+        
+        if (data.connected && data.isReady) {
+          console.log("Already connected");
+          return true;
+        }
+        
+        // אם יש session - חכה 10 שניות ובדוק שוב
+        if (data.hasSession && !data.connected) {
+          console.log("Has session, waiting 10s...");
+          await new Promise(resolve => setTimeout(resolve, 10000));
+          
+          const retry = await fetch(`${SERVER_URL}/status`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          
+          if (retry.ok) {
+            const retryData = await retry.json();
+            if (retryData.connected && retryData.isReady) {
+              console.log("Connected after wait");
+              return true;
+            }
           }
         }
       }
       
-      const result = await RequestSession();
-      console.log("🎯 checkConnection result:", result);
-      console.log("⏰ Time:", new Date().toISOString());
+      return false;
+    } catch (err) {
+      console.error("Check error:", err);
+      return false;
+    }
+  };
+
+  // יצירת QR על canvas
+  useEffect(() => {
+    if (qrCodeData && canvasRef.current) {
+      const QRCode = require('qrcode');
+      QRCode.toCanvas(canvasRef.current, qrCodeData, { width: 300, margin: 2 });
+    }
+  }, [qrCodeData]);
+
+  // חשיפה לקומפוננטה אב
+  useImperativeHandle(ref, () => ({
+    checkConnection: async () => {
+      const result = await simpleConnectionCheck();
+      if (!result) {
+        await RequestSession();
+      }
       return result;
     }
   }));
 
   const RequestSession = async () => {
-    console.log("\n=== 🚀 RequestSession Started ===");
-    console.log("⏰ Time:", new Date().toISOString());
+    console.log("\n=== RequestSession ===");
     
     try {
-      emitRequest.current = true;
       setIsLoading(true);
       setErrorMessage(null);
-      setStatusMessage("מאתחל חיבור...");
+      setStatusMessage("מאתחל...");
       
-      const initUrl = `${SERVER_URL}/Initialize`;
-      console.log("📡 Calling:", initUrl);
-      
-      // Step 1: Initialize with 60 second timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.log("⏰ 60 second timeout");
-        controller.abort();
-      }, 60000);
-      
-      const initRes = await fetch(initUrl, { 
+      // קריאה ל-Initialize
+      const initRes = await fetch(`${SERVER_URL}/Initialize`, {
         method: "GET",
-        signal: controller.signal
+        signal: AbortSignal.timeout(60000)
       });
       
-      clearTimeout(timeoutId);
-      console.log("📥 Initialize response:", initRes.status);
-      console.log("⏰ Time:", new Date().toISOString());
-
       if (!initRes.ok) {
         throw new Error(`Server error: ${initRes.status}`);
       }
 
       const initData = await initRes.json();
-      console.log("📦 Initialize data:", initData);
+      console.log("Initialize result:", initData.result);
       
-      // Case 1: Already ready (has stored session)
+      // מוכן
       if (initData.result === 'ready') {
-        console.log("✅ Already connected (stored session)");
         setAuthenticated(true);
-        setShowAuthentication(false);
-        setTimeout(() => setShowAuthentication(true), 1000);
+        setShowAuthentication(true);
         setIsLoading(false);
-        emitRequest.current = false;
-        setStatusMessage("מחובר!");
-        return true;
+        return;
       }
       
-      // Case 2: Need to scan QR (new session)
+      // צריך QR
       if (initData.result === 'qr' && initData.data) {
-        console.log("📱 QR code received");
-        setStatusMessage("סרוק QR בטלפון");
         setQrCodeData(initData.data);
         setShowQRModal(true);
+        setStatusMessage("סרוק QR");
         
-        // Step 2: Wait for QR scan (up to 3 minutes)
-        console.log("⏳ Waiting for QR scan...");
-        const waitUrl = `${SERVER_URL}/WaitQr`;
-        console.log("📡 Calling:", waitUrl);
+        // Polling - בדיקה כל 3 שניות
+        const maxTime = 6 * 60 * 1000;
+        const interval = 3000;
+        const start = Date.now();
         
-        const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => {
-          console.log("⏰ 180 second timeout for QR scan");
-          controller2.abort();
-        }, 180000); // 3 minutes
-        
-        try {
-          const waitRes = await fetch(waitUrl, { 
-            method: "GET",
-            signal: controller2.signal
+        while (Date.now() - start < maxTime) {
+          await new Promise(resolve => setTimeout(resolve, interval));
+          
+          const statusRes = await fetch(`${SERVER_URL}/status`, {
+            signal: AbortSignal.timeout(5000)
           });
           
-          clearTimeout(timeoutId2);
-          console.log("📥 WaitQr response:", waitRes.status);
-          console.log("⏰ Time:", new Date().toISOString());
-
-          if (waitRes.status === 408) {
-            console.error("❌ QR scan timeout");
-            setErrorMessage("לא סרקת את ה-QR בזמן (3 דקות). נסה שוב.");
-            setShowQRModal(false);
-            setIsLoading(false);
-            emitRequest.current = false;
-            return false;
-          }
-
-          if (!waitRes.ok) {
-            throw new Error(`WaitQr error: ${waitRes.status}`);
-          }
-          
-          const waitData = await waitRes.json();
-          console.log("📦 WaitQr data:", waitData);
-          
-          if (waitData.status === 'authenticated') {
-            console.log("✅ QR scanned successfully!");
-            setStatusMessage("מסנכרן עם WhatsApp...");
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
             
-            // Wait for client to be fully ready
-            if (!waitData.clientReady) {
-              console.log("⏳ Waiting for client to be ready...");
-              await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
+            if (statusData.connected && statusData.isReady) {
+              console.log("Connected!");
+              
+              setAuthenticated(true);
+              setShowQRModal(false);
+              setShowAuthentication(true);
+              setIsLoading(false);
+              return;
             }
-            
-            setAuthenticated(true);
-            setShowAuthentication(false);
-            setShowQRModal(false);
-            setTimeout(() => setShowAuthentication(true), 1000);
-            setIsLoading(false);
-            emitRequest.current = false;
-            setStatusMessage("מחובר בהצלחה!");
-            console.log("✅ Connection complete!");
-            console.log("⏰ Time:", new Date().toISOString());
-            return true;
           }
           
-          console.warn("⚠️ Unexpected WaitQr response");
-          setErrorMessage("תגובה לא צפויה מהשרת");
-          setShowQRModal(false);
-          setIsLoading(false);
-          emitRequest.current = false;
-          return false;
-          
-        } catch (fetchError: any) {
-          clearTimeout(timeoutId2);
-          
-          if (fetchError.name === 'AbortError') {
-            console.error("❌ QR scan timeout");
-            setErrorMessage("תם הזמן לסריקת QR (3 דקות). נסה שוב.");
-          } else {
-            console.error("❌ WaitQr error:", fetchError);
-            setErrorMessage(`שגיאה: ${fetchError.message}`);
-          }
-          
-          setShowQRModal(false);
-          setIsLoading(false);
-          emitRequest.current = false;
-          return false;
+          const elapsed = Math.floor((Date.now() - start) / 1000);
+          setStatusMessage(`ממתין... (${elapsed}s)`);
         }
+        
+        // Timeout
+        setErrorMessage("לא סרקת בזמן");
+        setShowQRModal(false);
+        setIsLoading(false);
+        return;
       }
       
-      console.warn("⚠️ Unexpected initialize response");
-      setErrorMessage("תגובה לא צפויה מהשרת");
+      setErrorMessage("תגובה לא צפויה");
       setIsLoading(false);
-      emitRequest.current = false;
-      return false;
       
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.error("❌ Initialize timeout");
-        setErrorMessage("תם הזמן להתחברות (60 שניות). נסה שוב.");
-      } else {
-        console.error("❌ RequestSession error:", err);
-        setErrorMessage(`שגיאה: ${err.message}`);
-      }
-      
+      console.error("Error:", err);
+      setErrorMessage(`שגיאה: ${err.message}`);
       setShowQRModal(false);
       setIsLoading(false);
-      emitRequest.current = false;
-      return false;
     }
   };
 
-  // Success Modal
+  // Modals (Success, QR, Error) - זהה לקוד הקודם
   const getSuccessModal = () => {
     if (showAuthentication || !authenticated) return null;
     
@@ -245,34 +196,18 @@ const QrCode = forwardRef((props, ref) => {
         <div className="relative p-4 w-full max-w-md h-full md:h-auto">
           <div className="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5">
             <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 p-2 flex items-center justify-center mx-auto mb-3.5">
-              <svg
-                className="w-8 h-8 text-green-500 dark:text-green-400"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
+              <svg className="w-8 h-8 text-green-500 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             </div>
-            <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-              התחבר לווצאפ בהצלחה ✔
-            </p>
-            <button
-              onClick={() => setShowAuthentication(true)}
-              className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
-            >
-              סגור
-            </button>
+            <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">מחובר לווצאפ</p>
+            <button onClick={() => setShowAuthentication(true)} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700">סגור</button>
           </div>
         </div>
       </div>
     );
   };
 
-  // QR Code Modal
   const getQRModal = () => {
     if (!showQRModal) return null;
     
@@ -280,54 +215,22 @@ const QrCode = forwardRef((props, ref) => {
       <div className="fixed flex content-center overflow-y-auto overflow-x-hidden right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-modal md:h-full bg-black bg-opacity-50">
         <div className="relative p-4 w-full max-w-md h-full md:h-auto">
           <div className="relative p-6 text-center bg-white rounded-lg shadow dark:bg-gray-800">
-            <button
-              onClick={() => {
-                setShowQRModal(false);
-                setQrCodeData(null);
-                emitRequest.current = false;
-                setIsLoading(false);
-              }}
-              className="absolute top-2 right-2 text-gray-400 hover:text-gray-900 dark:hover:text-white"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-            
-            <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
-              סרוק QR Code
-            </h3>
-            
-            {statusMessage && (
-              <p className="mb-2 text-sm text-blue-600 dark:text-blue-400">
-                {statusMessage}
-              </p>
-            )}
-            
+            <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">סרוק QR Code</h3>
+            {statusMessage && <p className="mb-2 text-sm text-blue-600">{statusMessage}</p>}
             <div className="flex justify-center mb-4 bg-white p-4 rounded-lg">
               <canvas ref={canvasRef} />
             </div>
-            
-            <div className="text-sm text-gray-600 dark:text-gray-400 space-y-2 text-right">
-              <p>1. פתח את WhatsApp בטלפון שלך</p>
-              <p>2. עבור להגדרות → מכשירים מקושרים</p>
-              <p>3. לחץ על "קשר מכשיר" וסרוק את הקוד</p>
-              <p className="text-xs text-orange-600 mt-3">⏰ יש לך 3 דקות לסרוק</p>
+            <div className="text-sm text-gray-600 space-y-2 text-right">
+              <p>1. פתח WhatsApp בטלפון</p>
+              <p>2. הגדרות → מכשירים מקושרים</p>
+              <p>3. קשר מכשיר וסרוק</p>
             </div>
-            
-            {isLoading && (
-              <div className="mt-4">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">ממתין לסריקה...</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
     );
   };
 
-  // Error Modal
   const getErrorModal = () => {
     if (!errorMessage) return null;
     
@@ -335,20 +238,9 @@ const QrCode = forwardRef((props, ref) => {
       <div className="fixed flex content-center overflow-y-auto overflow-x-hidden right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-modal md:h-full bg-black bg-opacity-50">
         <div className="relative p-4 w-full max-w-md h-full md:h-auto">
           <div className="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5">
-            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900 p-2 flex items-center justify-center mx-auto mb-3.5">
-              <svg className="w-8 h-8 text-red-500 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-              {errorMessage}
-            </p>
-            <button
-              onClick={() => setErrorMessage(null)}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-            >
-              סגור
-            </button>
+            <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{errorMessage}</p>
+            <button onClick={() => { setErrorMessage(null); setTimeout(() => checkAndInitialize(), 1000); }} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 ml-2">נסה שוב</button>
+            <button onClick={() => setErrorMessage(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">סגור</button>
           </div>
         </div>
       </div>

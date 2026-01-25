@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 import React, { ChangeEvent, Suspense, useRef } from "react";
-import Select, { components } from 'react-select'; 
+import Select from 'react-select';
 import CreatableSelect from 'react-select/creatable';
 import { Button, Col, Container, Form, InputGroup, Row } from "react-bootstrap";
 import { useState, useContext, useEffect } from "react";
@@ -112,7 +112,7 @@ export default function MessagesPage() {
   const [selectedSchoolStatuses, setSelectedSchoolStatuses] = useState([]);
 
   const [patterns, setPatterns] = useState<MessagePattern[]>([]);
-  const [selectedPattern, setSelectedPattern] = useState<MessagePattern | undefined>(undefined);
+  const [selectedPattern, setSelectedPattern] = useState<MessagePattern>();
   const [selectedOption, setSelectedOption] = useState<{ value: number; label: string } | null>(null);
   const [patternTitle, setPatternTitle] = useState("");
   const [options, setOptions] = useState<{ value: number; label: string }[]>([]);
@@ -236,29 +236,6 @@ export default function MessagesPage() {
   }, [options]);
 
   const onGridReady = async () => {
-    const columnFlex: { [key: string]: number } = {
-        SchoolName: 2,
-        Remarks: 1.5,
-        CalculatedPhone: 1.3,
-        Representive: 1.2,
-        City: 1.2,
-        Symbol: 0.8,
-        RepresentativeID: 0.7,
-        Date: 0.8,
-        SchoolType: 0.9,
-        ReligiousSector: 0.9,
-        EducationStage: 0.9,
-        Status: 1,
-        default: 1
-    };
-
-    const minWidths: { [key: string]: number } = {
-        SchoolName: 120,
-        CalculatedPhone: 100,
-        Remarks: 100,
-        default: 60
-    };
-
     const getPhoneValue = (params: any, contactsList: any[]) => {
       if (!contactsList || contactsList.length === 0 || !params.data) return "";
       const data = params.data;
@@ -304,17 +281,13 @@ export default function MessagesPage() {
 
         const colDefsBuilder: any[] = Tablemodel[0]?.map((value: any, index: any) => {
           const headerName = Tablemodel[1][index];
-          const flexVal = columnFlex[value] || columnFlex["default"];
-          const minW = minWidths[value] || minWidths["default"];
 
+          // הגדרות עמודה בסיסיות
           let colDef: any = {
             field: value,
             headerName: headerName,
             editable: true,
             filter: true,
-            flex: flexVal,
-            minWidth: minW,
-            resizable: true
           };
 
           if (value === "ReligiousSector") {
@@ -336,22 +309,21 @@ export default function MessagesPage() {
           else if (value === "Schoolid") {
             colDef.cellEditor = "agTextCellEditor";
             colDef.rowDrag = true;
-            colDef.pinned = 'right';
-            colDef.lockPosition = true;
-            colDef.width = 65;
-            delete colDef.flex;
           }
           else {
              colDef.cellEditor = "agTextCellEditor";
           }
 
+          // === 🟢 צביעת הסטטוס בירוק ===
           if (headerName === "סטטוס" || value === "Status" || value === "status") {
              colDef.cellStyle = (params: any) => {
+                // חילוץ המחרוזת הנכונה מתוך אובייקט הסטטוס (אם הוא אובייקט)
                 const currentStatusObj = newStatusRef.current;
                 const statusValue = (currentStatusObj && typeof currentStatusObj === 'object' && 'value' in currentStatusObj) 
                                     ? currentStatusObj.value 
                                     : currentStatusObj;
                 
+                // בדיקת התאמה מדויקת
                 if (params.value && statusValue && String(params.value) === String(statusValue)) {
                      return { backgroundColor: '#198754', color: 'white', fontWeight: 'bold' };
                 }
@@ -367,9 +339,7 @@ export default function MessagesPage() {
           headerName: "טלפון נייד",
           valueGetter: (params) => getPhoneValue(params, schoolsContacts),
           filter: true,
-          flex: columnFlex["CalculatedPhone"],
-          minWidth: minWidths["CalculatedPhone"],
-          resizable: true
+          width: 150
         });
 
         setColDefs(colDefsBuilder);
@@ -392,17 +362,12 @@ export default function MessagesPage() {
 
             const colDefsBuilder: any[] = modelData[0]?.map((value: any, index: any) => {
                 const headerName = modelData[1][index];
-                const flexVal = columnFlex[value] || columnFlex["default"];
-                const minW = minWidths[value] || minWidths["default"];
-
+                
                 let colDef: any = {
                     field: value, 
                     headerName: headerName, 
                     editable: true, 
-                    filter: true,
-                    flex: flexVal,
-                    minWidth: minW,
-                    resizable: true
+                    filter: true
                 };
 
                 if (value === "ReligiousSector") {
@@ -425,6 +390,7 @@ export default function MessagesPage() {
                     colDef.cellEditor = "agTextCellEditor";
                 }
 
+                 // === 🟢 אותו תיקון גם כאן ===
                 if (headerName === "סטטוס" || value === "Status" || value === "status") {
                     colDef.cellStyle = (params: any) => {
                         const currentStatusObj = newStatusRef.current;
@@ -439,13 +405,7 @@ export default function MessagesPage() {
                     };
                  }
                  
-                 if (value === "Schoolid") {
-                    colDef.rowDrag = true;
-                    colDef.pinned = 'right';
-                    colDef.lockPosition = true;
-                    colDef.width = 65;
-                    delete colDef.flex;
-                 }
+                 if (value === "Schoolid") colDef.rowDrag = true;
 
                 return colDef;
             }) || [];
@@ -455,9 +415,7 @@ export default function MessagesPage() {
                 headerName: "טלפון נייד",
                 valueGetter: (params) => getPhoneValue(params, contactsData),
                 filter: true,
-                flex: columnFlex["CalculatedPhone"],
-                minWidth: minWidths["CalculatedPhone"],
-                resizable: true
+                width: 150
             });
 
             setColDefs(colDefsBuilder);
@@ -520,7 +478,7 @@ export default function MessagesPage() {
     setMsg1("");
     setMsg2("");
     setAddedFile(null);
-    setSelectedPattern(undefined);
+    setSelectedPattern(null);
     setSelectedOption(null);
     setFileName("");
   }
@@ -532,10 +490,7 @@ export default function MessagesPage() {
         fileName = addedFile.name;
       }
       setFileName(fileName);
-      
-      const maxId = patterns.reduce((max, p) => (p.PatternId > max ? p.PatternId : max), 0);
-      const id = maxId + 1;
-
+      const id = patterns.length + 1;
       Promise.all([addPattern(id, patternTitle, msg1, msg2, fileName), savePatternFile(id, addedFile)]).then(([new_pattern, add_file_result]) => {
         setPatterns(prevPatterns => [...prevPatterns, new_pattern]);
         if (new_pattern.PatternId && new_pattern.Caption) {
@@ -552,70 +507,17 @@ export default function MessagesPage() {
   };
 
   const handleDeletePattern = () => {
-    if (!selectedPattern || !selectedOption) {
-      alert("לא נבחרה תבנית למחיקה");
-      return;
-    }
-    const idToDelete = selectedPattern.PatternId;
-    const newOptions = options.filter(option => option.value !== idToDelete);
-    const newPatterns = patterns.filter(pattern => pattern.PatternId !== idToDelete);
-
-    Promise.all([deletePattern(idToDelete), deletePatternFile(idToDelete)]).then((res) => {
-      console.log("Delete result:", res);
-    }).catch((err) => {
-      console.error("Error deleting pattern:", err);
-    });
-
+    const newOptions = options.filter(option => option != selectedOption)
+    const newPatterns = patterns.filter(pattern => pattern != selectedPattern);
+    Promise.all([deletePattern(selectedPattern.PatternId), deletePatternFile(selectedPattern.PatternId)]).then((res) => {
+      console.log(res)
+    })
     setSelectedOption(null);
-    setSelectedPattern(undefined);
+    setSelectedPattern(null);
     setOptions(newOptions);
     setPatterns(newPatterns);
     clearPattern();
   }
-
-  const handleDeleteSpecificPattern = async (idToDelete: number, e: any) => {
-    e.stopPropagation(); 
-    if (!window.confirm("האם אתה בטוח שברצונך למחוק תבנית זו?")) return;
-
-    try {
-      await Promise.all([deletePattern(idToDelete), deletePatternFile(idToDelete)]);
-    } catch (err) {
-      console.error("Failed to delete pattern via X button", err);
-    }
-
-    const newOptions = options.filter(option => option.value !== idToDelete);
-    const newPatterns = patterns.filter(pattern => pattern.PatternId !== idToDelete);
-
-    setOptions(newOptions);
-    setPatterns(newPatterns);
-
-    if (selectedOption && selectedOption.value === idToDelete) {
-      clearPattern();
-    }
-  };
-
-  const CustomOption = (props: any) => {
-    return (
-      <components.Option {...props}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{props.label}</span>
-          <span 
-            onClick={(e) => handleDeleteSpecificPattern(props.data.value, e)}
-            style={{ 
-              cursor: 'pointer', 
-              color: 'red', 
-              fontWeight: 'bold', 
-              marginLeft: '10px',
-              padding: '0 5px'
-            }}
-            title="מחק תבנית"
-          >
-            ✕
-          </span>
-        </div>
-      </components.Option>
-    );
-  };
 
   const handleIsRepChange = (value) => { setIsRep(value); };
 
@@ -631,7 +533,6 @@ export default function MessagesPage() {
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      console.log("📂 File selected:", e.target.files[0].name, e.target.files[0].size);
       setAddedFile(e.target.files[0]);
       setFileName(e.target.files[0].name)
     }
@@ -642,10 +543,7 @@ export default function MessagesPage() {
     let result = message.replace(/{name}/gi, contact.FirstName || "");
     return result;
   };
-  // ← כאן תוסיף את הפונקציה החדשה
-const encodeFilename = (filename: string): string => {
-  return Buffer.from(filename, 'utf8').toString('base64');
-};
+
   return (
     <>
       <QrCode ref={qrCodeRef} />
@@ -665,14 +563,7 @@ const encodeFilename = (filename: string): string => {
             </Row>
             <Row className="mb-3">
               <Col>
-                <Select 
-                  options={options} 
-                  value={selectedOption} 
-                  onChange={handlePatternChange} 
-                  placeholder="..בחר תבנית הודעות" 
-                  isClearable
-                  components={{ Option: CustomOption }} 
-                />
+                <Select options={options} value={selectedOption} onChange={handlePatternChange} placeholder="..בחר תבנית הודעות" isClearable />
                 <br></br>
                 <Button onClick={handleDeletePattern}>{pageText.deleteMessagePattern}</Button>
               </Col>
@@ -690,8 +581,6 @@ const encodeFilename = (filename: string): string => {
                   <Button className="file-input-button" onClick={() => document.getElementById('fileInput')?.click()}>
                     {fileName ? fileName : "..בחר קובץ"}
                   </Button>
-                  {/* חיווי ויזואלי לגודל הקובץ לצורך דיבוג */}
-                  {addedFile && <span style={{fontSize: '0.8em', color: 'gray'}}> ({Math.round(addedFile.size / 1024)} KB)</span>}
                 </Form.Group>
               </Row>
               <Row className="mb-3"></Row>
@@ -829,8 +718,33 @@ const encodeFilename = (filename: string): string => {
                 <Button
                   variant="primary"
                   disabled={isSending}
-                  onClick={async () => {
-                    setNewStatusError(false);
+onClick={async () => {
+  console.log("\n=== 🚀 Starting Send Process ===");
+  
+  // ✅ בדיקת חיבור WhatsApp לפני תחילת השליחה
+  if (qrCodeRef.current) {
+    try {
+      console.log("🔍 Checking WhatsApp connection...");
+      const isConnected = await qrCodeRef.current.checkConnection();
+      
+      if (!isConnected) {
+        console.log("❌ Not connected to WhatsApp");
+        alert("נדרש חיבור ל-WhatsApp כדי לשלוח הודעות.\nאנא סרוק את קוד ה-QR שמופיע על המסך.");
+        return;
+      }
+      
+      console.log("✅ WhatsApp connected - proceeding");
+    } catch (err) {
+      console.error("❌ Connection check failed:", err);
+      alert("שגיאה בבדיקת החיבור ל-WhatsApp. אנא נסה שוב.");
+      return;
+    }
+  } else {
+    console.error("❌ QR Code component not available");
+    alert("שגיאה במערכת. אנא רענן את הדף ונסה שוב.");
+    return;
+  }                    setNewStatusError(false);
+                    // איפוס State של React
                     setSendingStats({ success: 0, missing: 0, error: 0 });
                     
                     let localSuccessCount = 0;
@@ -840,8 +754,42 @@ const encodeFilename = (filename: string): string => {
                     shouldStopRef.current = false; 
                     setIsSending(true); 
 
-                    console.log("\n=== 🚀 Starting Batch Send (FormData Fix + UI Sync) ===");
+                    console.log("\n=== 🚀 Starting Batch Send ===");
+// ========================================
 
+// 🔐 בדיקת חיבור WhatsApp לפני שליחה
+console.log("\n=== 🔐 בדיקת חיבור WhatsApp ===");
+if (qrCodeRef.current) {
+  try {
+    const isConnected = await qrCodeRef.current.checkConnection();
+    
+    if (!isConnected) {
+      console.log("❌ לא מחובר ל-WhatsApp - תהליך בוטל");
+      setIsSending(false);
+      alert("נדרש חיבור ל-WhatsApp כדי לשלוח הודעות.\nאנא סרוק את קוד ה-QR שמופיע על המסך.");
+      return;
+    }
+    
+    console.log("✅ מחובר ל-WhatsApp - ממשיך בשליחה");
+    
+    // המתן 3 שניות נוספות אחרי אימות החיבור
+    console.log("⏳ ממתין 3 שניות לסנכרון מלא...");
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+  } catch (err) {
+    console.error("❌ שגיאה בבדיקת חיבור WhatsApp:", err);
+    setIsSending(false);
+    alert("שגיאה בבדיקת החיבור ל-WhatsApp. אנא נסה שוב.");
+    return;
+  }
+} else {
+  console.error("❌ רכיב QR Code לא זמין");
+  setIsSending(false);
+  alert("שגיאה במערכת. אנא רענן את הדף ונסה שוב.");
+  return;
+}
+
+                    // 👇 קוד חדש 1: הכנה - טעינת הנתונים המקומיים פעם אחת בהתחלה
                     let currentStorageData: any = null;
                     let localContactsList: any[] = [];
                     try {
@@ -852,6 +800,7 @@ const encodeFilename = (filename: string): string => {
                     } catch (e) {
                       console.error("Failed to load initial storage", e);
                     }
+                    // 👆 סוף קוד חדש 1
 
                     if (filteredContacts.length === 0) {
                       alert("לא נבחרו אנשי קשר לשליחה");
@@ -867,6 +816,7 @@ const encodeFilename = (filename: string): string => {
                       statusToUse = newStatus;
                     }
 
+                    // הוספת סטטוס חדש אם לא קיים
                     if (statusToUse) {
                       if (!ContactStatuses.includes(statusToUse)) {
                         await addContactStatuses(statusToUse);
@@ -878,152 +828,153 @@ const encodeFilename = (filename: string): string => {
                       }
                     }
 
+                    // === 🛠️ ביטול מנגנון סינון כפילויות לצורך בדיקות ===
+                    // לוקחים את כל אנשי הקשר שיש להם טלפון, גם אם המספר חוזר על עצמו
                     const contactsToSend = filteredContacts.filter(contact => 
                         contact.Cellphone && contact.Cellphone.trim() !== ""
                     );
                     
                     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-                    console.log(`📤 Sending to ${contactsToSend.length} contacts...`);
+                    console.log(`📤 Sending to ${contactsToSend.length} contacts (including duplicates for testing)...`);
                     
-                    // ========================================
-// חלק 1: מצא את הלולאה בקובץ page.tsx
-// ========================================
+                    // הדפסת לוג ברור עם פירוט IsRepresentative
+                    console.table(contactsToSend.map(c => ({ 
+                        Name: `${c.FirstName} ${c.LastName}`, 
+                        Phone: c.Cellphone,
+                        Role: c.Role,
+                        SchoolID: c.SchoolId || c.Schoolid,
+                        IsRep: c.IsRepresentative || c.IsRepresentive || c.isRepresentative // בדיקה למה נבחר
+                    })));
 
-// חפש את השורה:
-// for (const [index, contact] of contactsToSend.entries()) {
+                    // שליחת הודעות - הלולאה הראשית
+                    for (const [index, contact] of contactsToSend.entries()) {
 
-// החלף את כל התוכן של הלולאה (מהשורה הזו עד ה-} שסוגר אותה) בקוד הזה:
+                      // 🛑 בדיקת עצירה בתחילת כל איטרציה
+                      if (shouldStopRef.current) {
+                        console.log("🛑 Sending Process Stopped by User");
+                        alert(`התהליך נעצר על ידי המשתמש.\nנשלחו ${index} הודעות מתוך ${contactsToSend.length}.`);
+                        break;
+                      }
 
-for (const [index, contact] of contactsToSend.entries()) {
-  if (shouldStopRef.current) {
-    console.log("🛑 Sending Process Stopped by User");
-    alert(`התהליך נעצר על ידי המשתמש.\nנשלחו ${index} הודעות מתוך ${contactsToSend.length}.`);
-    break;
-  }
+                      const phone = contact.Cellphone;
 
-  const phone = contact.Cellphone;
+                      if (!phone || phone.trim() === "") {
+                        setSendingStats(prev => ({ ...prev, missing: prev.missing + 1 }));
+                        localMissingCount++; // עדכון מונה מקומי
+                        await updateContactsStatus("להשיב", [contact.Contactid]);
+                        continue;
+                      }
 
-  if (!phone || phone.trim() === "") {
-    setSendingStats(prev => ({ ...prev, missing: prev.missing + 1 }));
-    localMissingCount++; 
-    await updateContactsStatus("להשיב", [contact.Contactid]);
-    continue;
-  }
+                      try {
+                        const personalizedMsg1 = replaceMessageVariables(msg1, contact);
+                        const personalizedMsg2 = replaceMessageVariables(msg2, contact);
 
-  try {
-    const personalizedMsg1 = replaceMessageVariables(msg1, contact);
-    const personalizedMsg2 = replaceMessageVariables(msg2, contact);
+                        console.log(`📨 [${index + 1}/${contactsToSend.length}] Sending to ${contact.FirstName} (${phone})...`);
 
-    // === 🔍 לוגים לדיבאג ===
-    console.log(`\n[${index + 1}/${contactsToSend.length}] 📨 Sending to ${contact.FirstName}`);
-    console.log("  Phone:", phone);
-    console.log("  School ID:", contact.Schoolid || contact.SchoolId);
-    console.log("  File?", addedFile ? `Yes: ${addedFile.name}` : "No");
+                        const result = await sendMessageViaWhatsApp(
+                          personalizedMsg1, 
+                          personalizedMsg2, 
+                          addedFile, 
+                          phone, 
+                          "972", 
+                          selectedPattern?.PatternId
+                        );
 
-    const formData = new FormData();
-    formData.append("PhoneNumber", phone);
-    formData.append("CountryCode", "972");
-    formData.append("Message_1", personalizedMsg1);
-    formData.append("Message_2", personalizedMsg2);
+                        if (result.success) {
+                          console.log(`✅ Sent successfully to ${contact.FirstName}`);
+                          
+                          // עדכון גם ב-State (עבור התצוגה למעלה) וגם במשתנה מקומי (עבור האלרט)
+                          setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
+                          localSuccessCount++; 
 
-    if (selectedPattern?.PatternId) {
-      formData.append("PatternID", selectedPattern.PatternId.toString());
-    }
+                          if (statusToUse) {
+                            // 1. עדכון בשרת (Contacts)
+                            await updateContactsStatus(statusToUse, [contact.Contactid]);
 
-    // 🎯 תיקון #1: שליחת הקובץ עם שם מקודד ב-Base64
-if (addedFile && addedFile.size > 0) {
-  console.log("  🔎 Attaching file:", addedFile.name);
-  formData.append("file", addedFile, addedFile.name);
-  // שליחת שם הקובץ מקודד ב-Base64 כדי לשמור תווים עבריים
-  formData.append("FileNameBase64", encodeFilename(addedFile.name));
-}
+                             // 👇 קוד חדש 2: עדכון Storage מיידי (מדמה את השרת)
+                             try {
+                                // מציאת איש הקשר ברשימה המקומית ועדכון הסטטוס שלו
+                                const contactIndex = localContactsList.findIndex((c: any) => c.Contactid === contact.Contactid);
+                                if (contactIndex !== -1) {
+                                    // עדכון הסטטוס בזיכרון
+                                    localContactsList[contactIndex].Status = statusToUse;
+                                    localContactsList[contactIndex].status = statusToUse; // גיבוי למקרה של רגישות לאותיות
 
-    const result = await sendMessageViaWhatsApp(formData);
-    console.log("  Result:", result.success ? "✅ Success" : "❌ Failed");
+                                    // שמירה חזרה ל-Storage - זה מה שגורם לטבלה להתעדכן מייד!
+                                    if (currentStorageData) {
+                                        await updateStorage({ 
+                                            ...currentStorageData, 
+                                            schoolsContacts: localContactsList 
+                                        });
+                                    }
+                                }
+                            } catch (err) {
+                                console.error("Error updating local storage immediately:", err);
+                            }
+                            // 👆 סוף קוד חדש 2
 
-    if (result.success) {
-      setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
-      localSuccessCount++; 
+                            const isRep = contact.IsRepresentative === true ||
+                              contact.IsRepresentive === true ||
+                              contact.isRepresentative === true ||
+                              contact.IsRep === true;
 
-      if (statusToUse) {
-        await updateContactsStatus(statusToUse, [contact.Contactid]);
+                            if (isRep) {
+                              const rawSchoolId = contact.Schoolid || contact.SchoolId;
 
-        try {
-          const contactIndex = localContactsList.findIndex((c: any) => c.Contactid === contact.Contactid);
-          if (contactIndex !== -1) {
-            localContactsList[contactIndex].Status = statusToUse;
-            localContactsList[contactIndex].status = statusToUse; 
-            if (currentStorageData) {
-              await updateStorage({ 
-                ...currentStorageData, 
-                schoolsContacts: localContactsList 
-              });
-            }
-          }
-        } catch (err) {
-          console.error("  ❌ Storage update error:", err);
-        }
+                              if (rawSchoolId) {
+                                const schoolIdNum = Number(rawSchoolId);
+                                // 2. עדכון בשרת (School)
+                                await updateSchoolStatus(statusToUse, [schoolIdNum]);
 
-        const rawSchoolId = contact.Schoolid || contact.SchoolId;
+                                // 3. 🌟 עדכון ויזואלי מיידי בטבלה (AgGrid) 🌟
+                                if (gridRef.current && gridRef.current.api) {
+                                  const rowNode = gridRef.current.api.getRowNode(String(schoolIdNum));
+                                  if (rowNode) {
+                                    rowNode.setDataValue('Status', statusToUse);
+                                    // אופציונלי: הבהוב השורה כדי להראות שינוי
+                                    gridRef.current.api.flashCells({ rowNodes: [rowNode] });
+                                    // רענון התא כדי שיתפוס את הצבע החדש
+                                    gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        } else {
+                          console.log(`❌ Failed to send to ${contact.FirstName}`);
+                          setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+                          localErrorCount++;
+                          await updateContactsStatus("שגוי", [contact.Contactid]);
+                        }
+                      } catch (error) {
+                        console.error(`❌ Error sending to ${contact.FirstName}:`, error);
+                        setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+                        localErrorCount++;
+                      }
 
-        if (rawSchoolId) {
-          const schoolIdNum = Number(rawSchoolId);
-          console.log("  🏫 Updating school", schoolIdNum, "to status:", statusToUse);
-          
-          await updateSchoolStatus(statusToUse, [schoolIdNum]);
+                      // המתנה אקראית - רק אם לא הגענו לסוף וגם לא עצרנו
+                      if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
+                       // המתנה של בין 1 ל-3 שניות בלבד (בנוסף ל-30 שניות של השרת)
+                        const delay = Math.floor(Math.random() * (3000 - 1000 + 1) + 1000);
+                        console.log(`⏳ Waiting ${(delay / 1000).toFixed(1)}s (Client) + Server Sync Time...`);
+                        await sleep(delay);
+                      }
+                    } // סוף לולאה
 
-          // 🎯 תיקון #2: עדכון הגריד - גרסה פשוטה שעובדת
-          if (gridRef.current?.api) {
-            const rowNode = gridRef.current.api.getRowNode(String(schoolIdNum));
-            console.log("  🎨 Grid rowNode found?", !!rowNode);
-            
-            if (rowNode) {
-              // עדכון הנתונים
-              rowNode.setDataValue('Status', statusToUse);
-              rowNode.setDataValue('status', statusToUse);
-              
-              // הבהוב
-              gridRef.current.api.flashCells({ 
-                rowNodes: [rowNode],
-                columns: ['Status', 'status']
-              });
-              
-              console.log("  ✅ Grid updated");
-            } else {
-              console.log("  ⚠️ Grid rowNode NOT found for ID:", schoolIdNum);
-            }
-          }
-        }
-      }
-    } else {
-      console.log("  ❌ Send failed:", result.error);
-      setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
-      localErrorCount++;
-      await updateContactsStatus("שגוי", [contact.Contactid]);
-    }
-  } catch (error) {
-    console.error(`  ❌ Exception:`, error);
-    setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
-    localErrorCount++;
-  }
-
-  if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
-    const delay = Math.floor(Math.random() * (3000 - 1000 + 1) + 1000);
-    console.log(`  ⏳ Waiting ${(delay / 1000).toFixed(1)}s...\n`);
-    await sleep(delay);
-  }
-}
-
+                    // סיום התהליך
                     setIsSending(false);
 
+                    // 👇 קוד חדש 3: הסרת סנכרון כפול בסוף והשארת הודעת סיום בלבד
                     if (!shouldStopRef.current) {
                       alert(`תהליך השליחה הסתיים.\nהצלחות: ${localSuccessCount}`);
                     }
+                    // 👆 סוף קוד חדש 3
                   }}>
                   {isSending ? "שולח..." : pageText.sendMessages}
                 </Button>
 
+                {/* === כפתור עצירה חדש === */}
                 {isSending && (
                   <Button
                     variant="danger"

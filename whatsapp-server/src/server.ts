@@ -4,12 +4,10 @@ import cors from "cors";
 import { Client, MessageMedia } from "whatsapp-web.js";
 import {
   GetClientOrInitialize,
-  QrPromise,
-  readyPromise,
-  authenticatedPromise,
+  Initialize,
   isReady,
   hasStoredSession,
-  getLastQr
+  resetClient
 } from "./WhatsApp";
 import multer from "multer";
 import path from "path";
@@ -21,6 +19,10 @@ dotenv.config();
 
 const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3994;
+
+// 🔥 NEW: נעילה למניעת קריאות כפולות
+let isInitializingGlobal = false;
+let initPromise: Promise<Client> | null = null;
 
 // CORS
 app.use(cors({
@@ -78,139 +80,90 @@ app.get("/health", (req: Request, res: Response) => {
   res.status(200).json({ status: "OK", message: "WhatsApp Server is running" });
 });
 
-// ✅ Initialize endpoint - מחזיר QR או ready
-app.get("/Initialize", async (req: Request, res: Response) => {
-  console.log("\n=== 📡 /Initialize Called ===");
-  console.log("⏰ Time:", new Date().toISOString());
+// ✅ Status endpoint
+app.get("/status", async (req: Request, res: Response) => {
+  console.log("\n=== 📊 /status ===");
   
   try {
-    // Check if already ready
-    if (isReady()) {
-      console.log("✅ Already ready (stored session)");
-      return res.status(200).json({ result: 'ready' });
-    }
+    const connected = await isReady();
+    const hasSession = hasStoredSession();
     
-    console.log("🔧 Initializing client...");
-    const client = await GetClientOrInitialize();
+    console.log(`Status: connected=${connected}, hasSession=${hasSession}`);
     
-    console.log("⏳ Waiting for ready or QR (up to 30 seconds)...");
-    
-    // Wait for either ready or QR
-    const result: any = await Promise.race([
-      readyPromise.then(() => ({ type: 'ready' })),
-      authenticatedPromise.then(() => ({ type: 'authenticated' })),
-      QrPromise.then((qr: string) => ({ type: 'qr', qr })),
-      new Promise(resolve => setTimeout(() => resolve({ type: 'timeout' }), 30000))
-    ]);
-    
-    console.log("🎯 Result:", result.type);
-    console.log("⏰ Time:", new Date().toISOString());
-    
-    if (result.type === 'ready') {
-      console.log("✅ Client is ready");
-      return res.status(200).json({ result: 'ready' });
-    }
-    
-    if (result.type === 'authenticated') {
-      console.log("✅ Client authenticated");
-      // Wait a bit more for ready
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      return res.status(200).json({ result: 'ready' });
-    }
-    
-    if (result.type === 'qr') {
-      console.log("📱 Returning QR code");
-      return res.status(200).json({ 
-        result: 'qr', 
-        data: result.qr 
-      });
-    }
-    
-    // Timeout - check current state
-    console.log("⏰ Timeout - checking state...");
-    if (isReady()) {
-      return res.status(200).json({ result: 'ready' });
-    }
-    
-    // Maybe QR was generated during timeout
-    const lastQr = getLastQr();
-    if (lastQr) {
-      console.log("📱 Returning last QR from timeout");
-      return res.status(200).json({ 
-        result: 'qr', 
-        data: lastQr 
-      });
-    }
-    
-    return res.status(408).json({ 
-      status: "Timeout", 
-      message: "Failed to initialize within 30 seconds" 
+    return res.status(200).json({ 
+      connected,
+      isReady: connected,
+      hasSession,
+      timestamp: new Date().toISOString()
     });
     
   } catch (err) {
-    console.error("❌ Error in /Initialize:", err);
+    console.error("Error:", err);
     return res.status(500).json({ 
-      status: "Error", 
-      message: err instanceof Error ? err.message : "Unknown error"
+      connected: false,
+      isReady: false,
+      hasSession: false,
+      error: err instanceof Error ? err.message : "Unknown"
+    });
+  }
+});
+
+// 🔥 FIX: Initialize endpoint עם נעילה למניעת קריאות כפולות
+// רק endpoint ה-Initialize המעודכן - שאר הקוד נשאר
+
+app.get("/Initialize", async (req: Request, res: Response) => {
+  console.log("\n=== 🚀 /Initialize ===");
+  
+  try {
+    const result = await Initialize();
+    
+    if (result.result === 'ready') {
+      console.log("✅ Returning: ready");
+      return res.status(200).json({ result: 'ready' });
+    }
+    
+    if (result.result === 'qr' && result.qr) {
+      console.log("✅ Returning: QR code");
+      return res.status(200).json({ result: 'qr', data: result.qr });
+    }
+    
+    return res.status(500).json({
+      status: "Error",
+      message: "Unexpected result"
+    });
+    
+  } catch (err) {
+    console.error("❌ Error:", err);
+    return res.status(500).json({
+      status: "Error",
+      message: err instanceof Error ? err.message : "Unknown"
     });
   }
 });
 
 // ✅ WaitQr - ממתין לסריקת QR
-app.get("/WaitQr", async (req: Request, res: Response) => {
-  console.log("\n=== 📱 /WaitQr Called ===");
-  console.log("⏰ Time:", new Date().toISOString());
+
+app.post("/ResetSession", async (req: Request, res: Response) => {
+  console.log("\n=== 🗑️  /ResetSession ===");
   
   try {
-    console.log("⏳ Waiting for QR scan (up to 3 minutes)...");
+    await resetClient();
     
-    const result = await Promise.race([
-      authenticatedPromise.then(() => ({ status: 'authenticated' })),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("QR scan timeout")), 180000) // 3 minutes
-      )
-    ]);
-    
-    console.log("✅ QR scanned!");
-    console.log("⏰ Time:", new Date().toISOString());
-    
-    // Wait for ready state
-    console.log("⏳ Waiting for ready state (up to 10 seconds)...");
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    
-    const clientReady = isReady();
-    console.log(`🔍 Client ready: ${clientReady}`);
-    
-    if (!clientReady) {
-      console.log("⏳ Waiting additional 5 seconds...");
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-    
-    return res.status(200).json({ 
-      ...(result as object),
-      clientReady: isReady(),
-      message: "QR scanned successfully"
+    console.log("✅ Session reset complete");
+    return res.status(200).json({
+      status: "Success",
+      message: "Session deleted. Call /Initialize for fresh QR."
     });
     
   } catch (err) {
-    console.error("❌ Error in /WaitQr:", err);
-    console.log("⏰ Time:", new Date().toISOString());
-    
-    if (err instanceof Error && err.message.includes("timeout")) {
-      return res.status(408).json({ 
-        status: "Timeout", 
-        message: "QR code was not scanned within 3 minutes"
-      });
-    }
-    
-    return res.status(500).json({ 
-      status: "Error", 
-      message: err instanceof Error ? err.message : "Unknown error"
+    console.error("❌ Error:", err);
+    return res.status(500).json({
+      status: "Error",
+      message: err instanceof Error ? err.message : "Unknown"
     });
   }
 });
-
-// ✅ SendMessage endpoint - עם כל התיקונים
+// ✅ SendMessage endpoint
 app.post(
   "/SendMessage",
   MemoryWithNoStoring.single("file"),
@@ -244,7 +197,7 @@ app.post(
       
       console.log("✅ Client is ready!");
 
-      // ✅ המתנה נוספת לסנכרון מלא
+      // המתנה נוספת לסנכרון מלא
       console.log("⏳ Waiting additional 30 seconds for full WhatsApp sync...");
       await new Promise(resolve => setTimeout(resolve, 30000));
       console.log("✅ Sync complete!");
@@ -259,11 +212,9 @@ app.post(
       let phoneNumber = requestBody.PhoneNumber;
       console.log("📞 Original number:", phoneNumber);
 
-      // 🔥 FIX: נקה את המספר ונרמל אותו
       phoneNumber = phoneNumber.replace('@c.us', '').replace(/[\s-]/g, '');
       console.log("🧹 Cleaned number:", phoneNumber);
 
-      // 🔥 FIX: קבל את המזהה הנכון מ-WhatsApp
       let chatId: string;
       let chat: any;
       
@@ -282,15 +233,11 @@ app.post(
         chatId = numberId._serialized;
         console.log("✅ Got chat ID:", chatId);
         
-        // 🔥 NEW: טען את הצ'אט ווודא שהוא מוכן
         console.log("📂 Loading chat...");
         try {
           chat = await client.getChatById(chatId);
           console.log("✅ Chat loaded successfully");
-          
-          // המתן קצת לסנכרון מלא של הצ'אט
           await new Promise(resolve => setTimeout(resolve, 2000));
-          
         } catch (chatErr) {
           console.log("⚠️ Could not load chat, will try direct send:", chatErr);
           chat = null;
@@ -298,7 +245,6 @@ app.post(
         
       } catch (err) {
         console.log("⚠️ Error getting number ID:", err);
-        // Fallback: נסה עם פורמט ישיר
         chatId = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@c.us`;
         console.log("🔄 Using fallback chat ID:", chatId);
         chat = null;
@@ -307,34 +253,26 @@ app.post(
       const responses: any[] = [];
       let messageCount = 0;
       
-      // ✅ סדר נכון: Message_1 → File → Message_2 (ברצף!)
-      
-      // 1️⃣ שלח הודעה ראשונה (אם יש)
+      // 1️⃣ שלח הודעה ראשונה
       if (requestBody.Message_1) {
         console.log("💬 Sending Message_1...");
         try {
-          let response;
-          
-          // 🔥 FIX: שלח ישירות ללא sendSeen אוטומטי
           console.log("📤 Sending message directly without sendSeen...");
-          response = await client.sendMessage(chatId, requestBody.Message_1, {
-            sendSeen: false  // ← זה מונע את שגיאת markedUnread
+          const response = await client.sendMessage(chatId, requestBody.Message_1, {
+            sendSeen: false
           });
           
           responses.push(response);
           messageCount++;
           console.log("✅ Message_1 sent!");
-          
-          // המתן קצת בין הודעות
           await new Promise(resolve => setTimeout(resolve, 1500));
-          
         } catch (err) {
           console.error("❌ Error sending Message_1:", err);
           throw err;
         }
       }
       
-      // 2️⃣ שלח קובץ (pattern או uploaded) - רק אחרי שההודעה הראשונה נשלחה!
+      // 2️⃣ שלח קובץ
       if (requestBody.PatternID && !req.file) {
         console.log("📁 Looking for pattern file:", requestBody.PatternID);
         const files = fs.readdirSync(uploadDirectory);
@@ -362,59 +300,51 @@ app.post(
           responses.push(response);
           messageCount++;
           console.log("✅ Pattern file sent!");
-          
-          // המתן קצת
           await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
 
-    if (req.file) {
+      if (req.file) {
         console.log("📎 Processing uploaded file...");
         
         if (req.file.size === 0) {
-            console.error("❌ Error: Received file with 0 bytes!");
+          console.error("❌ Error: Received file with 0 bytes!");
         } else {
-            let fileName = "file.bin"; // ברירת מחדל
+          let fileName = "file.bin";
 
-            // ✅ תיקון סופי: פענוח שם הקובץ מ-Base64
-            // הקוד הזה לוקח את הרצף המוצפן ומחזיר אותו לעברית תקנית
-            if (req.body.FileNameBase64) {
-    try {
-        // דיקוד Base64 שתומך בעברית (תואם ל-btoa+encodeURIComponent)
-        const decoded = Buffer.from(req.body.FileNameBase64, 'base64').toString('binary');
-        fileName = decodeURIComponent(escape(decoded));
-        console.log(`🏷️ Decoded Hebrew Filename: ${fileName}`);
-    } catch (e) {
-        console.error("❌ Base64 decode failed, using fallback");
-        fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
-    }
-}
-            // גיבוי למקרה שהשדה לא הגיע
-            else {
-                fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+          if (req.body.FileNameBase64) {
+            try {
+              const decoded = Buffer.from(req.body.FileNameBase64, 'base64').toString('binary');
+              fileName = decodeURIComponent(escape(decoded));
+              console.log(`🏷️ Decoded Hebrew Filename: ${fileName}`);
+            } catch (e) {
+              console.error("❌ Base64 decode failed, using fallback");
+              fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
             }
+          } else {
+            fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+          }
 
-            const media = new MessageMedia(
-              req.file.mimetype,
-              req.file.buffer.toString("base64"),
-              fileName, // כאן נכנס השם המתוקן והמפעונח
-              req.file.size
-            );
-            
-            console.log("📤 Sending uploaded file with name:", fileName);
-            const response = await client.sendMessage(chatId, media, {
-              sendSeen: false
-            });
-            
-            responses.push(response);
-            messageCount++;
-            console.log("✅ Uploaded file sent!");
-            
-            await new Promise(resolve => setTimeout(resolve, 1500));
+          const media = new MessageMedia(
+            req.file.mimetype,
+            req.file.buffer.toString("base64"),
+            fileName,
+            req.file.size
+          );
+          
+          console.log("📤 Sending uploaded file with name:", fileName);
+          const response = await client.sendMessage(chatId, media, {
+            sendSeen: false
+          });
+          
+          responses.push(response);
+          messageCount++;
+          console.log("✅ Uploaded file sent!");
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
 
-      // 3️⃣ שלח הודעה שנייה (אם יש) - רק אחרי שהקובץ נשלח!
+      // 3️⃣ שלח הודעה שנייה
       if (requestBody.Message_2) {
         console.log("💬 Sending Message_2...");
         try {
