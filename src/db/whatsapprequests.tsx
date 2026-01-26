@@ -119,8 +119,70 @@ export async function sendMessageViaWhatsApp(
 
 export async function savePatternFile(id: number, file: File | null) {
   if (!file) return { success: true };
+  
   console.log(`💾 שומר קובץ לתבנית ${id}: ${file.name}`);
-  return { success: true }; 
+  
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("patternId", id.toString());
+    
+    // המרת שם קובץ עברי ל-Base64
+    const fileNameBase64 = Buffer.from(file.name, 'utf8').toString('base64');
+    formData.append("FileNameBase64", fileNameBase64);
+    
+    const response = await fetch(`${WHATSAPP_SERVER_URL}/SavePatternFile`, {
+      method: "POST",
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      console.error("❌ שגיאה בשמירת קובץ");
+      return { success: false };
+    }
+    
+    console.log("✅ קובץ נשמר בהצלחה");
+    return { success: true };
+    
+  } catch (error) {
+    console.error("❌ שגיאה בשמירת קובץ:", error);
+    return { success: false };
+  }
+}
+
+export async function getPatternFile(patternId: number): Promise<File | null> {
+  try {
+    console.log(`📥 טוען קובץ לתבנית ${patternId}...`);
+    
+    const response = await fetch(`${WHATSAPP_SERVER_URL}/GetPatternFile/${patternId}`);
+    
+    if (!response.ok) {
+      console.log(`ℹ️ אין קובץ לתבנית ${patternId}`);
+      return null;
+    }
+
+    // קבלת שם הקובץ מה-header
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let fileName = 'file.bin';
+    
+    if (contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?;?/);
+      if (fileNameMatch) {
+        fileName = decodeURIComponent(fileNameMatch[1]);
+      }
+    }
+
+    // המרה ל-File
+    const blob = await response.blob();
+    const file = new File([blob], fileName, { type: blob.type });
+    
+    console.log(`✅ קובץ נטען: ${fileName} (${file.size} בתים)`);
+    return file;
+    
+  } catch (error) {
+    console.error(`❌ שגיאה בטעינת קובץ לתבנית ${patternId}:`, error);
+    return null;
+  }
 }
 
 export async function deletePatternFile(patternId: number) {

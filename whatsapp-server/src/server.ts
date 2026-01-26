@@ -20,10 +20,6 @@ dotenv.config();
 const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3994;
 
-// 🔥 NEW: נעילה למניעת קריאות כפולות
-let isInitializingGlobal = false;
-let initPromise: Promise<Client> | null = null;
-
 // CORS
 app.use(cors({
   origin: ['http://localhost:3666', 'http://localhost:3000', 'http://127.0.0.1:3666'],
@@ -72,15 +68,7 @@ const createMulterFileObject = (filePath: string) => {
   };
 };
 
-app.get("/", (req: Request, res: Response) => {
-  res.send("WhatsApp Server is Running");
-});
-
-app.get("/health", (req: Request, res: Response) => {
-  res.status(200).json({ status: "OK", message: "WhatsApp Server is running" });
-});
-
-// ✅ Status endpoint
+// ✅ Status endpoint - פשוט ומהיר
 app.get("/status", async (req: Request, res: Response) => {
   console.log("\n=== 📊 /status ===");
   
@@ -108,9 +96,7 @@ app.get("/status", async (req: Request, res: Response) => {
   }
 });
 
-// 🔥 FIX: Initialize endpoint עם נעילה למניעת קריאות כפולות
-// רק endpoint ה-Initialize המעודכן - שאר הקוד נשאר
-
+// 🔥 Initialize endpoint
 app.get("/Initialize", async (req: Request, res: Response) => {
   console.log("\n=== 🚀 /Initialize ===");
   
@@ -141,10 +127,9 @@ app.get("/Initialize", async (req: Request, res: Response) => {
   }
 });
 
-// ✅ WaitQr - ממתין לסריקת QR
-
+// ✅ ResetSession
 app.post("/ResetSession", async (req: Request, res: Response) => {
-  console.log("\n=== 🗑️  /ResetSession ===");
+  console.log("\n=== 🗑️ /ResetSession ===");
   
   try {
     await resetClient();
@@ -163,6 +148,7 @@ app.post("/ResetSession", async (req: Request, res: Response) => {
     });
   }
 });
+
 // ✅ SendMessage endpoint
 app.post(
   "/SendMessage",
@@ -174,7 +160,7 @@ app.post(
     console.log("📎 File:", req.file ? req.file.originalname : "No file");
     
     try {
-      console.log("🔌 Getting client...");
+      console.log("📌 Getting client...");
       const client: Client = await GetClientOrInitialize();
       
       console.log("⏳ Waiting for client to be ready (up to 60 seconds)...");
@@ -274,7 +260,7 @@ app.post(
       
       // 2️⃣ שלח קובץ
       if (requestBody.PatternID && !req.file) {
-        console.log("📁 Looking for pattern file:", requestBody.PatternID);
+        console.log("🔍 Looking for pattern file:", requestBody.PatternID);
         const files = fs.readdirSync(uploadDirectory);
         const found_file = files.find((val) =>
           val.startsWith(`file-${requestBody.PatternID}`)

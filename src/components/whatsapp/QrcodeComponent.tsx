@@ -1,265 +1,290 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useImperativeHandle, forwardRef } from "react";
-import { usePathname } from 'next/navigation';
+import React, { forwardRef, useImperativeHandle, useState, useEffect } from 'react';
+import { Modal, Button, Spinner, Alert } from 'react-bootstrap';
+import QRCode from 'qrcode.react';
 
-interface QrCodeRef {
-  checkConnection: () => Promise<boolean>;
-}
+type ConnectionStatus = 'checking' | 'connected' | 'disconnected' | 'waiting_qr' | 'qr_ready' | 'error';
 
-const QrCode = forwardRef<QrCodeRef>((props, ref) => {
-  const currentRoute = usePathname();
-  const relevantRoutes = useMemo(() => ["/messagesForm", "/placementsPage"], []);
+const QrCodeComponent = forwardRef((props, ref) => {
+  const [showModal, setShowModal] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [status, setStatus] = useState<ConnectionStatus>('checking');
+  const [statusMessage, setStatusMessage] = useState('בודק חיבור...');
+  const [showResetButton, setShowResetButton] = useState(false);
 
-  const [authenticated, setAuthenticated] = useState(false);
-  const [showAuthentication, setShowAuthentication] = useState(false);
-  const [showQRModal, setShowQRModal] = useState(false);
-  const [qrCodeData, setQrCodeData] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string>("");
-  
-  const initRef = useRef(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const WHATSAPP_SERVER = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994';
 
-  const SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994';
-
-  // בדיקה אוטומטית בטעינה - פעם אחת בלבד
-  useEffect(() => {
-    if (relevantRoutes.includes(currentRoute) && !initRef.current) {
-      initRef.current = true;
-      console.log("Checking connection...");
-      checkAndInitialize();
-    }
-  }, [currentRoute]);
-
-  const checkAndInitialize = async () => {
-    const connected = await simpleConnectionCheck();
-    if (!connected) {
-      await RequestSession();
-    } else {
-      setAuthenticated(true);
-      setShowAuthentication(true);
-    }
-  };
-
-  // בדיקה פשוטה - האם מחובר?
-  const simpleConnectionCheck = async (): Promise<boolean> => {
+  // פונקציה לבדיקת סטטוס - UPDATED
+  const checkConnection = async (): Promise<boolean> => {
     try {
-      const res = await fetch(`${SERVER_URL}/status`, {
-        method: "GET",
-        signal: AbortSignal.timeout(5000)
-      });
+      console.log("🔍 Checking connection...");
       
-      if (res.ok) {
-        const data = await res.json();
-        
-        if (data.connected && data.isReady) {
-          console.log("Already connected");
-          return true;
-        }
-        
-        // אם יש session - חכה 10 שניות ובדוק שוב
-        if (data.hasSession && !data.connected) {
-          console.log("Has session, waiting 10s...");
-          await new Promise(resolve => setTimeout(resolve, 10000));
-          
-          const retry = await fetch(`${SERVER_URL}/status`, {
-            signal: AbortSignal.timeout(5000)
-          });
-          
-          if (retry.ok) {
-            const retryData = await retry.json();
-            if (retryData.connected && retryData.isReady) {
-              console.log("Connected after wait");
-              return true;
-            }
-          }
-        }
+      const response = await fetch(`${WHATSAPP_SERVER}/status`);
+      const data = await response.json();
+      
+      console.log("📊 Status response:", data);
+      
+      // אם יש חיבור - מצוין!
+      if (data.connected === true) {
+        console.log("✅ Connected!");
+        return true;
       }
       
+      // אם אין חיבור אבל יש Session וניסינו להתחבר אוטומטית
+      if (data.autoConnected === true && data.hasSession === true) {
+        console.log("⏳ Auto-connect in progress, checking again in 3s...");
+        
+        // המתן 3 שניות ובדוק שוב
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        const recheck = await fetch(`${WHATSAPP_SERVER}/status`);
+        const recheckData = await recheck.json();
+        
+        console.log("🔄 Recheck result:", recheckData.connected);
+        return recheckData.connected === true;
+      }
+      
+      // אחרת - לא מחובר
+      console.log("❌ Not connected");
       return false;
-    } catch (err) {
-      console.error("Check error:", err);
+      
+    } catch (error) {
+      console.error('שגיאה בבדיקת חיבור:', error);
       return false;
     }
   };
 
-  // יצירת QR על canvas
-  useEffect(() => {
-    if (qrCodeData && canvasRef.current) {
-      const QRCode = require('qrcode');
-      QRCode.toCanvas(canvasRef.current, qrCodeData, { width: 300, margin: 2 });
-    }
-  }, [qrCodeData]);
+  // פונקציה להתחברות
+  const initialize = async () => {
+    try {
+      setStatus('checking');
+      setStatusMessage('בודק אם כבר מחובר...');
+      
+      const response = await fetch(`${WHATSAPP_SERVER}/Initialize`);
+      const data = await response.json();
 
-  // חשיפה לקומפוננטה אב
-  useImperativeHandle(ref, () => ({
-    checkConnection: async () => {
-      const result = await simpleConnectionCheck();
-      if (!result) {
-        await RequestSession();
+      if (data.result === 'ready') {
+        setStatus('connected');
+        setStatusMessage('✅ מחובר ל-WhatsApp בהצלחה!');
+        setShowResetButton(false);
+        setTimeout(() => setShowModal(false), 2000);
+      } else if (data.result === 'qr' && data.data) {
+        setStatus('qr_ready');
+        setStatusMessage('📱 סרוק את הקוד תוך 30 שניות');
+        setQrCode(data.data);
+        setShowResetButton(true);
+        
+        // המתנה לסריקה - בודק כל 3 שניות
+        const checkInterval = setInterval(async () => {
+          const connected = await checkConnection();
+          if (connected) {
+            clearInterval(checkInterval);
+            setStatus('connected');
+            setStatusMessage('✅ התחברת בהצלחה!');
+            setShowResetButton(false);
+            setTimeout(() => setShowModal(false), 2000);
+          }
+        }, 3000);
+
+        // עצור בדיקה אחרי 2 דקות
+        setTimeout(() => clearInterval(checkInterval), 120000);
       }
-      return result;
+    } catch (error) {
+      setStatus('error');
+      setStatusMessage('❌ שגיאה בהתחברות. נסה Reset');
+      setShowResetButton(true);
+      console.error('שגיאה:', error);
+    }
+  };
+
+  // פונקציה ל-Reset
+  const resetConnection = async () => {
+    if (!confirm('פעולה זו תנתק את החיבור הנוכחי ותיצור QR חדש. להמשיך?')) {
+      return;
+    }
+
+    try {
+      setStatus('checking');
+      setStatusMessage('מנתק חיבור קיים...');
+      setQrCode(null);
+      
+      await fetch(`${WHATSAPP_SERVER}/ResetSession`, { method: 'POST' });
+      
+      setStatusMessage('ממתין 3 שניות...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // התחל מחדש
+      await initialize();
+    } catch (error) {
+      setStatus('error');
+      setStatusMessage('❌ שגיאה ב-Reset. רענן את הדף');
+      console.error('שגיאה ב-Reset:', error);
+    }
+  };
+
+  // חשיפת פונקציות ל-parent component
+  useImperativeHandle(ref, () => ({
+    checkConnection,
+    openModal: () => {
+      setShowModal(true);
+      initialize();
+    },
+    checkAndOpenIfNeeded: async () => {
+      console.log("🔍 checkAndOpenIfNeeded called");
+      const connected = await checkConnection();
+      
+      if (!connected) {
+        console.log("❌ Not connected - opening modal");
+        setShowModal(true);
+        initialize();
+      } else {
+        console.log("✅ Already connected - no action needed");
+      }
+      
+      return connected;
     }
   }));
 
-  const RequestSession = async () => {
-    console.log("\n=== RequestSession ===");
-    
-    try {
-      setIsLoading(true);
-      setErrorMessage(null);
-      setStatusMessage("מאתחל...");
-      
-      // קריאה ל-Initialize
-      const initRes = await fetch(`${SERVER_URL}/Initialize`, {
-        method: "GET",
-        signal: AbortSignal.timeout(60000)
-      });
-      
-      if (!initRes.ok) {
-        throw new Error(`Server error: ${initRes.status}`);
-      }
+  // קומפוננטת סטטוס ויזואלית
+  const StatusIndicator = () => {
+    const statusConfig = {
+      checking: { color: 'warning', icon: '⏳', text: 'בודק...' },
+      connected: { color: 'success', icon: '✅', text: 'מחובר' },
+      disconnected: { color: 'danger', icon: '🔴', text: 'לא מחובר' },
+      waiting_qr: { color: 'info', icon: '⏱️', text: 'ממתין ל-QR' },
+      qr_ready: { color: 'primary', icon: '📱', text: 'סרוק QR' },
+      error: { color: 'danger', icon: '❌', text: 'שגיאה' }
+    };
 
-      const initData = await initRes.json();
-      console.log("Initialize result:", initData.result);
-      
-      // מוכן
-      if (initData.result === 'ready') {
-        setAuthenticated(true);
-        setShowAuthentication(true);
-        setIsLoading(false);
-        return;
-      }
-      
-      // צריך QR
-      if (initData.result === 'qr' && initData.data) {
-        setQrCodeData(initData.data);
-        setShowQRModal(true);
-        setStatusMessage("סרוק QR");
-        
-        // Polling - בדיקה כל 3 שניות
-        const maxTime = 6 * 60 * 1000;
-        const interval = 3000;
-        const start = Date.now();
-        
-        while (Date.now() - start < maxTime) {
-          await new Promise(resolve => setTimeout(resolve, interval));
-          
-          const statusRes = await fetch(`${SERVER_URL}/status`, {
-            signal: AbortSignal.timeout(5000)
-          });
-          
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();
-            
-            if (statusData.connected && statusData.isReady) {
-              console.log("Connected!");
-              
-              setAuthenticated(true);
-              setShowQRModal(false);
-              setShowAuthentication(true);
-              setIsLoading(false);
-              return;
-            }
-          }
-          
-          const elapsed = Math.floor((Date.now() - start) / 1000);
-          setStatusMessage(`ממתין... (${elapsed}s)`);
-        }
-        
-        // Timeout
-        setErrorMessage("לא סרקת בזמן");
-        setShowQRModal(false);
-        setIsLoading(false);
-        return;
-      }
-      
-      setErrorMessage("תגובה לא צפויה");
-      setIsLoading(false);
-      
-    } catch (err: any) {
-      console.error("Error:", err);
-      setErrorMessage(`שגיאה: ${err.message}`);
-      setShowQRModal(false);
-      setIsLoading(false);
-    }
-  };
+    const config = statusConfig[status];
 
-  // Modals (Success, QR, Error) - זהה לקוד הקודם
-  const getSuccessModal = () => {
-    if (showAuthentication || !authenticated) return null;
-    
     return (
-      <div className="fixed flex content-center overflow-y-auto overflow-x-hidden right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-modal md:h-full bg-black bg-opacity-50">
-        <div className="relative p-4 w-full max-w-md h-full md:h-auto">
-          <div className="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5">
-            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900 p-2 flex items-center justify-center mx-auto mb-3.5">
-              <svg className="w-8 h-8 text-green-500 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">מחובר לווצאפ</p>
-            <button onClick={() => setShowAuthentication(true)} className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700">סגור</button>
-          </div>
-        </div>
-      </div>
+      <Alert variant={config.color} className="text-center mb-3">
+        <h4>{config.icon} {config.text}</h4>
+        <p className="mb-0">{statusMessage}</p>
+      </Alert>
     );
   };
-
-  const getQRModal = () => {
-    if (!showQRModal) return null;
-    
-    return (
-      <div className="fixed flex content-center overflow-y-auto overflow-x-hidden right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-modal md:h-full bg-black bg-opacity-50">
-        <div className="relative p-4 w-full max-w-md h-full md:h-auto">
-          <div className="relative p-6 text-center bg-white rounded-lg shadow dark:bg-gray-800">
-            <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">סרוק QR Code</h3>
-            {statusMessage && <p className="mb-2 text-sm text-blue-600">{statusMessage}</p>}
-            <div className="flex justify-center mb-4 bg-white p-4 rounded-lg">
-              <canvas ref={canvasRef} />
-            </div>
-            <div className="text-sm text-gray-600 space-y-2 text-right">
-              <p>1. פתח WhatsApp בטלפון</p>
-              <p>2. הגדרות → מכשירים מקושרים</p>
-              <p>3. קשר מכשיר וסרוק</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const getErrorModal = () => {
-    if (!errorMessage) return null;
-    
-    return (
-      <div className="fixed flex content-center overflow-y-auto overflow-x-hidden right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-modal md:h-full bg-black bg-opacity-50">
-        <div className="relative p-4 w-full max-w-md h-full md:h-auto">
-          <div className="relative p-4 text-center bg-white rounded-lg shadow dark:bg-gray-800 sm:p-5">
-            <p className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">{errorMessage}</p>
-            <button onClick={() => { setErrorMessage(null); setTimeout(() => checkAndInitialize(), 1000); }} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 ml-2">נסה שוב</button>
-            <button onClick={() => setErrorMessage(null)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">סגור</button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  if (!relevantRoutes.includes(currentRoute)) {
-    return null;
-  }
 
   return (
     <>
-      {getSuccessModal()}
-      {getQRModal()}
-      {getErrorModal()}
+      <Modal 
+        show={showModal} 
+        onHide={() => setShowModal(false)}
+        centered
+        size="lg"
+        backdrop="static"
+      >
+        <Modal.Header closeButton={status === 'connected'}>
+          <Modal.Title>חיבור ל-WhatsApp</Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body className="text-center">
+          <StatusIndicator />
+
+          {status === 'checking' && (
+            <div className="my-4">
+              <Spinner animation="border" variant="primary" />
+              <p className="mt-3">בודק חיבור קיים...</p>
+            </div>
+          )}
+
+          {status === 'qr_ready' && qrCode && (
+            <div className="my-4">
+              <div className="d-flex justify-content-center mb-3">
+                <QRCode value={qrCode} size={256} level="M" />
+              </div>
+              <Alert variant="info">
+                <strong>הוראות:</strong>
+                <ol className="text-end mb-0 pe-3">
+                  <li>פתח WhatsApp במכשיר הנייד</li>
+                  <li>לחץ על תפריט (⋮) → מכשירים מקושרים</li>
+                  <li>לחץ "קשר מכשיר"</li>
+                  <li>סרוק את הקוד למעלה</li>
+                </ol>
+              </Alert>
+              <p className="text-muted small">
+                ⏱️ הקוד תקף ל-30 שניות. אם פג, לחץ Reset למטה.
+              </p>
+            </div>
+          )}
+
+          {status === 'connected' && (
+            <div className="my-4">
+              <div style={{ fontSize: '4rem' }}>✅</div>
+              <h3 className="text-success">מחובר בהצלחה!</h3>
+              <p>החלון ייסגר אוטומטית...</p>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <Alert variant="danger">
+              <h5>❌ לא הצלחנו להתחבר</h5>
+              <p className="mb-0">לחץ על "Reset חיבור" למטה ונסה שוב</p>
+            </Alert>
+          )}
+        </Modal.Body>
+
+        <Modal.Footer className="justify-content-between">
+          <div>
+            {showResetButton && (
+              <Button 
+                variant="warning" 
+                onClick={resetConnection}
+                disabled={status === 'checking'}
+              >
+                🔄 Reset חיבור
+              </Button>
+            )}
+          </div>
+          <div>
+            {status === 'connected' && (
+              <Button variant="success" onClick={() => setShowModal(false)}>
+                סגור
+              </Button>
+            )}
+            {status !== 'connected' && status !== 'checking' && (
+              <Button 
+                variant="primary" 
+                onClick={initialize}
+                disabled={status === 'checking'}
+              >
+                נסה שוב
+              </Button>
+            )}
+          </div>
+        </Modal.Footer>
+      </Modal>
+
+      {/* אינדיקטור קבוע בפינת המסך */}
+      <div 
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          zIndex: 1000,
+          cursor: 'pointer'
+        }}
+        onClick={() => setShowModal(true)}
+      >
+        <Alert 
+          variant={status === 'connected' ? 'success' : 'danger'} 
+          className="mb-0 py-2 px-3"
+          style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+        >
+          <strong>
+            {status === 'connected' ? '✅ WhatsApp מחובר' : '🔴 WhatsApp לא מחובר'}
+          </strong>
+          {status !== 'connected' && (
+            <div className="small">לחץ להתחבר</div>
+          )}
+        </Alert>
+      </div>
     </>
   );
 });
 
-QrCode.displayName = 'QrCode';
+QrCodeComponent.displayName = 'QrCodeComponent';
 
-export default QrCode;
+export default QrCodeComponent;

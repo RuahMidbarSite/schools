@@ -131,7 +131,33 @@ export default function MessagesPage() {
 
   const dataRowCount = useRef(0);
   const rowCount = useRef(0);
+// במקום:
+useEffect(() => {
+  if (qrCodeRef.current) {
+    qrCodeRef.current.checkAndOpenIfNeeded();
+  }
+}, []);
 
+// החלף ל:
+useEffect(() => {
+  const checkInitialConnection = async () => {
+    console.log("🔍 Checking initial WhatsApp connection...");
+    
+    if (qrCodeRef.current) {
+      try {
+        const connected = await qrCodeRef.current.checkAndOpenIfNeeded();
+        console.log(connected ? "✅ Connected!" : "❌ Not connected - modal opened");
+      } catch (err) {
+        console.error("❌ Connection check failed:", err);
+      }
+    }
+  };
+  
+  // המתן רגע קצר לאחר טעינת הדף ואז בדוק
+  const timer = setTimeout(checkInitialConnection, 1000);
+  
+  return () => clearTimeout(timer);
+}, []);
   useEffect(() => {
     const fetchData = () => {
       getFromStorage().then(({ Cities, Religion, Role, SchoolStatuses, ContactsStatuses, Stages, messagePatterns, SchoolTypes }: DataType) => {
@@ -927,17 +953,25 @@ if (qrCodeRef.current) {
                                 // 2. עדכון בשרת (School)
                                 await updateSchoolStatus(statusToUse, [schoolIdNum]);
 
-                                // 3. 🌟 עדכון ויזואלי מיידי בטבלה (AgGrid) 🌟
-                                if (gridRef.current && gridRef.current.api) {
-                                  const rowNode = gridRef.current.api.getRowNode(String(schoolIdNum));
-                                  if (rowNode) {
-                                    rowNode.setDataValue('Status', statusToUse);
-                                    // אופציונלי: הבהוב השורה כדי להראות שינוי
-                                    gridRef.current.api.flashCells({ rowNodes: [rowNode] });
-                                    // רענון התא כדי שיתפוס את הצבע החדש
-                                    gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
-                                  }
-                                }
+                                // 3.  עדכון ויזואלי מיידי בטבלה (AgGrid) 
+                               if (gridRef.current && gridRef.current.api) {
+  const rowNode = gridRef.current.api.getRowNode(String(schoolIdNum));
+  if (rowNode) {
+    // א. עדכון ויזואלי מיידי ב-Grid
+    rowNode.setDataValue('Status', statusToUse);
+    
+    // ב. עדכון ה-State של React (הכרחי כדי שהשינוי לא ייעלם)
+    setRowData((currentRows: any[]) => 
+      currentRows.map(row => 
+        String(row.Schoolid) === String(schoolIdNum) ? { ...row, Status: statusToUse } : row
+      )
+    );
+
+    // ג. רענון ויזואלי
+    gridRef.current.api.flashCells({ rowNodes: [rowNode] });
+    gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
+  }
+}
                               }
                             }
                           }
