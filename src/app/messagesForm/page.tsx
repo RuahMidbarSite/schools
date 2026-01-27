@@ -43,7 +43,6 @@ import "ag-grid-community/styles/ag-theme-quartz.css";
 import { title } from "process";
 import { deletePatternFile, savePatternFile, sendMessageViaWhatsApp } from "@/db/whatsapprequests";
 import { DataType, getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
-import QrCode from "@/components/whatsapp/QrcodeComponent";
 
 export type FilterOptions = {
   Filter: boolean,
@@ -64,7 +63,7 @@ export type ContactFilterOptions = {
 
 export default function MessagesPage() {
   const router = useRouter(); 
-  const qrCodeRef = useRef(null);
+ 
   const gridRef: any = useRef(null);
 
   const [isSending, setIsSending] = useState(false); 
@@ -132,32 +131,9 @@ export default function MessagesPage() {
   const dataRowCount = useRef(0);
   const rowCount = useRef(0);
 // במקום:
-useEffect(() => {
-  if (qrCodeRef.current) {
-    qrCodeRef.current.checkAndOpenIfNeeded();
-  }
-}, []);
 
-// החלף ל:
-useEffect(() => {
-  const checkInitialConnection = async () => {
-    console.log("🔍 Checking initial WhatsApp connection...");
-    
-    if (qrCodeRef.current) {
-      try {
-        const connected = await qrCodeRef.current.checkAndOpenIfNeeded();
-        console.log(connected ? "✅ Connected!" : "❌ Not connected - modal opened");
-      } catch (err) {
-        console.error("❌ Connection check failed:", err);
-      }
-    }
-  };
-  
-  // המתן רגע קצר לאחר טעינת הדף ואז בדוק
-  const timer = setTimeout(checkInitialConnection, 1000);
-  
-  return () => clearTimeout(timer);
-}, []);
+
+
   useEffect(() => {
     const fetchData = () => {
       getFromStorage().then(({ Cities, Religion, Role, SchoolStatuses, ContactsStatuses, Stages, messagePatterns, SchoolTypes }: DataType) => {
@@ -262,23 +238,31 @@ useEffect(() => {
   }, [options]);
 
   const onGridReady = async () => {
+    // 1. הגדרת מיפוי רוחב עמודות קבועות
+    const columnWidths: { [key: string]: number } = {
+      "מזהה": 70,
+      "שם בית ספר": 180,
+      "שלב חינוך": 110,
+      "מגזר": 110,
+      "סוג": 90,
+      "עיר": 110,
+      "סמל": 90,
+      "נציג": 140,
+      "סטטוס": 120,
+      "תאריך": 110,
+      "Representative ID": 130,
+      "Remarks": 150,
+      "טלפון נייד": 140
+    };
+
     const getPhoneValue = (params: any, contactsList: any[]) => {
       if (!contactsList || contactsList.length === 0 || !params.data) return "";
       const data = params.data;
-      
-      const repId = data.RepresentiveID || 
-                    data.RepresentativeId || 
-                    data.RepresentiveId || 
-                    data.RepId || 
-                    data.ContactId || 
-                    data["Representative ID"] || 
-                    data["Repres entive ID"]; 
+      const repId = data.RepresentiveID || data.RepresentativeId || data.RepId || data.ContactId; 
 
       if (repId) {
         const match = contactsList.find(c => String(c.Contactid) === String(repId));
-        if (match) {
-          return match.Cellphone || match.Phone || match.cellphone || "";
-        }
+        if (match) return match.Cellphone || match.Phone || "";
       }
 
       const repName = data.Representive || data.Representative || data.Name;
@@ -288,75 +272,42 @@ useEffect(() => {
         const schoolContacts = contactsList.filter(c => String(c.SchoolId || c.Schoolid) === String(schoolId));
         const match = schoolContacts.find(c => {
             const fullName = `${c.FirstName || ""} ${c.LastName || ""}`.trim();
-            const cleanRepName = String(repName).trim();
-            return fullName === cleanRepName || fullName.includes(cleanRepName) || cleanRepName.includes(fullName);
+            return fullName === String(repName).trim();
         });
         if (match) return match.Cellphone || match.Phone || "";
       }
       return "";
     };
 
+    // שליפה מה-Storage
     getFromStorage().then(({ Schools, Religion, Cities, schoolsContacts, Tablemodel }: DataType) => {
       if (Schools && Religion && Cities && schoolsContacts && Tablemodel) {
         setRowData(Schools);
         setSchools(Schools);
         setSelectedSchools(Schools);
-        
         rowCount.current = Schools.length;
         dataRowCount.current = Schools.length;
 
         const colDefsBuilder: any[] = Tablemodel[0]?.map((value: any, index: any) => {
           const headerName = Tablemodel[1][index];
-
-          // הגדרות עמודה בסיסיות
           let colDef: any = {
             field: value,
             headerName: headerName,
             editable: true,
             filter: true,
+            width: columnWidths[headerName] || 120,
+            suppressSizeToFit: true 
           };
 
-          if (value === "ReligiousSector") {
-            colDef.cellEditor = "agSelectCellEditor";
-            colDef.cellEditorParams = { values: Religion };
-          }
-          else if (value === "City") {
-            colDef.cellEditor = "CustomSelect";
-            colDef.cellEditorParams = { selectData: Cities.map((val) => ({ value: val, label: val })) };
-            colDef.cellEditorPopup = true;
-            colDef.cellEditorPopupPosition = "under";
-          }
-          else if (value === "Representive") {
-            colDef.cellEditor = "CustomSelect";
-            colDef.cellEditorParams = { selectData: schoolsContacts };
-            colDef.cellEditorPopup = true;
-            colDef.cellEditorPopupPosition = "under";
-          }
-          else if (value === "Schoolid") {
-            colDef.cellEditor = "agTextCellEditor";
-            colDef.rowDrag = true;
-          }
-          else {
-             colDef.cellEditor = "agTextCellEditor";
-          }
-
-          // === 🟢 צביעת הסטטוס בירוק ===
-          if (headerName === "סטטוס" || value === "Status" || value === "status") {
+          if (headerName === "סטטוס") {
              colDef.cellStyle = (params: any) => {
-                // חילוץ המחרוזת הנכונה מתוך אובייקט הסטטוס (אם הוא אובייקט)
-                const currentStatusObj = newStatusRef.current;
-                const statusValue = (currentStatusObj && typeof currentStatusObj === 'object' && 'value' in currentStatusObj) 
-                                    ? currentStatusObj.value 
-                                    : currentStatusObj;
-                
-                // בדיקת התאמה מדויקת
-                if (params.value && statusValue && String(params.value) === String(statusValue)) {
+                const statusValue = newStatusRef.current?.value || newStatusRef.current;
+                if (params.value && String(params.value) === String(statusValue)) {
                      return { backgroundColor: '#198754', color: 'white', fontWeight: 'bold' };
                 }
                 return null;
              };
           }
-
           return colDef;
         }) || [];
 
@@ -364,13 +315,14 @@ useEffect(() => {
           field: "CalculatedPhone",
           headerName: "טלפון נייד",
           valueGetter: (params) => getPhoneValue(params, schoolsContacts),
-          filter: true,
-          width: 150
+          width: 140,
+          suppressSizeToFit: true
         });
 
         setColDefs(colDefsBuilder);
 
       } else {
+        // שליפה מהשרת במקרה שאין ב-Storage
         Promise.all([
             getAllSchools(), 
             getAllReligionSectors(), 
@@ -378,61 +330,32 @@ useEffect(() => {
             getAllContacts(), 
             getModelFields("School")
         ]).then(([schoolsData, religionData, citiesData, contactsData, modelData]) => {
-            
             setRowData(schoolsData);
             setSchools(schoolsData);
             setSelectedSchools(schoolsData);
-            
             rowCount.current = schoolsData.length;
             dataRowCount.current = schoolsData.length;
 
             const colDefsBuilder: any[] = modelData[0]?.map((value: any, index: any) => {
                 const headerName = modelData[1][index];
-                
                 let colDef: any = {
                     field: value, 
                     headerName: headerName, 
                     editable: true, 
-                    filter: true
+                    filter: true,
+                    width: columnWidths[headerName] || 120,
+                    suppressSizeToFit: true
                 };
 
-                if (value === "ReligiousSector") {
-                    colDef.cellEditor = "agSelectCellEditor";
-                    colDef.cellEditorParams = { values: religionData };
-                }
-                else if (value === "City") {
-                    colDef.cellEditor = "CustomSelect";
-                    colDef.cellEditorParams = { selectData: citiesData.map((val: any) => ({ value: val.CityName, label: val.CityName })) };
-                    colDef.cellEditorPopup = true;
-                    colDef.cellEditorPopupPosition = "under";
-                }
-                else if (value === "Representive") {
-                    colDef.cellEditor = "CustomSelect";
-                    colDef.cellEditorParams = { selectData: contactsData };
-                    colDef.cellEditorPopup = true;
-                    colDef.cellEditorPopupPosition = "under";
-                }
-                else {
-                    colDef.cellEditor = "agTextCellEditor";
-                }
-
-                 // === 🟢 אותו תיקון גם כאן ===
-                if (headerName === "סטטוס" || value === "Status" || value === "status") {
+                if (headerName === "סטטוס") {
                     colDef.cellStyle = (params: any) => {
-                        const currentStatusObj = newStatusRef.current;
-                        const statusValue = (currentStatusObj && typeof currentStatusObj === 'object' && 'value' in currentStatusObj) 
-                                            ? currentStatusObj.value 
-                                            : currentStatusObj;
-                        
-                        if (params.value && statusValue && String(params.value) === String(statusValue)) {
+                        const statusValue = newStatusRef.current?.value || newStatusRef.current;
+                        if (params.value && String(params.value) === String(statusValue)) {
                              return { backgroundColor: '#198754', color: 'white', fontWeight: 'bold' };
                         }
                         return null;
                     };
                  }
-                 
-                 if (value === "Schoolid") colDef.rowDrag = true;
-
                 return colDef;
             }) || [];
 
@@ -440,8 +363,8 @@ useEffect(() => {
                 field: "CalculatedPhone",
                 headerName: "טלפון נייד",
                 valueGetter: (params) => getPhoneValue(params, contactsData),
-                filter: true,
-                width: 150
+                width: 140,
+                suppressSizeToFit: true
             });
 
             setColDefs(colDefsBuilder);
@@ -569,10 +492,8 @@ useEffect(() => {
     let result = message.replace(/{name}/gi, contact.FirstName || "");
     return result;
   };
-
   return (
     <>
-      <QrCode ref={qrCodeRef} />
       <Container fluid className="formGrid text-end bg-transparent">
         <Row className="borderedColumns flex-row-reverse">
           <Col className="square border border-dark custom-col">
@@ -745,31 +666,28 @@ useEffect(() => {
                   variant="primary"
                   disabled={isSending}
 onClick={async () => {
-  console.log("\n=== 🚀 Starting Send Process ===");
+  console.log("\n=== 🚀 תחילת תהליך שליחה ===");
   
-  // ✅ בדיקת חיבור WhatsApp לפני תחילת השליחה
-  if (qrCodeRef.current) {
-    try {
-      console.log("🔍 Checking WhatsApp connection...");
-      const isConnected = await qrCodeRef.current.checkConnection();
-      
-      if (!isConnected) {
-        console.log("❌ Not connected to WhatsApp");
-        alert("נדרש חיבור ל-WhatsApp כדי לשלוח הודעות.\nאנא סרוק את קוד ה-QR שמופיע על המסך.");
-        return;
-      }
-      
-      console.log("✅ WhatsApp connected - proceeding");
-    } catch (err) {
-      console.error("❌ Connection check failed:", err);
-      alert("שגיאה בבדיקת החיבור ל-WhatsApp. אנא נסה שוב.");
+  // ✅ בדיקה ישירה מול השרת במקום שימוש ב-qrCodeRef שנמחק
+  try {
+    console.log("🔍 בודק חיבור ל-WhatsApp...");
+    const statusRes = await fetch('http://localhost:3994/status');
+    const statusData = await statusRes.json();
+    
+    if (!statusData.connected) {
+      console.log("❌ לא מחובר ל-WhatsApp");
+      alert("נדרש חיבור ל-WhatsApp כדי לשלוח הודעות.\nאנא וודא שהאינדיקטור בסרגל העליון ירוק.");
+      setIsSending(false);
       return;
     }
-  } else {
-    console.error("❌ QR Code component not available");
-    alert("שגיאה במערכת. אנא רענן את הדף ונסה שוב.");
+    
+    console.log("✅ WhatsApp מחובר - ממשיך בשליחה");
+  } catch (err) {
+    console.error("❌ שגיאה בתקשורת עם השרת:", err);
+    alert("שגיאה בתקשורת עם שרת ה-WhatsApp. וודא שהוא פועל.");
+    setIsSending(false);
     return;
-  }                    setNewStatusError(false);
+  }               setNewStatusError(false);
                     // איפוס State של React
                     setSendingStats({ success: 0, missing: 0, error: 0 });
                     
@@ -783,37 +701,6 @@ onClick={async () => {
                     console.log("\n=== 🚀 Starting Batch Send ===");
 // ========================================
 
-// 🔐 בדיקת חיבור WhatsApp לפני שליחה
-console.log("\n=== 🔐 בדיקת חיבור WhatsApp ===");
-if (qrCodeRef.current) {
-  try {
-    const isConnected = await qrCodeRef.current.checkConnection();
-    
-    if (!isConnected) {
-      console.log("❌ לא מחובר ל-WhatsApp - תהליך בוטל");
-      setIsSending(false);
-      alert("נדרש חיבור ל-WhatsApp כדי לשלוח הודעות.\nאנא סרוק את קוד ה-QR שמופיע על המסך.");
-      return;
-    }
-    
-    console.log("✅ מחובר ל-WhatsApp - ממשיך בשליחה");
-    
-    // המתן 3 שניות נוספות אחרי אימות החיבור
-    console.log("⏳ ממתין 3 שניות לסנכרון מלא...");
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-  } catch (err) {
-    console.error("❌ שגיאה בבדיקת חיבור WhatsApp:", err);
-    setIsSending(false);
-    alert("שגיאה בבדיקת החיבור ל-WhatsApp. אנא נסה שוב.");
-    return;
-  }
-} else {
-  console.error("❌ רכיב QR Code לא זמין");
-  setIsSending(false);
-  alert("שגיאה במערכת. אנא רענן את הדף ונסה שוב.");
-  return;
-}
 
                     // 👇 קוד חדש 1: הכנה - טעינת הנתונים המקומיים פעם אחת בהתחלה
                     let currentStorageData: any = null;
@@ -959,7 +846,25 @@ if (qrCodeRef.current) {
   if (rowNode) {
     // א. עדכון ויזואלי מיידי ב-Grid
     rowNode.setDataValue('Status', statusToUse);
-    
+    try {
+            // 1. שליפת הנתונים הנוכחיים מה-Storage
+            const currentData = await getFromStorage();
+            
+            if (currentData && currentData.Schools) {
+                // 2. יצירת רשימת בתי ספר מעודכנת שבה רק הסטטוס של ביה"ס הנוכחי משתנה
+                const updatedSchools = currentData.Schools.map((s: any) => 
+                    Number(s.Schoolid) === schoolIdNum ? { ...s, Status: statusToUse } : s
+                );
+
+                // 3. שמירה חזרה ל-Storage (זה מה שיגרום ל-SchoolTable להתעדכן מיידית)
+                await updateStorage({ 
+                    ...currentData, 
+                    Schools: updatedSchools 
+                });
+            }
+        } catch (err) {
+            console.error("שגיאה בעדכון הסטורג':", err);
+        }
     // ב. עדכון ה-State של React (הכרחי כדי שהשינוי לא ייעלם)
     setRowData((currentRows: any[]) => 
       currentRows.map(row => 
@@ -969,13 +874,30 @@ if (qrCodeRef.current) {
 
     // ג. רענון ויזואלי
     gridRef.current.api.flashCells({ rowNodes: [rowNode] });
-    gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
-  }
-}
-                              }
-                            }
-                          }
-                        } else {
+gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
+                  }
+                }
+
+                // --- עדכון ה-STORAGE המרכזי כדי לסנכרן את עמוד בתי ספר ---
+                try {
+                  const currentData = await getFromStorage();
+                  if (currentData && currentData.Schools) {
+                    const updatedSchools = currentData.Schools.map((s: any) => 
+                      String(s.Schoolid) === String(contact.Schoolid || contact.SchoolId) 
+                        ? { ...s, Status: statusToUse } 
+                        : s
+                    );
+                    await updateStorage({ ...currentData, Schools: updatedSchools });
+                  }
+                } catch (e) {
+                  console.error("Storage update failed", e);
+                }
+                // -------------------------------------------------------
+
+              }
+            }
+          }
+        } else {
                           console.log(`❌ Failed to send to ${contact.FirstName}`);
                           setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
                           localErrorCount++;

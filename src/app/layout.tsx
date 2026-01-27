@@ -38,7 +38,6 @@ export default function RootLayout({
             <YearProvider>
               <StatusProvider>
 
-                <QrCode />
                 <NavBarClient />
 
 

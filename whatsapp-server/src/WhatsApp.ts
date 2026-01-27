@@ -9,7 +9,7 @@ import fs from "fs";
 // ====================================
 // משתנים גלובליים
 // ====================================
-
+let connectionStatusMessage = "ממתין לתחילת תהליך...";
 const GlobalClient = global as unknown as { client: Client };
 
 let lastQrCode: string | null = null;
@@ -232,16 +232,25 @@ const createNewClient = async (): Promise<Client> => {
   });
   
   client.on("disconnected", async (reason) => {
-    console.log("\n❌ Disconnected:", reason);
+    console.log("\n❌ WhatsApp נותק:", reason);
     isClientReady = false;
-    
-    const reasonStr = String(reason);
-    if (reasonStr === 'LOGOUT' || reasonStr.includes('NAVIGATION')) {
-      console.log("🗑️  Logout detected - deleting session");
-      await deleteSession();
+    // 🆕 עדכון סטטוס למשתמש
+    connectionStatusMessage = "החיבור נותק מהטלפון. יש לסרוק קוד QR חדש.";
+
+    try {
+      console.log("🛑 Closing browser processes...");
+      await client.destroy(); 
+      
+      const reasonStr = String(reason);
+      if (reasonStr === 'LOGOUT' || reasonStr.includes('NAVIGATION')) {
+        console.log("🗑️ Logout detected from phone - resetting session...");
+        connectionStatusMessage = "מנקה נתונים ישנים ומכין סשן חדש..."; // 🆕
+        await deleteSession(); 
+      }
+    } catch (err) {
+      console.error("⚠️ Error during disconnect handling:", err);
     }
   });
-  
   // 🆕 הוסף event נוסף לניפוי שגיאות
   client.on("loading_screen", (percent, message) => {
     console.log(`⏳ Loading: ${percent}% - ${message}`);
@@ -307,7 +316,10 @@ let initPromise: Promise<{ result: 'ready' | 'qr', qr?: string }> | null = null;
 // ========================================
 const Initialize = async (): Promise<{ result: 'ready' | 'qr', qr?: string }> => {
   console.log("\n=== 🚀 Initialize ===");
-  
+  if (isClientReady || await isActuallyConnected()) {
+    console.log("✅ Client already connected, fast returning 'ready'");
+    return { result: 'ready' as const };
+}
   // נעילה
   if (isInitializing && initPromise) {
     console.log("⏳ Already initializing - waiting for existing process...");
@@ -406,10 +418,11 @@ const Initialize = async (): Promise<{ result: 'ready' | 'qr', qr?: string }> =>
   
   return initPromise;
 };
-
+export const getConnectionStatus = () => connectionStatusMessage;
 // ========================================
 // Export
 // ========================================
+
 export {
   GetClientOrInitialize,
   Initialize,

@@ -7,7 +7,8 @@ import {
   Initialize,
   isReady,
   hasStoredSession,
-  resetClient
+  resetClient,
+  getConnectionStatus
 } from "./WhatsApp";
 import multer from "multer";
 import path from "path";
