@@ -1,36 +1,53 @@
 import { NextResponse } from 'next/server';
 
-// משתנה גלובלי לשמירת ה-QR הנוכחי
-// במקרה שלך, זה צריך להתחבר ל-WhatsApp client שלך
+// --- אלו המשתנים הקיימים שלך (נשארים אותו דבר) ---
 let currentQR: string | null = null;
 let isReady: boolean = false;
 
+// --- 1. מה שצריך להוסיף לפני ה-GET: פונקציית OPTIONS לפתרון ה-CORS ---
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  });
+}
+
+// --- 2. פונקציית ה-GET המקורית שלך עם תוספת ה-Headers ---
 export async function GET() {
   try {
     console.log('📡 QR API called');
     
-    // אם WhatsApp מחובר - אין צורך ב-QR
+    let responseData;
+    
     if (isReady) {
-      return NextResponse.json({ 
+      responseData = { 
         ready: true,
         qr: null,
         message: 'WhatsApp already connected' 
-      });
-    }
-    
-    // אם יש QR זמין - החזר אותו
-    if (currentQR) {
-      return NextResponse.json({ 
+      };
+    } else if (currentQR) {
+      responseData = { 
         qr: currentQR,
         ready: false 
-      });
+      };
+    } else {
+      responseData = { 
+        qr: null,
+        ready: false,
+        message: 'Waiting for QR code...' 
+      };
     }
     
-    // אין QR זמין כרגע
-    return NextResponse.json({ 
-      qr: null,
-      ready: false,
-      message: 'Waiting for QR code...' 
+    // החזרת התשובה עם ה-Headers שמאשרים את הגישה בדפדפן
+    return NextResponse.json(responseData, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+      },
     });
     
   } catch (error) {
@@ -39,11 +56,14 @@ export async function GET() {
       error: 'Failed to get QR code',
       qr: null,
       ready: false
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' } 
+    });
   }
 }
 
-// פונקציות עזר - תקרא להן מה-WhatsApp client שלך
+// --- 3. מה שאחרי ה-GET: פונקציות העזר שלך (נשארות ללא שינוי) ---
 export function setQR(qr: string) {
   console.log('📱 New QR code received');
   currentQR = qr;
@@ -54,7 +74,7 @@ export function setReady(ready: boolean) {
   console.log('✅ WhatsApp ready status:', ready);
   isReady = ready;
   if (ready) {
-    currentQR = null; // נקה את ה-QR כשמחובר
+    currentQR = null;
   }
 }
 
