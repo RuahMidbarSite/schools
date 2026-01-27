@@ -158,17 +158,14 @@ const createNewClient = async (): Promise<Client> => {
       clientId: '1'
     }),
     puppeteer: {
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
-      ]
-    },
+  // ב-Windows פופטיר ימצא את Chrome/Edge לבד. 
+  // אם תרצה לראות את הדפדפן נפתח פיזית, שנה ל-headless: false
+  headless: true, 
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox'
+  ]
+},
     webVersion: "2.3000.1015910634-alpha",
     webVersionCache: {
       remotePath: "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015910634-alpha.html",

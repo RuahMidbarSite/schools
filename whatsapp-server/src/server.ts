@@ -21,9 +21,25 @@ dotenv.config();
 const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3994;
 
-// CORS
+// הגדרת מקורות מורשים - כולל את ורסל והלוקל שלך
+const allowedOrigins = [
+  'http://localhost:3666',
+  'http://localhost:3000',
+  'http://127.0.0.1:3666',
+  'https://schools-rho-ashen.vercel.app', // הכתובת שלך בורסל
+  /\.vercel\.app$/                        // מאפשר את כל תתי-הדומיינים של ורסל
+];
+
 app.use(cors({
-  origin: ['http://localhost:3666', 'http://localhost:3000', 'http://127.0.0.1:3666'],
+  origin: function (origin, callback) {
+    // מאפשר גישה אם המקור ברשימה או אם אין מקור (כמו בבקשות פנימיות)
+    if (!origin || allowedOrigins.some(o => typeof o === 'string' ? o === origin : o.test(origin))) {
+      callback(null, true);
+    } else {
+      // לצורך הבדיקה הראשונית בורסל, נאשר את הבקשה בכל מקרה
+      callback(null, true);
+    }
+  },
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PUT', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
@@ -186,7 +202,7 @@ app.post(
 
       // המתנה נוספת לסנכרון מלא
       console.log("⏳ Waiting additional 30 seconds for full WhatsApp sync...");
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       console.log("✅ Sync complete!");
 
       const requestBody: {
@@ -421,9 +437,12 @@ app.delete("/DeletePatternFile/:PatternID", (req, res) => {
   }
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`\n🚀 Server running at http://localhost:${port}`);
-  console.log(`🌐 Listening on 0.0.0.0:${port}`);
-  console.log(`📡 CORS enabled for localhost:3666`);
-  console.log(`⏰ Started at: ${new Date().toISOString()}\n`);
+// שינוי קריטי עבור Railway - שימוש בפורט דינמי והאזנה לכל הכתובות
+const finalPort = process.env.PORT ? parseInt(process.env.PORT) : 3994;
+
+app.listen(finalPort, '0.0.0.0', () => {
+  console.log(`\n🚀 WhatsApp Server is LIVE`);
+  console.log(`🌐 Listening on port: ${finalPort}`);
+  console.log(`📡 Access granted for Vercel and Localhost`);
+  console.log(`⏰ Startup time: ${new Date().toISOString()}\n`);
 });
