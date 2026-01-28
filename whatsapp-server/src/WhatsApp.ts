@@ -1,79 +1,54 @@
 // ====================================
-// WhatsApp.ts - קובץ מלא מתוקן
+// WhatsApp.ts - Ultimate Version
+// פשוט, יציב, עובד עם Vercel + ngrok
 // ====================================
 
 import { Client, LocalAuth } from "whatsapp-web.js";
 import path from "path";
 import fs from "fs";
 
-// ====================================
-// משתנים גלובליים
-// ====================================
-let connectionStatusMessage = "ממתין לתחילת תהליך...";
-const GlobalClient = global as unknown as { client: Client; latestQr?: string };
+const GlobalClient = global as unknown as { client: Client };
 
 let lastQrCode: string | null = null;
 let qrResolve: ((qr: string) => void) | null = null;
-
-// משתנה גלובלי לעקוב אחרי מצב ה-ready
 let isClientReady = false;
-let readyResolve: (() => void) | null = null;
-
-// מונה ניסיונות התחברות
-let connectionAttempts = 0;
-const MAX_CONNECTION_ATTEMPTS = 2;
 
 // ========================================
-// פונקציה משופרת: בדיקת חיבור אמיתי
+// פונקציה: האם יש חיבור אמיתי?
 // ========================================
 const isActuallyConnected = async (): Promise<boolean> => {
-  // בדיקה 1: סימן גלובלי
-  if (isClientReady && GlobalClient.client) {
-    console.log(`🔍 Quick check: isClientReady=true`);
-    return true;
-  }
-  
-  // בדיקה 2: אין client
   if (!GlobalClient.client) {
     console.log(`🔍 No client exists`);
     return false;
   }
   
+  // בדיקה מהירה של הסטטוס הגלובלי
+  if (isClientReady) {
+    console.log(`🔍 Quick check: isClientReady=true`);
+    return true;
+  }
+  
   try {
-    // בדיקה משופרת - גם pupPage וגם getState
-    const pupPage = (GlobalClient.client as any).pupPage;
-    
-    // בדוק אם הדפדפן פעיל
-    if (!pupPage || pupPage.isClosed()) {
-      console.log(`🔍 Browser page is closed`);
-      isClientReady = false;
-      return false;
-    }
-    
-    // בדוק state עם timeout קצר יותר
+    // בדיקה עם timeout של 10 שניות (מספיק לשליחת הודעה)
     const state = await Promise.race([
       GlobalClient.client.getState(),
       new Promise<string>((_, reject) => 
-        setTimeout(() => reject(new Error("timeout")), 3000)
+        setTimeout(() => reject(new Error("timeout")), 10000)
       )
     ]);
     
     const connected = state === 'CONNECTED';
     console.log(`🔍 Connection check: ${connected} (state: ${state})`);
     
-    // עדכן את הסימן הגלובלי
+    // עדכן את הסטטוס הגלובלי
     if (connected) {
       isClientReady = true;
-      connectionAttempts = 0;
-    } else {
-      isClientReady = false;
     }
     
     return connected;
     
   } catch (err: any) {
     console.log(`🔍 Connection check: false (error: ${err.message})`);
-    isClientReady = false;
     return false;
   }
 };
@@ -97,7 +72,7 @@ const hasSessionFiles = (): boolean => {
 };
 
 // ========================================
-// מחיקת Session
+// מחיקת Session - רק כשהמשתמש מבקש!
 // ========================================
 const deleteSession = async (): Promise<void> => {
   console.log("\n🗑️  Deleting session...");
@@ -118,13 +93,10 @@ const deleteSession = async (): Promise<void> => {
     GlobalClient.client = undefined as any;
   }
   
-  // אפס סימנים גלובליים
+  // אפס סטטוסים
   isClientReady = false;
-  readyResolve = null;
-  qrResolve = null;
-  connectionAttempts = 0;
   lastQrCode = null;
-  GlobalClient.latestQr = undefined;
+  qrResolve = null;
   
   // המתן לשחרור קבצים
   await new Promise(resolve => setTimeout(resolve, 3000));
@@ -142,120 +114,16 @@ const deleteSession = async (): Promise<void> => {
 };
 
 // ========================================
-// 🆕 הגדרת Event Handlers - פונקציה נפרדת
-// ========================================
-const setupClientEventHandlers = (client: Client) => {
-  console.log("🎯 Setting up event handlers...");
-  
-  // 🔥 QR Event
-  client.on("qr", (qr) => {
-    console.log("\n📱 QR Code generated");
-    console.log("⏰ Time:", new Date().toISOString());
-    lastQrCode = qr;
-    GlobalClient.latestQr = qr;
-    
-    if (qrResolve) {
-      console.log("✅ Resolving QR promise");
-      qrResolve(qr);
-      qrResolve = null;
-    } else {
-      console.log("⚠️  QR generated but no resolver waiting");
-    }
-  });
-  
-  // 🔥 Authenticated Event
-  client.on("authenticated", () => {
-    console.log("\n✅ ===== AUTHENTICATED! =====");
-    console.log("⏰ Time:", new Date().toISOString());
-    console.log("📱 User scanned QR successfully");
-  });
-  
-  // 🔥 Ready Event - הכי חשוב!
-  client.on("ready", () => {
-    console.log("\n🎉 ===== WHATSAPP CLIENT READY! =====");
-    console.log("⏰ Time:", new Date().toISOString());
-    
-    // סמן שה-client מוכן
-    isClientReady = true;
-    connectionAttempts = 0;
-    GlobalClient.latestQr = undefined;
-    connectionStatusMessage = "מחובר ל-WhatsApp בהצלחה!";
-    
-    // פתור promise אם ממתינים
-    if (readyResolve) {
-      console.log("✅ Resolving ready promise");
-      readyResolve();
-      readyResolve = null;
-    }
-  });
-  
-  // 🔥 Change State Event
-  client.on("change_state", (state) => {
-    console.log(`🔄 State changed: ${state}`);
-    
-    if (state === 'CONNECTED') {
-      console.log("✅ State is now CONNECTED");
-      isClientReady = true;
-      connectionAttempts = 0;
-      GlobalClient.latestQr = undefined;
-      connectionStatusMessage = "מחובר ל-WhatsApp";
-    }
-  });
-  
-  // 🔥 Auth Failure Event
-  client.on("auth_failure", async (msg) => {
-    console.log("\n❌ ===== AUTH FAILURE =====");
-    console.log("Message:", msg);
-    isClientReady = false;
-    connectionStatusMessage = "אימות נכשל. נא לנסות שוב.";
-    await deleteSession();
-  });
-  
-  // 🔥 Disconnected Event
-  client.on("disconnected", async (reason) => {
-    console.log("\n❌ ===== DISCONNECTED =====");
-    console.log("Reason:", reason);
-    isClientReady = false;
-    connectionStatusMessage = "החיבור נותק מהטלפון. יש לסרוק קוד QR חדש.";
-
-    try {
-      console.log("🛑 Closing browser processes...");
-      await client.destroy(); 
-      
-      const reasonStr = String(reason);
-      if (reasonStr === 'LOGOUT' || reasonStr.includes('NAVIGATION')) {
-        console.log("🗑️ Logout detected from phone - resetting session...");
-        connectionStatusMessage = "מנקה נתונים ישנים ומכין סשן חדש...";
-        await deleteSession(); 
-      }
-    } catch (err) {
-      console.error("⚠️ Error during disconnect handling:", err);
-    }
-  });
-  
-  // 🔥 Loading Screen Event
-  client.on("loading_screen", (percent, message) => {
-    console.log(`⏳ Loading: ${percent}% - ${message}`);
-  });
-
-  // 🆕 Message Event - לדיבאגינג
-  client.on("message", (msg) => {
-    console.log(`📨 Received message from ${msg.from}: ${msg.body.substring(0, 50)}`);
-  });
-};
-
-// ========================================
 // יצירת Client חדש
 // ========================================
 const createNewClient = async (): Promise<Client> => {
-  console.log("\n🔧 ===== Creating new WhatsApp client =====");
+  console.log("\n🔧 Creating new WhatsApp client...");
   
   const dataPath = path.join(process.cwd(), 'WhatsAppData');
   if (!fs.existsSync(dataPath)) {
     fs.mkdirSync(dataPath, { recursive: true });
   }
   
-  // 1️⃣ צור client
   const client = new Client({
     authStrategy: new LocalAuth({
       dataPath: dataPath,
@@ -280,37 +148,84 @@ const createNewClient = async (): Promise<Client> => {
     },
   });
   
-  // 2️⃣ הגדר event handlers לפני initialize
-  setupClientEventHandlers(client);
+  // ========================================
+  // EVENT HANDLERS
+  // ========================================
   
-  // 3️⃣ שמור ב-global
-  GlobalClient.client = client;
-  console.log("✅ Client created and stored globally");
+  client.on("qr", (qr) => {
+    console.log("\n📱 QR Code generated");
+    console.log("⏰ Time:", new Date().toISOString());
+    lastQrCode = qr;
+    
+    if (qrResolve) {
+      console.log("✅ Resolving QR promise");
+      qrResolve(qr);
+      qrResolve = null;
+    }
+  });
   
-  // 4️⃣ initialize
-  console.log("🚀 Calling client.initialize()...");
+  client.on("authenticated", () => {
+    console.log("\n✅ ===== AUTHENTICATED! =====");
+    console.log("⏰ Time:", new Date().toISOString());
+    console.log("📱 User scanned QR successfully");
+  });
+  
+  client.on("ready", () => {
+    console.log("\n🎉 ===== WHATSAPP CLIENT READY! =====");
+    console.log("⏰ Time:", new Date().toISOString());
+    isClientReady = true;
+    lastQrCode = null;
+  });
+  
+  client.on("change_state", (state) => {
+    console.log(`🔄 State changed: ${state}`);
+    if (state === 'CONNECTED') {
+      isClientReady = true;
+    }
+  });
+  
+  client.on("auth_failure", async (msg) => {
+    console.log("\n❌ ===== AUTH FAILURE =====");
+    console.log("Message:", msg);
+    isClientReady = false;
+    await deleteSession();
+  });
+  
+  client.on("disconnected", async (reason) => {
+    console.log("\n❌ ===== DISCONNECTED =====");
+    console.log("Reason:", reason);
+    isClientReady = false;
+    
+    const reasonStr = String(reason);
+    if (reasonStr === 'LOGOUT' || reasonStr.includes('NAVIGATION')) {
+      console.log("🗑️  Logout detected - deleting session");
+      await deleteSession();
+    }
+  });
+  
+  client.on("loading_screen", (percent, message) => {
+    console.log(`⏳ Loading: ${percent}% - ${message}`);
+  });
+  
+  console.log("🚀 Initializing client...");
   await client.initialize();
-  console.log("✅ client.initialize() completed");
+  
+  GlobalClient.client = client;
+  console.log("✅ Client initialized");
   
   return client;
 };
 
 // ========================================
-// הפונקציה הראשית
+// הפונקציה הראשית - עם הגנה מפני מחיקה
 // ========================================
-const GetClientOrInitialize = async () => {
+const GetClientOrInitialize = async (): Promise<Client> => {
   console.log("\n=== 🎯 GetClientOrInitialize ===");
   console.log("⏰ Time:", new Date().toISOString());
   
-  // 1️⃣ יש client קיים ומוכן?
-  if (GlobalClient.client && isClientReady) {
-    console.log("✅ Client exists and is ready - returning");
-    return GlobalClient.client;
-  }
-  
-  // 2️⃣ יש client אבל לא ready? בדוק state
+  // 1️⃣ יש client קיים? בדוק אם הוא מחובר
   if (GlobalClient.client) {
-    console.log("📌 Checking existing client state...");
+    console.log("📌 Checking existing client...");
     const connected = await isActuallyConnected();
     
     if (connected) {
@@ -318,19 +233,28 @@ const GetClientOrInitialize = async () => {
       return GlobalClient.client;
     }
     
-    // בדיקה: האם ניסינו יותר מדי פעמים?
-    if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-      console.log(`⚠️  Reached max connection attempts (${MAX_CONNECTION_ATTEMPTS})`);
-      console.log("💡 Returning existing client - user should Reset manually");
-      return GlobalClient.client;
+    // 🛡️ אם לא מחובר - אל תמחק אוטומטית!
+    // זה יכול להיות timeout זמני או בעיה רשת
+    console.log("⚠️  Client exists but connection check failed");
+    console.log("💡 Returning existing client - use Reset button if needed");
+    
+    // נסה לבדוק פעם נוספת עם timeout ארוך יותר
+    try {
+      const pupPage = (GlobalClient.client as any).pupPage;
+      if (pupPage && !pupPage.isClosed()) {
+        console.log("🔧 Browser is still open - client might recover");
+        return GlobalClient.client;
+      }
+    } catch (e) {
+      console.log("⚠️  Browser check failed");
     }
     
-    console.log(`❌ Client not connected (attempt ${connectionAttempts + 1}/${MAX_CONNECTION_ATTEMPTS})`);
-    connectionAttempts++;
+    // רק אם הדפדפן באמת סגור - צור חדש
+    console.log("🔄 Browser is closed - creating new client");
     await deleteSession();
   }
   
-  // 3️⃣ אין client - צור חדש
+  // 2️⃣ אין client - צור חדש
   return await createNewClient();
 };
 
@@ -339,18 +263,18 @@ let isInitializing = false;
 let initPromise: Promise<{ result: 'ready' | 'qr', qr?: string }> | null = null;
 
 // ========================================
-// Initialize
+// Initialize - עם Timeout קצר יותר
 // ========================================
 const Initialize = async (): Promise<{ result: 'ready' | 'qr', qr?: string }> => {
   console.log("\n=== 🚀 Initialize ===");
   
   // בדיקה מהירה אם כבר מחובר
-  if (isClientReady || await isActuallyConnected()) {
-    console.log("✅ Client already connected, fast returning 'ready'");
+  if (isClientReady) {
+    console.log("✅ Quick check: already ready!");
     return { result: 'ready' as const };
   }
   
-  // נעילה
+  // נעילה - אל תאפשר אתחולים מרובים
   if (isInitializing && initPromise) {
     console.log("⏳ Already initializing - waiting for existing process...");
     return initPromise;
@@ -367,55 +291,61 @@ const Initialize = async (): Promise<{ result: 'ready' | 'qr', qr?: string }> =>
         return { result: 'ready' as const };
       }
       
-      // 2️⃣ יש Session? נסה לטעון
+      // 2️⃣ יש Session? נסה לטעון (עם timeout קצר!)
       const hasSession = hasSessionFiles();
       
-      if (hasSession && connectionAttempts === 0) {
-        console.log("📁 Found session files - trying to auto-connect...");
+      if (hasSession) {
+        console.log("📁 Found session files - trying to load...");
         
-        // צור client
         await GetClientOrInitialize();
         
-        // 🆕 המתן ל-ready עם timeout
-        console.log("⏳ Waiting for ready event (up to 60 seconds)...");
+        // חכה רק 20 שניות (לא 60!) - מספיק לרוב המקרים
+        console.log("⏳ Waiting up to 20s for session to connect...");
+        const startTime = Date.now();
         
-        const readyPromise = new Promise<void>((resolve) => {
-          readyResolve = resolve;
-        });
-        
-        const timeoutPromise = new Promise<void>((_, reject) => 
-          setTimeout(() => reject(new Error("Session load timeout")), 60000)
-        );
-        
-        try {
-          await Promise.race([readyPromise, timeoutPromise]);
-          console.log("✅ Session loaded successfully!");
-          return { result: 'ready' as const };
-        } catch (err) {
-          console.log("⏱️  Session load timeout - will create fresh session");
-          connectionAttempts = 0;
-          await deleteSession();
+        while (Date.now() - startTime < 20000) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const nowConnected = await isActuallyConnected();
+          if (nowConnected) {
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.log(`✅ Connected after ${elapsed}s!`);
+            return { result: 'ready' as const };
+          }
+          
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          if (elapsed % 5 === 0) {
+            console.log(`⏳ Still waiting... (${elapsed}s)`);
+          }
         }
+        
+        console.log("⏱️  Session load timeout after 20s");
+        console.log("🔄 Will delete and create fresh session");
+        await deleteSession();
       }
       
-      // 3️⃣ אין Session תקין - צור חדש
+      // 3️⃣ אין Session תקין - צור חדש וחכה ל-QR
       console.log("📱 Creating fresh session - waiting for QR...");
       
+      // הגדר resolver לפני יצירת Client
       const qrPromise = new Promise<string>((resolve) => {
         qrResolve = resolve;
         console.log("✅ QR resolver ready");
       });
       
       const timeoutPromise = new Promise<string>((_, reject) => 
-        setTimeout(() => reject(new Error("QR timeout")), 40000)
+        setTimeout(() => reject(new Error("QR timeout after 30s")), 30000)
       );
       
+      // צור Client (יפעיל event 'qr')
       console.log("🔧 Creating client...");
       const createPromise = GetClientOrInitialize();
       
+      // המתן ל-QR
       const qr = await Promise.race([qrPromise, timeoutPromise]);
       console.log("✅ QR Code ready!");
       
+      // וודא שה-Client נוצר
       await createPromise;
       
       return { result: 'qr' as const, qr };
@@ -423,9 +353,15 @@ const Initialize = async (): Promise<{ result: 'ready' | 'qr', qr?: string }> =>
     } catch (err: any) {
       console.error("❌ Failed to initialize:", err.message);
       
-      // אולי בינתיים התחבר?
-      if (isClientReady || await isActuallyConnected()) {
+      // בדיקה אחרונה - אולי התחבר בינתיים
+      if (await isActuallyConnected()) {
         return { result: 'ready' as const };
+      }
+      
+      // אם יש QR שנוצר - החזר אותו
+      if (lastQrCode) {
+        console.log("💡 Returning last QR code from memory");
+        return { result: 'qr' as const, qr: lastQrCode };
       }
       
       throw new Error("Failed to initialize WhatsApp");
@@ -439,8 +375,17 @@ const Initialize = async (): Promise<{ result: 'ready' | 'qr', qr?: string }> =>
   return initPromise;
 };
 
-export const getConnectionStatus = () => connectionStatusMessage;
-export const getLastQrCode = () => GlobalClient.latestQr || lastQrCode;
+// ========================================
+// פונקציות עזר
+// ========================================
+export const getConnectionStatus = () => {
+  if (isClientReady) return "Connected";
+  if (isInitializing) return "Connecting...";
+  if (hasSessionFiles()) return "Session exists, not connected";
+  return "Not connected";
+};
+
+export const getLastQrCode = () => lastQrCode;
 
 // ========================================
 // Export
