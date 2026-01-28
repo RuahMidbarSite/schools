@@ -1,6 +1,6 @@
 "use client";
 
-import React, { forwardRef, useImperativeHandle, useState, useEffect } from 'react';
+import React, { forwardRef, useImperativeHandle, useState, useEffect, useRef } from 'react';
 import { Modal, Button, Spinner, Badge } from 'react-bootstrap';
 import QRCode from 'qrcode.react';
 
@@ -11,299 +11,338 @@ const QrCodeComponent = forwardRef((props, ref) => {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>('checking');
   const [statusMessage, setStatusMessage] = useState('בודק חיבור...');
-  const [showResetButton, setShowResetButton] = useState(false);
+  
+  const isInitializing = useRef(false);
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null);
 
-const WHATSAPP_SERVER = 'https://beamingly-footworn-johnsie.ngrok-free.dev';
+  // 🔧 זיהוי אוטומטי של הסביבה
+  const getWhatsAppServer = () => {
+    // 1. בדוק משתנה סביבה
+    if (process.env.NEXT_PUBLIC_WHATSAPP_SERVER) {
+      return process.env.NEXT_PUBLIC_WHATSAPP_SERVER;
+    }
+    
+    // 2. בדוק אם זה Vercel
+    if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+      return 'https://beamingly-footworn-johnsie.ngrok-free.dev';
+    }
+    
+    // 3. ברירת מחדל - localhost
+    return 'http://localhost:3994';
+  };
+
+  const WHATSAPP_SERVER = getWhatsAppServer();
+
+  const fetchHeaders = {
+    'ngrok-skip-browser-warning': 'true',
+    'Content-Type': 'application/json'
+  };
 
   const checkConnection = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${WHATSAPP_SERVER}/status`);
+      const response = await fetch(`${WHATSAPP_SERVER}/status`, { 
+        headers: fetchHeaders,
+        cache: 'no-store'
+      });
       const data = await response.json();
+      if (data.statusMessage) setStatusMessage(data.statusMessage);
       return data.connected === true;
     } catch (error) {
+      console.error("Check connection failed:", error);
+      setStatusMessage('שגיאה בתקשורת עם השרת');
       return false;
-    }
-  };
-
-  // 🆕 פונקציה לקבלת QR עם timeout
-  const tryGetQR = async (): Promise<string | null> => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 שניות timeout
-
-      const response = await fetch(`${WHATSAPP_SERVER}/GetQR`, {
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        console.error('GetQR failed:', response.status);
-        return null;
-      }
-
-      const data = await response.json();
-      
-      if (data.result === 'qr' && data.data) {
-        return data.data;
-      } else if (data.result === 'ready') {
-        // כבר מחובר
-        setStatus('connected');
-        setStatusMessage('✅ מחובר בהצלחה!');
-        return 'connected';
-      } else if (data.result === 'generating' || data.result === 'connecting') {
-        // QR בתהליך - נסה שוב בעוד 3 שניות
-        setStatusMessage('מייצר קוד QR... רגע...');
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        return await tryGetQR(); // רקורסיה
-      }
-      
-      return null;
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.log('GetQR timeout - will retry');
-      } else {
-        console.error('GetQR error:', error);
-      }
-      return null;
     }
   };
 
   const initialize = async () => {
+    if (isInitializing.current) {
+      console.log("⏳ Already initializing - skipping duplicate call");
+      return;
+    }
+    
+    isInitializing.current = true;
+
     try {
       setStatus('checking');
       setStatusMessage('מתחבר לשרת...');
 
-      // 🆕 בדיקה ראשונה - האם כבר מחובר?
-      const alreadyConnected = await checkConnection();
-      if (alreadyConnected) {
+      const response = await fetch(`${WHATSAPP_SERVER}/Initialize`, { 
+        headers: fetchHeaders,
+        cache: 'no-store'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("📥 Initialize response:", data);
+
+      if (data.result === 'ready') {
         setStatus('connected');
-        setStatusMessage('✅ כבר מחובר!');
+        setStatusMessage('מחובר ל-WhatsApp');
+        setQrCode(null);
+        if (pollingInterval.current) clearInterval(pollingInterval.current);
+        setTimeout(() => setShowModal(false), 1500);
+      } else if (data.result === 'qr' && data.data) {
+        setQrCode(data.data);
+        setStatus('qr_ready');
+        setStatusMessage('סרוק את קוד ה-QR');
+        startPolling();
+      } else {
+        setStatus('waiting_qr');
+        setStatusMessage(data.message || 'מכין קוד QR...');
+        startPolling();
+      }
+    } catch (error) {
+      console.error("❌ Initialize error:", error);
+      setStatus('error');
+      setStatusMessage('שגיאה בתקשורת עם השרת. וודא שהשרת פועל.');
+    } finally {
+      isInitializing.current = false;
+    }
+  };
+
+  const startPolling = () => {
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
+
+    console.log("🔄 Starting polling...");
+    
+    pollingInterval.current = setInterval(async () => {
+      const isConnected = await checkConnection();
+      
+      if (isConnected) {
+        console.log("✅ Connected detected during polling!");
+        setStatus('connected');
+        setStatusMessage('מחובר בהצלחה!');
+        setQrCode(null);
+        
+        if (pollingInterval.current) {
+          clearInterval(pollingInterval.current);
+          pollingInterval.current = null;
+        }
+        
         setTimeout(() => setShowModal(false), 2000);
-        return true;
+        return;
       }
 
-      // 🆕 נסה קודם עם Initialize (עם timeout קצר)
-      setStatusMessage('מנסה להתחבר...');
-      
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 שניות
-
-        const response = await fetch(`${WHATSAPP_SERVER}/Initialize`, {
-          signal: controller.signal
+        const qrRes = await fetch(`${WHATSAPP_SERVER}/GetQR`, { 
+          headers: fetchHeaders,
+          cache: 'no-store'
         });
         
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data = await response.json();
-
-          if (data.result === 'ready') {
-            setStatus('connected');
-            setStatusMessage('✅ מחובר בהצלחה!');
-            setTimeout(() => setShowModal(false), 2000);
-            return true;
-          } else if (data.result === 'qr' && data.data) {
-            // קיבלנו QR
-            setStatus('qr_ready');
-            setQrCode(data.data);
-            setStatusMessage('📱 סרוק את הקוד כעת');
-            setShowResetButton(true);
-            startPolling();
-            return false;
-          } else if (data.result === 'connecting') {
-            // מנסה להתחבר עם session קיים
-            setStatusMessage('מנסה להתחבר עם session שמור...');
-            startPolling();
-            
-            // נסה לקבל QR אם זה לוקח יותר מדי זמן
-            setTimeout(async () => {
-              const stillConnecting = await checkConnection();
-              if (!stillConnecting && !qrCode) {
-                await handleGetQR();
-              }
-            }, 5000);
+        if (!qrRes.ok) {
+          console.log(`⚠️  GetQR returned ${qrRes.status}`);
+          return;
+        }
+        
+        const qrData = await qrRes.json();
+        console.log("📥 GetQR response:", qrData);
+        
+        if (qrData.result === 'ready') {
+          console.log("✅ Connected (from GetQR)!");
+          setStatus('connected');
+          setStatusMessage('מחובר בהצלחה!');
+          setQrCode(null);
+          
+          if (pollingInterval.current) {
+            clearInterval(pollingInterval.current);
+            pollingInterval.current = null;
           }
+          
+          setTimeout(() => setShowModal(false), 2000);
+          return;
         }
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          console.log('Initialize timeout - trying GetQR instead');
-          setStatusMessage('Initialize לקח יותר מדי זמן, מנסה דרך אחרת...');
-        } else {
-          throw error;
+        
+        if (qrData.result === 'qr' && qrData.data) {
+          if (qrCode !== qrData.data) {
+            console.log("🆕 New QR code received");
+            setQrCode(qrData.data);
+          }
+          setStatus('qr_ready');
+          setStatusMessage('סרוק את קוד ה-QR');
+        } else if (qrData.result === 'waiting') {
+          setStatus('waiting_qr');
+          setStatusMessage(qrData.message || 'מכין קוד QR...');
         }
+      } catch (e) {
+        console.log("⚠️  Polling error:", e);
+        setStatusMessage('מחכה לקוד QR מהשרת...');
       }
+    }, 5000);
+  };
 
-      // 🆕 אם Initialize נכשל או timeout - נסה GetQR
-      await handleGetQR();
-
-      return false;
+  const resetConnection = async () => {
+    if (!window.confirm("האם אתה בטוח שברצונך לאפס את החיבור? זה ינתק את המכשיר הקיים.")) return;
+    
+    if (pollingInterval.current) {
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
+    
+    try {
+      setStatus('checking');
+      setStatusMessage('מנקה נתונים...');
+      setQrCode(null);
+      
+      const response = await fetch(`${WHATSAPP_SERVER}/ResetSession`, { 
+        method: 'POST',
+        headers: fetchHeaders,
+        cache: 'no-store'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Reset failed: ${response.status}`);
+      }
+      
+      console.log("✅ Session reset successful");
+      
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      isInitializing.current = false;
+      initialize();
+      
     } catch (error) {
-      console.error('Initialize error:', error);
+      console.error("❌ Reset error:", error);
       setStatus('error');
-      setStatusMessage('⚠️ שגיאה בתקשורת עם השרת');
-      return false;
+      setStatusMessage('שגיאה באיפוס הסשן');
     }
-  };
-
-  // 🆕 פונקציה נפרדת לטיפול ב-QR
-  const handleGetQR = async () => {
-    setStatusMessage('מייצר קוד QR...');
-    
-    const qr = await tryGetQR();
-    
-    if (qr === 'connected') {
-      // התחבר בינתיים
-      setTimeout(() => setShowModal(false), 2000);
-      return;
-    }
-    
-    if (qr) {
-      setStatus('qr_ready');
-      setQrCode(qr);
-      setStatusMessage('📱 סרוק את הקוד כעת');
-      setShowResetButton(true);
-      startPolling();
-    } else {
-      setStatus('error');
-      setStatusMessage('⚠️ לא הצלחתי לקבל קוד QR. נסה "איפוס סשן"');
-    }
-  };
-
-  // 🆕 פונקציה לpolling מתמשך
-  const startPolling = () => {
-    const checkInterval = setInterval(async () => {
-      const connected = await checkConnection();
-      if (connected) {
-        setStatus('connected');
-        setStatusMessage('✅ התחברת בהצלחה!');
-        setQrCode(null);
-        clearInterval(checkInterval);
-        setTimeout(() => setShowModal(false), 2000);
-      }
-    }, 3000); // כל 3 שניות
-
-    // עצור אחרי 2 דקות
-    setTimeout(() => {
-      clearInterval(checkInterval);
-      if (status !== 'connected') {
-        setStatusMessage('⏱️ פג תוקף ה-QR. נסה שוב.');
-      }
-    }, 120000);
   };
 
   useEffect(() => {
-    const checkAtStart = async () => {
-      const connected = await checkConnection();
-      setStatus(connected ? 'connected' : 'disconnected');
-    };
-    checkAtStart();
-
-    const interval = setInterval(async () => {
-      if (!showModal) {
-        const isConnected = await checkConnection();
-        setStatus(isConnected ? 'connected' : 'disconnected');
-      }
-    }, 30000);
+    let mounted = true;
     
-    return () => clearInterval(interval);
+    const initialCheck = async () => {
+      const connected = await checkConnection();
+      if (mounted) {
+        setStatus(connected ? 'connected' : 'disconnected');
+        setStatusMessage(connected ? 'מחובר ל-WhatsApp' : 'לא מחובר');
+      }
+    };
+    
+    initialCheck();
+
+    return () => {
+      mounted = false;
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+        pollingInterval.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showModal && pollingInterval.current) {
+      console.log("🛑 Modal closed - stopping polling");
+      clearInterval(pollingInterval.current);
+      pollingInterval.current = null;
+    }
   }, [showModal]);
 
   useImperativeHandle(ref, () => ({
-    checkConnection: checkConnection,
     openModal: () => {
       setShowModal(true);
-      initialize();
-    },
-    checkAndOpenIfNeeded: async () => {
-      const isConnected = await checkConnection();
-      if (!isConnected) {
-        setShowModal(true);
-        return await initialize();
+      if (status !== 'connected') {
+        initialize();
       }
-      setStatus('connected');
-      return true;
+    },
+    isConnected: status === 'connected',
+    checkStatus: async () => {
+      const connected = await checkConnection();
+      setStatus(connected ? 'connected' : 'disconnected');
+      return connected;
     }
   }));
 
-  const resetConnection = async () => {
-    if (confirm('לאפס חיבור?')) {
-      try {
-        setStatus('checking');
-        setStatusMessage('מאפס...');
-        
-        await fetch(`${WHATSAPP_SERVER}/ResetSession`, { method: 'POST' });
-        
-        setQrCode(null);
-        setStatusMessage('מתחיל מחדש...');
-        
-        // המתן רגע לשרת לסיים איפוס
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        await initialize();
-      } catch (error) {
-        setStatus('error');
-        setStatusMessage('⚠️ שגיאה באיפוס');
-      }
-    }
-  };
-
   return (
     <>
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered dir="rtl">
+      <Modal 
+        show={showModal} 
+        onHide={() => setShowModal(false)} 
+        centered 
+        dir="rtl"
+        backdrop="static"
+      >
         <Modal.Header closeButton>
           <Modal.Title>חיבור ל-WhatsApp</Modal.Title>
         </Modal.Header>
-        <Modal.Body className="text-center py-4">
-            {status === 'checking' && (
-              <div className="mt-3">
-                <Spinner animation="border" variant="primary" />
-                <h6 className="mt-3 text-primary">{statusMessage}</h6>
-                <p className="text-muted small">אנא המתן, זה עשוי לקחת עד 30 שניות...</p>
+        <Modal.Body className="text-center py-4" style={{ minHeight: '300px' }}>
+          
+          {(status === 'checking' || status === 'waiting_qr') && (
+            <div className="py-5">
+              <Spinner animation="border" variant="primary" className="mb-3" />
+              <p className="text-muted">{statusMessage}</p>
+              <p className="small text-muted mt-2">זה עשוי לקחת עד 30 שניות...</p>
+            </div>
+          )}
+
+          {status === 'qr_ready' && (
+            <div>
+              <div className="bg-white p-3 d-inline-block rounded shadow-sm mb-3" style={{ border: '1px solid #eee' }}>
+                {qrCode ? (
+                  <QRCode value={qrCode} size={256} level="H" includeMargin={true} />
+                ) : (
+                  <div className="py-5">
+                    <Spinner animation="border" variant="primary" />
+                    <p className="small text-muted mt-2">ממתין לקוד QR...</p>
+                  </div>
+                )}
               </div>
-            )}
-            {status === 'qr_ready' && qrCode && (
-              <div>
-                <QRCode value={qrCode} size={250} />
-                <p className="mt-3 fw-bold">{statusMessage}</p>
-                <p className="text-muted small">
-                  פתח WhatsApp → הגדרות → מכשירים מקושרים → קשר מכשיר
-                </p>
+              <p className="fw-bold mb-1">סרוק את הקוד מהנייד</p>
+              <p className="small text-muted">פתח וואטסאפ {'>'} מכשירים מקושרים {'>'} קישור מכשיר</p>
+              <p className="small text-primary mt-3">
+                ⏳ הקוד יישאר תקף למשך 60 שניות
+              </p>
+            </div>
+          )}
+
+          {status === 'connected' && (
+            <div className="text-success py-5">
+              <div className="display-4 mb-2">✅</div>
+              <h5>החיבור בוצע בהצלחה!</h5>
+              <p className="small text-muted mt-2">כעת ניתן לשלוח הודעות</p>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="text-danger py-5">
+              <div className="display-4 mb-2">❌</div>
+              <p className="mb-3">{statusMessage}</p>
+              <div className="d-flex gap-2 justify-content-center">
+                <Button variant="primary" onClick={initialize}>נסה שוב</Button>
+                <Button variant="outline-danger" onClick={resetConnection}>איפוס מלא</Button>
               </div>
-            )}
-            {status === 'connected' && <h4 className="text-success">✅ מחובר!</h4>}
-            {status === 'error' && (
-              <div>
-                <p className="text-danger">{statusMessage}</p>
-                <Button 
-                  variant="outline-primary" 
-                  size="sm" 
-                  onClick={resetConnection}
-                  className="mt-2"
-                >
-                  🔄 נסה שוב
-                </Button>
-              </div>
-            )}
+            </div>
+          )}
         </Modal.Body>
-        <Modal.Footer className="justify-content-between">
+        <Modal.Footer className="justify-content-between bg-light">
           <Button 
             variant="link" 
             size="sm" 
-            className="text-danger" 
+            className="text-danger p-0" 
             onClick={resetConnection}
             disabled={status === 'checking'}
           >
-            איפוס סשן
+            איפוס סשן מלא
           </Button>
+          <div className="small text-muted">
+            {WHATSAPP_SERVER.includes('localhost') ? '🏠 פיתוח' : '☁️ ייצור'}
+          </div>
           <Button variant="secondary" onClick={() => setShowModal(false)}>סגור</Button>
         </Modal.Footer>
       </Modal>
 
-      {/* הכפתור הקטן לסרגל הניווט */}
       <div 
-        onClick={() => { setShowModal(true); initialize(); }}
+        onClick={() => { 
+          setShowModal(true); 
+          if (status !== 'connected') {
+            initialize(); 
+          }
+        }}
         className="d-flex align-items-center"
         style={{ cursor: 'pointer', userSelect: 'none' }}
       >
@@ -313,7 +352,7 @@ const WHATSAPP_SERVER = 'https://beamingly-footworn-johnsie.ngrok-free.dev';
           style={{ borderRadius: '18px', fontWeight: '500', transition: 'all 0.3s' }}
         >
           {status === 'checking' && <Spinner animation="border" size="sm" variant="light" />}
-          <span>{status === 'connected' ? 'WhatsApp מחובר' : (status === 'checking' ? 'בודק...' : 'WhatsApp מנותק')}</span>
+          <span>{status === 'connected' ? 'WhatsApp מחובר' : 'WhatsApp מנותק'}</span>
         </Badge>
       </div>
     </>

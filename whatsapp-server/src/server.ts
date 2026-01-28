@@ -8,7 +8,8 @@ import {
   isReady,
   hasStoredSession,
   resetClient,
-  getConnectionStatus
+  getConnectionStatus,
+  getLastQrCode, // 🆕 הוספה
 } from "./WhatsApp";
 import multer from "multer";
 import path from "path";
@@ -21,46 +22,37 @@ dotenv.config();
 const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3994;
 
-// הגדרת מקורות מורשים - כולל את ורסל והלוקל שלך
+// 1. הגדרת מקורות מורשים
 const allowedOrigins = [
   'http://localhost:3666',
   'http://localhost:3000',
   'http://127.0.0.1:3666',
-  'https://schools-rho-ashen.vercel.app', // הכתובת שלך בורסל
-  /\.vercel\.app$/                        // מאפשר את כל תתי-הדומיינים של ורסל
+  'https://schools-rho-ashen.vercel.app', 
+  /\.vercel\.app$/                        
 ];
 
+// 2. הגדרת CORS משופרת התומכת ב-ngrok
 app.use(cors({
-  origin: function (origin, callback) {
-    // מאפשר גישה אם המקור ברשימה או אם אין מקור (כמו בבקשות פנימיות)
-    if (!origin || allowedOrigins.some(o => typeof o === 'string' ? o === origin : o.test(origin))) {
-      callback(null, true);
-    } else {
-      // לצורך הבדיקה הראשונית בורסל, נאשר את הבקשה בכל מקרה
-      callback(null, true);
-    }
-  },
+  origin: true,
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PUT', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning'],
   credentials: true,
   optionsSuccessStatus: 200
 }));
 
-// ✅ הוסף headers ידניים לכל בקשה (חשוב ל-ngrok + Vercel)
+// 3. headers ידניים למניעת חסימות
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PUT, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning');
   res.header('Access-Control-Allow-Credentials', 'true');
   
-  // עבור OPTIONS preflight
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
 });
 
-app.options('*', cors());
 app.use(express.json());
 
 // Upload directory setup
@@ -71,9 +63,7 @@ if (!fs.existsSync(uploadDirectory)) {
 
 const memoryStorage = multer.memoryStorage();
 const diskStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDirectory);
-  },
+  destination: (req, file, cb) => cb(null, uploadDirectory),
   filename: (req, file, cb) => {
     const PatternID = req.params.id;
     cb(null, file.fieldname + "-" + PatternID + path.extname(file.originalname));
@@ -99,16 +89,13 @@ const createMulterFileObject = (filePath: string) => {
   };
 };
 
-// ✅ Status endpoint - פשוט ומהיר
+// ✅ Status endpoint
 app.get("/status", async (req: Request, res: Response) => {
   console.log("\n=== 📊 /status ===");
-  
   try {
     const connected = await isReady();
     const hasSession = hasStoredSession();
     const statusMessage = getConnectionStatus();
-    
-    console.log(`Status: connected=${connected}, hasSession=${hasSession}`);
     
     return res.status(200).json({ 
       connected,
@@ -117,451 +104,169 @@ app.get("/status", async (req: Request, res: Response) => {
       statusMessage,
       timestamp: new Date().toISOString()
     });
-    
   } catch (err) {
-    console.error("Error:", err);
-    return res.status(500).json({ 
-      connected: false,
-      isReady: false,
-      hasSession: false,
-      error: err instanceof Error ? err.message : "Unknown"
-    });
+    return res.status(500).json({ connected: false, error: String(err) });
   }
 });
 
-// 🆕 GetQR endpoint - מחזיר QR מהר או מתחיל תהליך
+// 🆕 GetQR endpoint - משופר להחזיר QR מהזיכרון
 app.get("/GetQR", async (req: Request, res: Response) => {
   console.log("\n=== 📱 /GetQR ===");
-  
   try {
-    // בדוק אם כבר מחובר
+    // 1️⃣ בדוק אם כבר מחובר
     if (await isReady()) {
-      return res.status(200).json({ 
-        result: 'ready',
-        message: 'Already connected'
-      });
+      return res.status(200).json({ result: 'ready', message: 'Already connected' });
     }
-    
-    // אם אין session - צור QR חדש עם timeout
-    if (!hasStoredSession()) {
-      console.log("📱 Generating new QR with 8 second timeout...");
-      
-      const qrPromise = Initialize();
-      const timeoutPromise = new Promise<{ result: 'timeout' }>((resolve) => 
-        setTimeout(() => resolve({ result: 'timeout' as const }), 8000)
-      );
-      
-      const result = await Promise.race([qrPromise, timeoutPromise]);
-      
-      if (result.result === 'timeout') {
-        return res.status(202).json({
-          result: 'generating',
-          message: 'QR code generation in progress. Poll this endpoint again in 3 seconds.'
-        });
-      }
-      
-      if (result.result === 'qr' && result.qr) {
-        return res.status(200).json({ 
-          result: 'qr', 
-          data: result.qr 
-        });
-      }
-      
-      if (result.result === 'ready') {
-        return res.status(200).json({ result: 'ready' });
-      }
+
+    // 2️⃣ קבל QR מהזיכרון
+    const latestQr = getLastQrCode(); // 🆕 שימוש בפונקציה החדשה
+
+    // תמיכה בפורמט תמונה
+    if (req.query.format === 'image' && latestQr) {
+      const img = Buffer.from(latestQr.split(',')[1], 'base64');
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': img.length });
+      return res.end(img);
     }
-    
-    // יש session אבל לא מחובר - התחל חיבור ברקע
-    console.log("📁 Has session - starting background connection");
-    Initialize().catch(err => console.error("Background init error:", err));
-    
-    return res.status(202).json({
-      result: 'connecting',
-      message: 'Trying to connect with existing session. Poll /status to check progress.'
-    });
-    
+
+    // 3️⃣ החזר QR או הודעת המתנה
+    if (latestQr) {
+      return res.status(200).json({ result: 'qr', data: latestQr });
+    }
+
+    return res.status(404).json({ result: 'waiting', message: 'QR not ready yet' });
   } catch (err) {
-    console.error("❌ Error:", err);
-    return res.status(500).json({
-      status: "Error",
-      message: err instanceof Error ? err.message : "Unknown"
-    });
+    return res.status(500).json({ status: "Error", message: String(err) });
   }
 });
 
-// 🔥 Initialize endpoint - מהיר ולא חוסם (תוקן לVercel)
+// 🔥 Initialize endpoint - הגנה מפני אתחולים כפולים
 app.get("/Initialize", async (req: Request, res: Response) => {
   console.log("\n=== 🚀 /Initialize ===");
-  
   try {
-    // בדיקה מהירה - האם כבר מחובר?
+    // 1️⃣ בדוק אם כבר מחובר
     const alreadyConnected = await isReady();
     if (alreadyConnected) {
       console.log("✅ Already connected - returning ready");
       return res.status(200).json({ result: 'ready' });
     }
 
-    // האם יש session?
-    const hasSession = hasStoredSession();
-    
-    if (hasSession) {
-      console.log("📁 Has session - starting background connection");
-      
-      // התחל חיבור ברקע (לא חוסם!)
-      Initialize().catch(err => {
-        console.error("Background init error:", err);
-      });
-      
-      // החזר תשובה מיידית
-      return res.status(202).json({ 
-        result: 'connecting',
-        message: 'Attempting to connect with saved session. Poll /status to check progress.'
-      });
+    // 2️⃣ בדוק אם יש QR מוכן
+    const latestQr = getLastQrCode(); // 🆕 שימוש בפונקציה החדשה
+    if (latestQr) {
+      console.log("✨ Returning existing QR from memory to avoid loop");
+      return res.status(200).json({ result: 'qr', data: latestQr });
     }
-    
-    // אין session - צריך QR חדש
-    console.log("📱 No session - generating QR with 8 second timeout");
-    
-    // חכה ל-QR עם timeout קצר (8 שניות)
+
+    // 3️⃣ התחל אתחול חדש
+    console.log("🛠️ Starting fresh initialization...");
     const qrPromise = Initialize();
     const timeoutPromise = new Promise<{ result: 'timeout' }>((resolve) => 
       setTimeout(() => resolve({ result: 'timeout' as const }), 8000)
     );
-    
+
     const result = await Promise.race([qrPromise, timeoutPromise]);
     
     if (result.result === 'timeout') {
-      console.log("⏱️ QR generation taking too long - returning connecting status");
-      return res.status(202).json({ 
-        result: 'connecting',
-        message: 'QR generation in progress. Try /GetQR endpoint or poll /status.'
-      });
+      return res.status(202).json({ result: 'connecting', message: 'Initializing in background...' });
     }
     
-    if (result.result === 'qr' && result.qr) {
-      console.log("✅ Returning QR code");
-      return res.status(200).json({ result: 'qr', data: result.qr });
-    }
-    
-    if (result.result === 'ready') {
-      console.log("✅ Connected during init");
-      return res.status(200).json({ result: 'ready' });
-    }
-    
-    return res.status(500).json({
-      status: "Error",
-      message: "Unexpected result from Initialize"
-    });
-    
+    return res.status(200).json(result.result === 'qr' ? { result: 'qr', data: result.qr } : result);
   } catch (err) {
-    console.error("❌ Error:", err);
-    return res.status(500).json({
-      status: "Error",
-      message: err instanceof Error ? err.message : "Unknown"
-    });
+    return res.status(500).json({ status: "Error", message: String(err) });
   }
 });
 
 // ✅ ResetSession
 app.post("/ResetSession", async (req: Request, res: Response) => {
   console.log("\n=== 🗑️ /ResetSession ===");
-  
   try {
     await resetClient();
-    
-    console.log("✅ Session reset complete");
-    return res.status(200).json({
-      status: "Success",
-      message: "Session deleted. Call /Initialize for fresh QR."
-    });
-    
+    return res.status(200).json({ status: "Success", message: "Session deleted." });
   } catch (err) {
-    console.error("❌ Error:", err);
-    return res.status(500).json({
-      status: "Error",
-      message: err instanceof Error ? err.message : "Unknown"
-    });
+    return res.status(500).json({ status: "Error", message: String(err) });
   }
 });
 
 // ✅ SendMessage endpoint
-app.post(
-  "/SendMessage",
-  MemoryWithNoStoring.single("file"),
-  async (req: Request, res: Response) => {
+app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request, res: Response) => {
     console.log("\n=== 📨 /SendMessage Called ===");
-    console.log("⏰ Time:", new Date().toISOString());
-    console.log("📦 Body:", JSON.stringify(req.body, null, 2));
-    console.log("📎 File:", req.file ? req.file.originalname : "No file");
-    
     try {
-      console.log("📌 Getting client...");
       const client: Client = await GetClientOrInitialize();
-      
-      console.log("⏳ Waiting for client to be ready (up to 60 seconds)...");
       let waitCount = 0;
-      while (!isReady() && waitCount < 120) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      while (!(await isReady()) && waitCount < 10) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
         waitCount++;
-        if (waitCount % 20 === 0) {
-          console.log(`⏳ Still waiting... (${waitCount * 0.5} seconds)`);
-        }
       }
-      
-      if (!isReady()) {
-        console.log("❌ Client not ready after 60 seconds");
-        return res.status(401).json({ 
-          status: "Error", 
-          message: "WhatsApp not authenticated. Please scan QR code first.",
-        });
+
+      if (!(await isReady())) {
+        return res.status(401).json({ status: "Error", message: "WhatsApp not authenticated." });
       }
-      
-      console.log("✅ Client is ready!");
 
-      // המתנה נוספת לסנכרון מלא
-      console.log("⏳ Waiting additional 30 seconds for full WhatsApp sync...");
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log("✅ Sync complete!");
-
-      const requestBody: {
-        PhoneNumber: string;
-        Message_1: string | undefined;
-        Message_2: string | undefined;
-        PatternID: string | undefined;
-      } = req.body;
-      
-      let phoneNumber = requestBody.PhoneNumber;
-      console.log("📞 Original number:", phoneNumber);
-
-      phoneNumber = phoneNumber.replace('@c.us', '').replace(/[\s-]/g, '');
-      console.log("🧹 Cleaned number:", phoneNumber);
-
+      const requestBody = req.body;
+      let phoneNumber = requestBody.PhoneNumber.replace('@c.us', '').replace(/[\s-]/g, '');
       let chatId: string;
-      let chat: any;
       
       try {
-        console.log("🔍 Getting number ID from WhatsApp...");
         const numberId = await client.getNumberId(phoneNumber);
-        
-        if (!numberId) {
-          console.log("❌ Number not found on WhatsApp!");
-          return res.status(404).json({ 
-            status: "Error", 
-            message: `Number ${phoneNumber} is not registered on WhatsApp`
-          });
-        }
-        
-        chatId = numberId._serialized;
-        console.log("✅ Got chat ID:", chatId);
-        
-        console.log("📂 Loading chat...");
-        try {
-          chat = await client.getChatById(chatId);
-          console.log("✅ Chat loaded successfully");
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        } catch (chatErr) {
-          console.log("⚠️ Could not load chat, will try direct send:", chatErr);
-          chat = null;
-        }
-        
+        chatId = numberId ? numberId._serialized : `${phoneNumber}@c.us`;
       } catch (err) {
-        console.log("⚠️ Error getting number ID:", err);
-        chatId = phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@c.us`;
-        console.log("🔄 Using fallback chat ID:", chatId);
-        chat = null;
+        chatId = `${phoneNumber}@c.us`;
       }
 
       const responses: any[] = [];
       let messageCount = 0;
       
-      // 1️⃣ שלח הודעה ראשונה
       if (requestBody.Message_1) {
-        console.log("💬 Sending Message_1...");
-        try {
-          console.log("📤 Sending message directly without sendSeen...");
-          const response = await client.sendMessage(chatId, requestBody.Message_1, {
-            sendSeen: false
-          });
-          
-          responses.push(response);
-          messageCount++;
-          console.log("✅ Message_1 sent!");
-          await new Promise(resolve => setTimeout(resolve, 1500));
-        } catch (err) {
-          console.error("❌ Error sending Message_1:", err);
-          throw err;
-        }
+        responses.push(await client.sendMessage(chatId, requestBody.Message_1));
+        messageCount++;
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
-      // 2️⃣ שלח קובץ
       if (requestBody.PatternID && !req.file) {
-        console.log("🔍 Looking for pattern file:", requestBody.PatternID);
         const files = fs.readdirSync(uploadDirectory);
-        const found_file = files.find((val) =>
-          val.startsWith(`file-${requestBody.PatternID}`)
-        );
-        
+        const found_file = files.find((val) => val.startsWith(`file-${requestBody.PatternID}`));
         if (found_file) {
-          console.log("✅ Found pattern file:", found_file);
           const filePath = path.join(uploadDirectory, found_file);
-          const multerFile = await createMulterFileObject(filePath);
-          
-          const media = new MessageMedia(
-            multerFile.mimetype,
-            multerFile.buffer.toString("base64"),
-            multerFile.originalname,
-            multerFile.size
-          );
-          
-          console.log("📤 Sending pattern file...");
-          const response = await client.sendMessage(chatId, media, {
-            sendSeen: false
-          });
-          
-          responses.push(response);
+          const multerFile = createMulterFileObject(filePath);
+          const media = new MessageMedia(multerFile.mimetype || 'image/png', multerFile.buffer.toString("base64"), multerFile.originalname);
+          responses.push(await client.sendMessage(chatId, media));
           messageCount++;
-          console.log("✅ Pattern file sent!");
-          await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
 
       if (req.file) {
-        console.log("📎 Processing uploaded file...");
-        
-        if (req.file.size === 0) {
-          console.error("❌ Error: Received file with 0 bytes!");
-        } else {
-          let fileName = "file.bin";
-
-          if (req.body.FileNameBase64) {
-            try {
-              const decoded = Buffer.from(req.body.FileNameBase64, 'base64').toString('binary');
-              fileName = decodeURIComponent(escape(decoded));
-              console.log(`🏷️ Decoded Hebrew Filename: ${fileName}`);
-            } catch (e) {
-              console.error("❌ Base64 decode failed, using fallback");
-              fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
-            }
-          } else {
-            fileName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
-          }
-
-          const media = new MessageMedia(
-            req.file.mimetype,
-            req.file.buffer.toString("base64"),
-            fileName,
-            req.file.size
-          );
-          
-          console.log("📤 Sending uploaded file with name:", fileName);
-          const response = await client.sendMessage(chatId, media, {
-            sendSeen: false
-          });
-          
-          responses.push(response);
-          messageCount++;
-          console.log("✅ Uploaded file sent!");
-          await new Promise(resolve => setTimeout(resolve, 1500));
-        }
+        const media = new MessageMedia(req.file.mimetype, req.file.buffer.toString("base64"), req.file.originalname);
+        responses.push(await client.sendMessage(chatId, media));
+        messageCount++;
       }
 
-      // 3️⃣ שלח הודעה שנייה
       if (requestBody.Message_2) {
-        console.log("💬 Sending Message_2...");
-        try {
-          const response = await client.sendMessage(chatId, requestBody.Message_2, {
-            sendSeen: false
-          });
-          
-          responses.push(response);
-          messageCount++;
-          console.log("✅ Message_2 sent!");
-        } catch (err) {
-          console.error("❌ Error sending Message_2:", err);
-          throw err;
-        }
+        responses.push(await client.sendMessage(chatId, requestBody.Message_2));
+        messageCount++;
       }
       
-      console.log(`✅ Total messages sent: ${messageCount}`);
-      console.log("✅ All messages sent!");
-      console.log("⏰ Time:", new Date().toISOString());
-      
-      return res.status(200).json({ 
-        body: responses, 
-        status: "Success",
-        sentTo: chatId,
-        messageCount: messageCount
-      });
-        
+      return res.status(200).json({ status: "Success", sentTo: chatId, messageCount });
     } catch (err) {
-      console.error("❌ Error in /SendMessage:", err);
-      console.log("⏰ Time:", new Date().toISOString());
-      
-      return res.status(500).json({ 
-        status: "Error", 
-        message: err instanceof Error ? err.message : "Unknown error",
-        error: String(err)
-      });
-    } finally {
-      if (req.file?.buffer) {
-        req.file.buffer = Buffer.alloc(0);
-      }
+      return res.status(500).json({ status: "Error", error: String(err) });
     }
   }
 );
 
-app.post(
-  "/SavePatternFile/:id",
-  MemoryWithStoring.single("file"),
-  async (req: Request, res: Response) => {
-    try {
-      const requestBody: { PatternID: string } = req.body;
-      console.log("💾 File saved with ID:", requestBody.PatternID);
-      return res.status(200).json({
-        message: `File saved successfully with ID: ${requestBody.PatternID}`,
-      });
-    } catch (err) {
-      console.error("❌ Error in /SavePatternFile:", err);
-      return res.status(500).json({ 
-        status: "Error", 
-        message: err instanceof Error ? err.message : "Unknown error"
-      });
-    }
-  }
-);
-
-app.delete("/DeletePatternFile/:PatternID", (req, res) => {
-  try {
-    const { PatternID } = req.params;
-    console.log("🗑️ Delete pattern:", PatternID);
-    
-    const files = fs.readdirSync(uploadDirectory);
-    const found_file = files.find((val) => val.startsWith(`file-${PatternID}`));
-    
-    if (found_file) {
-      const filePath = path.join(uploadDirectory, found_file);
-      fs.unlinkSync(filePath);
-      console.log("✅ File deleted:", found_file);
-      return res.status(200).json({ status: "Success", message: "File deleted" });
-    } else {
-      return res.status(404).json({ status: "Error", message: "File not found" });
-    }
-  } catch (err) {
-    console.error("❌ Error in /DeletePatternFile:", err);
-    return res.status(500).json({ 
-      status: "Error", 
-      message: err instanceof Error ? err.message : "Unknown error"
-    });
-  }
+app.post("/SavePatternFile/:id", MemoryWithStoring.single("file"), async (req, res) => {
+    return res.status(200).json({ message: "File saved successfully" });
 });
 
-// שינוי קריטי עבור Railway - שימוש בפורט דינמי והאזנה לכל הכתובות
-const finalPort = process.env.PORT ? parseInt(process.env.PORT) : 3994;
+app.delete("/DeletePatternFile/:PatternID", (req, res) => {
+    const { PatternID } = req.params;
+    const files = fs.readdirSync(uploadDirectory);
+    const found_file = files.find((val) => val.startsWith(`file-${PatternID}`));
+    if (found_file) {
+      fs.unlinkSync(path.join(uploadDirectory, found_file));
+      return res.status(200).json({ status: "Success" });
+    }
+    return res.status(404).json({ status: "Error" });
+});
 
-app.listen(finalPort, '0.0.0.0', () => {
-  console.log(`\n🚀 WhatsApp Server is LIVE`);
-  console.log(`🌐 Listening on port: ${finalPort}`);
-  console.log(`📡 Access granted for Vercel and Localhost`);
-  console.log(`⏰ Startup time: ${new Date().toISOString()}\n`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`\n🚀 WhatsApp Server is LIVE on port: ${port}`);
 });
