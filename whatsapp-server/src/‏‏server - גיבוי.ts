@@ -46,20 +46,6 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-// ✅ הוסף headers ידניים לכל בקשה (חשוב ל-ngrok + Vercel)
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PUT, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // עבור OPTIONS preflight
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
 app.options('*', cors());
 app.use(express.json());
 
@@ -106,7 +92,6 @@ app.get("/status", async (req: Request, res: Response) => {
   try {
     const connected = await isReady();
     const hasSession = hasStoredSession();
-    const statusMessage = getConnectionStatus();
     
     console.log(`Status: connected=${connected}, hasSession=${hasSession}`);
     
@@ -114,7 +99,6 @@ app.get("/status", async (req: Request, res: Response) => {
       connected,
       isReady: connected,
       hasSession,
-      statusMessage,
       timestamp: new Date().toISOString()
     });
     
@@ -129,129 +113,26 @@ app.get("/status", async (req: Request, res: Response) => {
   }
 });
 
-// 🆕 GetQR endpoint - מחזיר QR מהר או מתחיל תהליך
-app.get("/GetQR", async (req: Request, res: Response) => {
-  console.log("\n=== 📱 /GetQR ===");
-  
-  try {
-    // בדוק אם כבר מחובר
-    if (await isReady()) {
-      return res.status(200).json({ 
-        result: 'ready',
-        message: 'Already connected'
-      });
-    }
-    
-    // אם אין session - צור QR חדש עם timeout
-    if (!hasStoredSession()) {
-      console.log("📱 Generating new QR with 8 second timeout...");
-      
-      const qrPromise = Initialize();
-      const timeoutPromise = new Promise<{ result: 'timeout' }>((resolve) => 
-        setTimeout(() => resolve({ result: 'timeout' as const }), 8000)
-      );
-      
-      const result = await Promise.race([qrPromise, timeoutPromise]);
-      
-      if (result.result === 'timeout') {
-        return res.status(202).json({
-          result: 'generating',
-          message: 'QR code generation in progress. Poll this endpoint again in 3 seconds.'
-        });
-      }
-      
-      if (result.result === 'qr' && result.qr) {
-        return res.status(200).json({ 
-          result: 'qr', 
-          data: result.qr 
-        });
-      }
-      
-      if (result.result === 'ready') {
-        return res.status(200).json({ result: 'ready' });
-      }
-    }
-    
-    // יש session אבל לא מחובר - התחל חיבור ברקע
-    console.log("📁 Has session - starting background connection");
-    Initialize().catch(err => console.error("Background init error:", err));
-    
-    return res.status(202).json({
-      result: 'connecting',
-      message: 'Trying to connect with existing session. Poll /status to check progress.'
-    });
-    
-  } catch (err) {
-    console.error("❌ Error:", err);
-    return res.status(500).json({
-      status: "Error",
-      message: err instanceof Error ? err.message : "Unknown"
-    });
-  }
-});
-
-// 🔥 Initialize endpoint - מהיר ולא חוסם (תוקן לVercel)
+// 🔥 Initialize endpoint
 app.get("/Initialize", async (req: Request, res: Response) => {
   console.log("\n=== 🚀 /Initialize ===");
   
   try {
-    // בדיקה מהירה - האם כבר מחובר?
-    const alreadyConnected = await isReady();
-    if (alreadyConnected) {
-      console.log("✅ Already connected - returning ready");
+    const result = await Initialize();
+    
+    if (result.result === 'ready') {
+      console.log("✅ Returning: ready");
       return res.status(200).json({ result: 'ready' });
-    }
-
-    // האם יש session?
-    const hasSession = hasStoredSession();
-    
-    if (hasSession) {
-      console.log("📁 Has session - starting background connection");
-      
-      // התחל חיבור ברקע (לא חוסם!)
-      Initialize().catch(err => {
-        console.error("Background init error:", err);
-      });
-      
-      // החזר תשובה מיידית
-      return res.status(202).json({ 
-        result: 'connecting',
-        message: 'Attempting to connect with saved session. Poll /status to check progress.'
-      });
-    }
-    
-    // אין session - צריך QR חדש
-    console.log("📱 No session - generating QR with 8 second timeout");
-    
-    // חכה ל-QR עם timeout קצר (8 שניות)
-    const qrPromise = Initialize();
-    const timeoutPromise = new Promise<{ result: 'timeout' }>((resolve) => 
-      setTimeout(() => resolve({ result: 'timeout' as const }), 8000)
-    );
-    
-    const result = await Promise.race([qrPromise, timeoutPromise]);
-    
-    if (result.result === 'timeout') {
-      console.log("⏱️ QR generation taking too long - returning connecting status");
-      return res.status(202).json({ 
-        result: 'connecting',
-        message: 'QR generation in progress. Try /GetQR endpoint or poll /status.'
-      });
     }
     
     if (result.result === 'qr' && result.qr) {
-      console.log("✅ Returning QR code");
+      console.log("✅ Returning: QR code");
       return res.status(200).json({ result: 'qr', data: result.qr });
-    }
-    
-    if (result.result === 'ready') {
-      console.log("✅ Connected during init");
-      return res.status(200).json({ result: 'ready' });
     }
     
     return res.status(500).json({
       status: "Error",
-      message: "Unexpected result from Initialize"
+      message: "Unexpected result"
     });
     
   } catch (err) {
