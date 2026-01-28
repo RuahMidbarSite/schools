@@ -13,7 +13,7 @@ const QrCodeComponent = forwardRef((props, ref) => {
   const [statusMessage, setStatusMessage] = useState('בודק חיבור...');
   const [showResetButton, setShowResetButton] = useState(false);
 
-  const WHATSAPP_SERVER = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || 'http://localhost:3994';
+const WHATSAPP_SERVER = 'https://beamingly-footworn-johnsie.ngrok-free.dev';
 
   const checkConnection = async (): Promise<boolean> => {
     try {
