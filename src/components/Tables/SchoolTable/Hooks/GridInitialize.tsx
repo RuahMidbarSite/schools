@@ -206,41 +206,38 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
     return Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getModelFields("School"), getEducationStages(), getAllStatuses("Schools"), getAllContacts(), getAllSchoolsTypes(), getPrograms()])
   }, [])
 
+  // 🔧 תיקון: תמיד שלוף מבסיס הנתונים במקום מ-Storage
   const onGridReady = async (event: GridReadyEvent) => {
-    getFromStorage().then(({ Schools, Religion, Cities, SchoolStatuses, schoolsContacts, SchoolTypes, Stages, Tablemodel, Programs }: DataType) => {
+    console.log("📊 GridInitialize: Fetching fresh data from database...");
+    
+    getAllData().then(
+      ([schools, religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes, programs]) => {
+        console.log(`✅ Loaded ${schools.length} schools from database`);
+        
+        rowCount.current = schools.length;
+        dataRowCount.current = schools.length;
+        var colDef = GetDefaultDefinitions([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes]);
 
-      if (Schools && Religion && Cities && SchoolStatuses && schoolsContacts && SchoolTypes && Stages && Tablemodel && Programs) {
-        const colDef = GetDefaultDefinitions([Religion, Cities, Tablemodel, Stages, SchoolStatuses, schoolsContacts, SchoolTypes]);
         setColDefs(colDef);
-        setRowData(Schools);
-
-        rowCount.current = Schools.length;
-        dataRowCount.current = rowCount.current;
-        if (Schools.length === 0) {
-          event.api.hideOverlay();
-        }
-        setAllContacts(schoolsContacts)
-        setAllPrograms(Programs)
-        maxIndex.current = Schools.length > 0 ? Math.max(...Schools?.map((val) => val.Schoolid)):0
-        return;
+        setRowData(schools);
+        setAllContacts(contacts)
+        setAllPrograms(programs)
+        maxIndex.current = schools.length > 0 ? Math.max(...schools?.map((val) => val.Schoolid)):0
+        
+        // עדכן את ה-Storage עם הנתונים העדכניים מבסיס הנתונים
+        updateStorage({ 
+          Schools: schools, 
+          Religion: religion_sectors, 
+          Cities: cities, 
+          SchoolStatuses: statuses, 
+          Stages: edustages, 
+          SchoolTypes: schoolTypes, 
+          schoolsContacts: contacts, 
+          Tablemodel: model, 
+          Programs: programs 
+        }).then((res) => console.log('✅ Storage updated with fresh data from database'))
       }
-
-      getAllData().then(
-        ([schools, religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes, programs]) => {
-
-          rowCount.current = schools.length;
-          dataRowCount.current = schools.length;
-          var colDef = GetDefaultDefinitions([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes]);
-
-          setColDefs(colDef);
-          setRowData(schools);
-          setAllContacts(contacts)
-          setAllPrograms(programs)
-          maxIndex.current = schools.length > 0 ? Math.max(...schools?.map((val) => val.Schoolid)):0
-          updateStorage({ Schools: schools, Religion: religion_sectors, Cities: cities, SchoolStatuses: statuses, Stages: edustages, SchoolTypes: schoolTypes, schoolsContacts: contacts, Tablemodel: model, Programs: programs }).then((res) => console.log('updated succesfully'))
-        }
-      );
-    })
+    );
   };
 
   return { GetDefaultDefinitions: GetDefaultDefinitions, onGridReady: onGridReady }

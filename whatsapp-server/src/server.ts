@@ -389,24 +389,8 @@ app.delete("/DeletePatternFile/:PatternID", (req, res) => {
     return res.status(404).json({ status: "Error" });
 });
 
-app.listen(port, '0.0.0.0', async () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`\n🚀 WhatsApp Server is LIVE on port: ${port}`);
   console.log(`🌐 Access via ngrok for Vercel`);
   console.log(`⏰ Startup time: ${new Date().toISOString()}\n`);
-  
-  // 🆕 אתחול אוטומטי אם יש session
-  if (hasStoredSession()) {
-    console.log("📁 Found existing session - auto-initializing...");
-    Initialize().then(result => {
-      if (result.result === 'ready') {
-        console.log("✅ Auto-connected successfully!");
-      } else {
-        console.log("📱 Session exists but needs QR scan");
-      }
-    }).catch(err => {
-      console.log("⚠️  Auto-initialization failed:", err.message);
-    });
-  } else {
-    console.log("💡 No session found - waiting for /Initialize call");
-  }
 });

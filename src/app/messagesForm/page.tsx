@@ -43,6 +43,8 @@ import "ag-grid-community/styles/ag-theme-quartz.css";
 import { title } from "process";
 import { deletePatternFile, savePatternFile, sendMessageViaWhatsApp } from "@/db/whatsapprequests";
 import { DataType, getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
+import { updateStorage as updateSchoolStorage } from "@/components/Tables/SchoolTable/Storage/SchoolDataStorage";
+import { getSmartMessageDelay, formatDelayMessage, estimateRemainingTime } from './utils/delayUtils';
 
 export type FilterOptions = {
   Filter: boolean,
@@ -909,11 +911,15 @@ gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'sta
                         localErrorCount++;
                       }
 
-                      // המתנה אקראית - רק אם לא הגענו לסוף וגם לא עצרנו
+                      // ========================================
+                      // 🎲 DELAY חכם לפני ההודעה הבאה
+                      // ========================================
                       if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
-                       // המתנה של בין 1 ל-3 שניות בלבד (בנוסף ל-30 שניות של השרת)
-                        const delay = Math.floor(Math.random() * (3000 - 1000 + 1) + 1000);
-                        console.log(`⏳ Waiting ${(delay / 1000).toFixed(1)}s (Client) + Server Sync Time...`);
+                        const delay = getSmartMessageDelay(contactsToSend.length, index);
+                        const formattedDelay = formatDelayMessage(delay);
+                        const remaining = estimateRemainingTime(contactsToSend.length, index);
+                        
+                        console.log(`⏳ Waiting ${formattedDelay} before next message... (Est. remaining: ${remaining})`);
                         await sleep(delay);
                       }
                     } // סוף לולאה

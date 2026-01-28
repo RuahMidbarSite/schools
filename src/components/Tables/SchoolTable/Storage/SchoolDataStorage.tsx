@@ -25,6 +25,35 @@ export interface SchoolStoreColDefinition {
 export type DataType = (SchoolStorePossibleOptionsForColumn & SchoolStoreRowData & SchoolsCascadingData)
 
 const defaultObject = defaultObjectMap.get('School')
+
+// 🆕 מערכת גרסאות לזיהוי שינויים
+const CACHE_VERSION_KEY = 'SchoolDataVersion'
+
+// 🆕 פונקציה לעדכון מספר הגרסה
+const incrementVersion = async (): Promise<number> => {
+  try {
+    const currentVersion = await StoreSchoolData.getItem(CACHE_VERSION_KEY) as number || 0
+    const newVersion = currentVersion + 1
+    await StoreSchoolData.setItem(CACHE_VERSION_KEY, newVersion)
+    console.log(`📊 School cache version updated: ${currentVersion} → ${newVersion}`)
+    return newVersion
+  } catch (error) {
+    console.error("❌ Error incrementing version:", error)
+    return 0
+  }
+}
+
+// 🆕 פונקציה לקבלת מספר הגרסה
+export const getCacheVersion = async (): Promise<number> => {
+  try {
+    const version = await StoreSchoolData.getItem(CACHE_VERSION_KEY) as number
+    return version || 0
+  } catch (error) {
+    console.error("❌ Error getting cache version:", error)
+    return 0
+  }
+}
+
 const handleBigContacts = (data: DataType, store: LocalForage, dep_tables_fields: string[], this_update_tables_field: string[]) => {
    let promises = []
    for (var need_to_be_updated_if_changed of dep_tables_fields) {
@@ -96,6 +125,8 @@ const updateDeps = async (data: (DataType)) => {
 }
 
 const updateStorage = async (data: DataType): Promise<void> => {
+   console.log("💾 SchoolDataStorage: updateStorage called with keys:", Object.keys(data))
+   
    const keys = Object.keys(data)
    let deps_promises = updateDeps(data)
    let promises = []
@@ -103,8 +134,31 @@ const updateStorage = async (data: DataType): Promise<void> => {
       const promise = StoreSchoolData.setItem(key, data[key])
       promises.push(promise)
    }
-   return Promise.all([deps_promises, ...promises]).then((response) => { console.log("updated succesfully.") })
-
+   
+   return Promise.all([deps_promises, ...promises]).then(async (response) => { 
+      console.log("✅ SchoolDataStorage: updated successfully")
+      
+      // עדכון מספר הגרסה
+      const newVersion = await incrementVersion()
+      
+      // שידור אירוע מותאם אישית לכל הדפים/קומפוננטות
+      if (typeof window !== 'undefined') {
+         console.log("📡 SchoolDataStorage: DISPATCHING storageUpdated event...")
+         console.log("📦 Keys being dispatched:", Object.keys(data))
+         console.log("📢 Version:", newVersion)
+         
+         window.dispatchEvent(new CustomEvent('storageUpdated', { 
+            detail: { 
+               keys: Object.keys(data),
+               version: newVersion,
+               timestamp: Date.now(),
+               source: 'SchoolDataStorage'
+            } 
+         }))
+         
+         console.log("✅ Event dispatched successfully!")
+      }
+   })
 }
 
 const getFromStorage = async (): Promise<DataType> => {
@@ -132,4 +186,3 @@ const getFromStorageWithKey = async (key: Partial<keyof DataType>): Promise<Part
 }
 
 export { updateStorage, getFromStorage, getFromStorageWithKey }
-

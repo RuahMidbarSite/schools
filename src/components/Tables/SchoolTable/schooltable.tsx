@@ -8,12 +8,12 @@ import {
   useContext,
   useEffect,
 } from "react";
-import { createPortal } from "react-dom"; 
 import { AgGridReact } from "ag-grid-react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css"; 
 import Spinner from "react-bootstrap/Spinner";
+import { Navbar } from "react-bootstrap";
 import { CustomMasterGrid } from "./Components/MasterGrid/CustomMasterGrid";
 import { CustomFilter } from "../GeneralFiles/Filters/CustomFilter";
 import { CustomSelect } from "../GeneralFiles/Select/CustomSelect";
@@ -33,8 +33,7 @@ import { CellKeyDownEvent, GetRowIdParams, IsFullWidthRowParams, RowHeightParams
 import { Program, School, SchoolsContact, } from "@prisma/client";
 import RepresentiveComponent from "../GeneralFiles/GoogleContacts/ContactsRepComponent";
 import { useContactComponent } from "@/util/Google/GoogleContacts/ContactComponent";
-// 👇 ייבוא updateStorage
-import { useStorageSync, getCacheVersion, getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
+import { getCacheVersion, getFromStorage, updateStorage } from "@/components/Tables/SchoolTable/Storage/SchoolDataStorage";
 import { deleteContactsRows } from "@/db/contactsRequests";
 
 export default function SchoolsTable() {
@@ -58,7 +57,6 @@ export default function SchoolsTable() {
   const [AllContacts, setAllContacts] = useState<SchoolsContact[]>([])
   const [AllPrograms, setAllPrograms] = useState<Program[]>([])
   const maxIndex = useRef(0)
-  const [mounted, setMounted] = useState(false); 
   const [cacheVersion, setCacheVersion] = useState<number>(0)
 
   const { updateColStateFromCache, updateColState } = useColumnEffects(gridRef, colState, setColState)
@@ -89,7 +87,6 @@ export default function SchoolsTable() {
           const currentColDefs = gridRef.current.api.getColumnDefs()
           if (currentColDefs) {
              // לוגיקת עדכון עמודות קיימת...
-             // ...
           }
         }
       }
@@ -101,21 +98,23 @@ export default function SchoolsTable() {
   }, [setRowData, setAllContacts])
   
   useEffect(() => {
-    if (!mounted) return
     const handleStorageUpdate = (event: any) => {
+      console.log("📩 SchoolTable: Received storage update event", event.detail);
+      
       if (event.detail?.keys?.includes("Schools") || event.detail?.keys?.includes("schoolsContacts")) {
+        console.log("✅ Refreshing data from storage...");
         refreshDataFromStorage();
       }
     };
+    
     window.addEventListener("storageUpdated", handleStorageUpdate);
+    console.log("🎧 SchoolTable: Storage listener registered");
+    
     return () => {
       window.removeEventListener("storageUpdated", handleStorageUpdate);
+      console.log("🔌 SchoolTable: Storage listener removed");
     };
-  }, [mounted, refreshDataFromStorage]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  }, [refreshDataFromStorage]);
 
   const handleSelectionChanged = useCallback((event: SelectionChangedEvent) => {
     if (onSelectionChange) onSelectionChange(event);
@@ -123,12 +122,29 @@ export default function SchoolsTable() {
   }, [onSelectionChange, setAmount]);
 
   const checkContactsStatus = useCallback(async () => {
-     // ... (קוד קיים)
-     return { isConnected: false };
+    try {
+      const response = await fetch('/api/google-contacts/check-status');
+      if (!response.ok) {
+        return { isConnected: false };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error checking Contacts status:", error);
+      return { isConnected: false };
+    }
   }, []);
 
   const onDisconnectContacts = useCallback(async () => {
-     // ... (קוד קיים)
+    try {
+      await fetch('/api/google-contacts/disconnect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (error) {
+      console.error("Error disconnecting Contacts:", error);
+    }
   }, []);
 
   const LoadingOverlay = useCallback(() => {
@@ -146,7 +162,7 @@ export default function SchoolsTable() {
   const getRowId = useCallback((params: GetRowIdParams<School>) => String(params.data.Schoolid), []);
   
   const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
-     // ... (קוד קיים)
+     // קוד קיים
   }, []);
 
   const CustomNoRowsOverlay = useCallback(() => {
@@ -159,31 +175,28 @@ export default function SchoolsTable() {
   }, []);
 
   const UpdateContactComponent = useCallback((Data) => {
-    // ... (קוד קיים)
+    // קוד קיים
   }, [AllContacts])
 
-  // 🛠️ פונקציית המחיקה: מטפלת בשרת וב-Storage בלבד
   const handleDeleteContactFromSubTable = useCallback(async (selectedIds: number[]) => {
     try {
       console.log("🚀 Server & Storage Delete:", selectedIds);
       
-      // 1. מחיקה מהשרת
       await deleteContactsRows(selectedIds);
       
-      // 2. מחיקה מה-Storage (כדי שלא יחזור ברענון)
       const currentStorage = await getFromStorage();
       if (currentStorage && currentStorage.schoolsContacts) {
           const updatedContacts = currentStorage.schoolsContacts.filter(
              (contact) => !selectedIds.includes(contact.Contactid)
           );
           await updateStorage({ ...currentStorage, schoolsContacts: updatedContacts });
-          setAllContacts(updatedContacts); // עדכון סטייט מקומי
+          setAllContacts(updatedContacts);
       }
-      return true; // החזרת הצלחה
+      return true;
     } catch (error: any) {
       console.error("Failed delete:", error);
       alert(`שגיאה במחיקה: ${error.message}`);
-      return false; // החזרת כישלון
+      return false;
     }
   }, []);
 
@@ -193,14 +206,29 @@ export default function SchoolsTable() {
     deleteContact: handleDeleteContactFromSubTable 
   }), [UpdateContactComponent, AuthenticateActivate, handleDeleteContactFromSubTable]);
 
-  // ... (Toolbar call)
-  const toolbarContent = ToolBar(
-    onClearFilterButtonClick, setColumnWindowOpen, onAddRowToolBarClick, onCancelChangeButtonClick, onSaveChangeButtonClick, onSaveDeletions, checkedAmount, onFilterTextBoxChanged, onDisplayProgramsClicked, LoadingOverlay, checkContactsStatus, onDisconnectContacts
-  );
-
   return (
     <>
-      {mounted && document.getElementById("navbar-actions") ? createPortal(toolbarContent, document.getElementById("navbar-actions") as HTMLElement) : null}
+      <Navbar
+        id="SchoolNavBar"
+        className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%] flex-row-reverse"
+        suppressHydrationWarning
+      >
+        <LoadingOverlay />
+        {ToolBar(
+          onClearFilterButtonClick, 
+          setColumnWindowOpen, 
+          onAddRowToolBarClick, 
+          onCancelChangeButtonClick, 
+          onSaveChangeButtonClick, 
+          onSaveDeletions, 
+          checkedAmount, 
+          onFilterTextBoxChanged, 
+          onDisplayProgramsClicked, 
+          LoadingOverlay, 
+          checkContactsStatus, 
+          onDisconnectContacts
+        )}
+      </Navbar>
       <Suspense>
         <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark w-full flex-grow overflow-x-hidden" : "ag-theme-quartz w-full flex-grow overflow-x-hidden"} style={{ width: "100%", height: "1000px" }}>
           <AgGridReact

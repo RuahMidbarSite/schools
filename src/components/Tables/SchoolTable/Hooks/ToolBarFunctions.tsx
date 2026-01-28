@@ -13,7 +13,7 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     );
   }, [gridRef]);
 
-  const onSaveChangeButtonClick = useCallback(() => {
+  const onSaveChangeButtonClick = useCallback(async () => {
     gridRef.current.api.stopEditing();
 
     const future_data: School[] = [];
@@ -37,35 +37,55 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
       }
     }
 
-    setDialogType('success');
-    setDialogMessage("בתי ספר נוספו בהצלחה");
-    setOpen(true);
-
-    addSchoolsRows(newly_added);
-
-    // עדכון מונים והסתרת כפתורים
+    // 🚀 שלב 1: עדכון מיידי ב-UI ו-Storage (לפני השרת!)
+    const sortedData = future_data.sort((arg1, arg2) => arg1.Schoolid - arg2.Schoolid);
+    
+    // עדכון UI
+    setRowData(sortedData);
+    
+    // עדכון Storage מיידית
+    await updateStorage({ Schools: sortedData });
+    
+    // עדכון מונים
     dataRowCount.current = rowCount.current;
+    maxIndex.current = future_data.length > 0 ? Math.max(...future_data.map((school) => school.Schoolid)) : 0;
+    
+    // הסתרת כפתורים
     const element: any = document.getElementById("savechangesbutton-school");
     if (element !== null) {
       element.style.display = "none";
     }
-    const element_2: any = document.getElementById(
-      "cancelchangesbutton-school"
-    );
+    const element_2: any = document.getElementById("cancelchangesbutton-school");
     if (element_2 !== null) {
       element_2.style.display = "none";
     }
     
     SetInTheMiddleOfAddingRows(false);
+    gridRef.current.api.deselectAll();
     
-    // עדכון הנתונים בטבלה
-    setRowData((data) => [...data, ...newly_added].sort((arg1: School, arg2) => arg1.Schoolid - arg2.Schoolid))
-
-    maxIndex.current = future_data.length > 0 ? Math.max(...future_data.map((school) => school.Schoolid)) : 0
-
-    updateStorage({ Schools: future_data.sort((arg1, arg2) => arg1.Schoolid - arg2.Schoolid) })
-
-    gridRef.current.api.deselectAll()
+    // 🚀 שלב 2: שליחה לשרת ברקע (אסינכרוני)
+    try {
+      await addSchoolsRows(newly_added);
+      
+      // הצלחה - הצג הודעה
+      setDialogType('success');
+      setDialogMessage("בתי ספר נוספו בהצלחה");
+      setOpen(true);
+      
+    } catch (error) {
+      console.error("Error saving to server:", error);
+      
+      // כשל בשרת - החזר למצב קודם
+      setDialogType('error');
+      setDialogMessage("שגיאה בשמירה לשרת. הנתונים נשמרו מקומית בלבד.");
+      setOpen(true);
+      
+      // אופציונלי: החזרה למצב קודם
+      // const prev_data = sortedData.filter(school => !newly_added.some(n => n.Schoolid === school.Schoolid));
+      // setRowData(prev_data);
+      // await updateStorage({ Schools: prev_data });
+    }
+    
   }, [SetInTheMiddleOfAddingRows, dataRowCount, gridRef, maxIndex, rowCount, setDialogMessage, setDialogType, setOpen, setRowData, validateFields]);
 
   const onCancelChangeButtonClick = useCallback(() => {
@@ -96,7 +116,7 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
     SetInTheMiddleOfAddingRows(false);
   }, [SetInTheMiddleOfAddingRows, dataRowCount, gridRef, maxIndex, rowCount, setRowData]);
 
-  // --- הפונקציה המתוקנת למחיקה ---
+  // --- פונקציה משופרת למחיקה עם עדכון מיידי ---
   const onSaveDeletions = useCallback(async () => {
     // 1. התחלת שעון חול מיד בהתחלה
     setLoading(true);
@@ -110,7 +130,7 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
         return;
       }
 
-      // איסוף כל הנתונים הנוכחיים מהגריד כדי לוודא שאין איבוד נתונים בגלל פילטרים
+      // איסוף כל הנתונים הנוכחיים מהגריד
       const allCurrentData: School[] = [];
       gridRef.current.api.forEachNode((node: any) => {
          allCurrentData.push(node.data);
@@ -119,9 +139,8 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
       // יצירת הרשימה המעודכנת (ללא המחוקים)
       const updated_data = allCurrentData.filter(school => !ids.includes(school.Schoolid));
 
-      // חישוב id_range לשימוש בקריסקיידינג (שמירה על הלוגיקה המקורית שלך)
+      // חישוב id_range
       let id_range: number[] = []
-      // שים לב: השימוש כאן הוא בלוגיקה המקורית שלך שמניחה שהמזהים הם עוקבים או קשורים לאינדקסים
       for (let index = 1; index <= dataRowCount.current; index++) {
         if (ids.includes(index)) {
           continue
@@ -129,7 +148,9 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
         id_range.push(index)
       }
 
-      // עדכון ה-UI באופן מיידי
+      // 🚀 עדכון מיידי ב-UI ו-Storage (לפני השרת!)
+      
+      // עדכון UI
       setRowData(updated_data);
       
       // עדכון מונים
@@ -144,33 +165,47 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
         element.style.display = "none";
       }
 
-      // עדכון רשימות מקושרות (Contacts, Programs)
-      const remainining_contacts = (AllContacts as SchoolsContact[]).filter((contact) => !ids.includes(contact.Contactid))
+      // עדכון רשימות מקושרות
+      const remaining_contacts = (AllContacts as SchoolsContact[]).filter((contact) => !ids.includes(contact.Contactid))
       const remaining_programs = (AllPrograms as Program[]).filter((program) => !ids.includes(program.Schoolid))
 
-      setAllContacts(remainining_contacts)
+      setAllContacts(remaining_contacts)
       setAllPrograms(remaining_programs)
 
-      // ביצוע הקריאות לשרת ולאחסון
-      const start = performance.now();
-      
-      await Promise.all([
-        updateStorage({ Schools: updated_data, Programs: remaining_programs, schoolsContacts: remainining_contacts }),
-        updateSchoolRowsCascading(ids, id_range, AllPrograms, AllContacts)
-      ]);
-
-      const end = performance.now();
-      console.log(`Execution time updating schools: ${end - start} milliseconds`);
+      // עדכון Storage מיידית
+      await updateStorage({ 
+        Schools: updated_data, 
+        Programs: remaining_programs, 
+        schoolsContacts: remaining_contacts 
+      });
 
       gridRef.current.api.deselectAll();
+
+      // 🚀 שליחה לשרת ברקע
+      const start = performance.now();
+      
+      try {
+        await updateSchoolRowsCascading(ids, id_range, AllPrograms, AllContacts);
+        
+        const end = performance.now();
+        console.log(`✅ Execution time updating schools: ${end - start} milliseconds`);
+        
+      } catch (serverError) {
+        console.error("Server update failed (but local update succeeded):", serverError);
+        
+        // הצג אזהרה אבל אל תחזיר את הנתונים
+        setDialogType('warning');
+        setDialogMessage("הנתונים נמחקו מקומית. שגיאה בסנכרון עם השרת.");
+        setOpen(true);
+      }
 
     } catch (error) {
       console.error("Error deleting schools:", error);
       setDialogType('error');
-      setDialogMessage("אירעה שגיאה בעת מחיקת בתי הספר. אנא נסה שנית.");
+      setDialogMessage("אירעה שגיאה בעת מחיקת בתי הספר.");
       setOpen(true);
     } finally {
-      // חובה: עצירת שעון החול בכל מקרה (הצלחה או כישלון)
+      // חובה: עצירת שעון החול בכל מקרה
       setLoading(false);
     }
 
@@ -212,7 +247,7 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
       "cancelchangesbutton-school"
     );
     if (element_2 !== null) {
-      element_2.style.display = "block";
+      element_2.display = "block";
     }
   }, [SetInTheMiddleOfAddingRows, gridRef, maxIndex, rowCount]);
 
