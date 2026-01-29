@@ -140,6 +140,7 @@ export default function GuidesTable({
   const [AllColorCandidates, setAllColorCandidates] = useState<ColorCandidate[]>([])
 
   const maxIndex = useRef<number>(0)
+  const originalMaxIndex = useRef<number>(0) // לשמור את המקסימום המקורי לפני הוספת שורות חדשות
  
   useEffect(() => {
     if (!(gridRef.current && gridRef.current.api)) { return }
@@ -215,6 +216,11 @@ export default function GuidesTable({
       ],
       defaultState: { sort: null } 
     });
+
+    // שמירת המקסימום המקורי רק בפעם הראשונה שמוסיפים שורות
+    if (!InTheMiddleOfAddingRows) {
+      originalMaxIndex.current = maxIndex.current;
+    }
 
     const newId = maxIndex.current + 1;
 
@@ -295,14 +301,14 @@ export default function GuidesTable({
     // 2. רוחב קבוע (Fixed Pixels) - צמצום אגרסיבי לפי צילומי המסך
     const columnFixedWidths: { [key: string]: number } = {
         // מזהים וצ'קבוקסים
-        Guideid: 45,
-        isAssigned: 45,     
+        Guideid: 90,
+        isAssigned: 60,     
         
         // פרטים אישיים - צומצמו למינימום
         FirstName: 75,      // שם פרטי
         LastName: 75,       // משפחה
         CellPhone: 90,      // טלפון (צפוף)
-        City: 75,           // יישוב
+        City: 100,           // יישוב
         Area: 75,           // אזור
         
         // עמודות קטנות
@@ -316,7 +322,7 @@ export default function GuidesTable({
         Documents: 70,      // מסמכים
         PoliceApproval: 65, // אישור משטרה
         Insurance: 45,      // ביטוח
-        Aggrement: 45,      // הסכם
+        Aggrement: 70,      // הסכם
         Other_Documents: 70,// תעודות
         
         BirthDate: 90,
@@ -363,7 +369,7 @@ export default function GuidesTable({
           lockVisible: true,
           pinned: 'right', 
           lockPosition: true,
-          width: 45,       
+          width: 90,       
           flex: undefined
         };
       }
@@ -716,20 +722,16 @@ export default function GuidesTable({
     setDialogMessage("");
   };
 
-  const validateCellphone = (cellphone: string, numbers: string[]) => {
-    let isNumeric = /^\d+$/.test(cellphone);
-    if (!isNumeric) {
-      return false;
-    }
+const validateCellphone = (cellphone: any, numbers: string[]) => {
+    if (cellphone === null || cellphone === undefined || cellphone === "") return false;
 
-    if (cellphone.startsWith("0")) {
-      return cellphone.length === 10;
-    } else {
-      return cellphone.length === 9;
-    }
+    const phoneStr = String(cellphone).replace(/\D/g, ''); 
+    if (phoneStr.length === 0) return false;
 
-
-  };
+    const len = phoneStr.length;
+    // אישור מפורש ל-9 (עמרי), 10 או 12 ספרות
+    return len === 9 || len === 10 || len === 12;
+};
 
   const validateFields = useCallback((rowData: object, rowIndex, numbers) => {
     console.log("numbers: ", numbers);
@@ -772,14 +774,17 @@ export default function GuidesTable({
   
   // איסוף כל מספרי הטלפון הקיימים
   gridRef.current.api.forEachNode((node, index) => {
-    if (index >= rowCount.current - dataRowCount.current) {
+    // זיהוי שורות חדשות לפי Guideid שגדול מהמקסימום המקורי
+    const isNewRow = node.data.Guideid > originalMaxIndex.current;
+    
+    if (isNewRow) {
       // שורה חדשה
       const phone = node.data.CellPhone;
       
       // בדיקת שדות חובה
       if (!node.data.FirstName) {
         setDialogType("validationError");
-        setDialogMessage(`אנא מלא שם פרטי בשורה ${index + 1}`);
+        setDialogMessage(`אנא מלא שם פרטי בשורה ${node.data.Guideid}`);
         setOpen(true);
         hasError = true;
         return;
@@ -787,7 +792,7 @@ export default function GuidesTable({
       
       if (!phone) {
         setDialogType("validationError");
-        setDialogMessage(`אנא מלא טלפון בשורה ${index + 1}`);
+        setDialogMessage(`אנא מלא טלפון בשורה ${node.data.Guideid}`);
         setOpen(true);
         hasError = true;
         return;
@@ -796,7 +801,7 @@ export default function GuidesTable({
       // בדיקת פורמט
       if (!validateCellphone(phone, [])) {
         setDialogType("validationError");
-        setDialogMessage(`מספר טלפון לא תקין בשורה ${index + 1}`);
+        setDialogMessage(`מספר טלפון לא תקין בשורה ${node.data.Guideid}`);
         setOpen(true);
         hasError = true;
         return;
@@ -836,14 +841,13 @@ export default function GuidesTable({
   // אם הכל תקין, המשך עם השמירה
   const future_data: Guide[] = [];
   const newly_added: Guide[] = [];
-  let count = 0;
   
   gridRef.current.api.forEachNode((node: any) => {
     future_data.push(node.data);
-    if (count < rowCount.current - dataRowCount.current) {
+    // זיהוי שורות חדשות לפי Guideid
+    if (node.data.Guideid > originalMaxIndex.current) {
       newly_added.push(node.data);
     }
-    count++;
   });
   
   future_data.sort((arg1, arg2) => arg1.Guideid - arg2.Guideid);
@@ -878,14 +882,15 @@ export default function GuidesTable({
 
   const onCancelChangeButtonClick = useCallback(() => {
     const prev_data: Guide[] = [];
-    var count = 0
+    
     gridRef.current.api.forEachNode((node: any) => {
-      if (count >= rowCount.current - dataRowCount.current) {
+      // שמור רק שורות קיימות (לא חדשות)
+      if (node.data.Guideid <= originalMaxIndex.current) {
         prev_data.push(node.data);
       }
-      count++;
     });
-  maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((guide) => guide.Guideid)):0
+    
+    maxIndex.current = prev_data.length > 0 ? Math.max(...prev_data.map((guide) => guide.Guideid)) : 0;
     
     setRowData(prev_data)
   
