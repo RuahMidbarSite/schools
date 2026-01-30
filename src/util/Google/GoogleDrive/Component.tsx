@@ -98,39 +98,55 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
   }, [gapiInted]);
 
   const AuthAndActivate = useCallback(async (config: PickerConfiguration, callBack: (args) => {}) => {
-    if (typeof google === 'undefined' || !google.accounts) return;
-
-    if (!tokenClientRef.current) {
-        tokenClientRef.current = google.accounts.oauth2.initTokenClient({
-          client_id: config.clientId || process.env.NEXT_PUBLIC_CLIENT_ID,
-          scope: (config.customScopes ? [...defaultScopes, ...config.customScopes] : defaultScopes).join(" "),
-          callback: async (tokenResponse: authResult) => { // 🔥 הוספתי async
-            if (tokenResponse.access_token) {
-                cachedSessionToken = tokenResponse.access_token;
-                
-                if (window.gapi && window.gapi.client) {
-                    window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-                }
-
-                // 🔥 שמירה בשרת!
-                const serverType = type === "Program" ? "programs" : "guides";
-                await saveTokenToServer(tokenResponse.access_token, serverType);
-            }
-
-            callBack({ ...config, token: tokenResponse.access_token });
-            
-            if (type === "Program") {
-              expiresInSeconds.current = tokenResponse.expires_in
-              UpdateProgramsAuthStorage({ authResult: tokenResponse, timeStamp: Date.now() })
-            } else {
-              expiresInSeconds.current = tokenResponse.expires_in
-              UpdateGuidesAuthStorage({ authResult: tokenResponse, timeStamp: Date.now() })
-            }
-          },
-        });
+    if (typeof google === 'undefined' || !google.accounts) {
+      console.error('❌ Google accounts API not loaded');
+      return;
     }
+
+    // 🔥 הסרת התנאי if - תמיד ליצור tokenClient חדש
+    const scopes = config.customScopes ? [...defaultScopes, ...config.customScopes] : defaultScopes;
+    const scopeString = scopes.join(" ");
     
-    tokenClientRef.current.requestAccessToken({ prompt: '' }); 
+    console.log('🔍 Initializing OAuth with scopes:', scopeString);
+    
+    tokenClientRef.current = google.accounts.oauth2.initTokenClient({
+      client_id: config.clientId || process.env.NEXT_PUBLIC_CLIENT_ID,
+      scope: scopeString,
+      callback: async (tokenResponse: authResult) => {
+        console.log('✅ OAuth callback received:', { 
+          hasToken: !!tokenResponse.access_token,
+          expiresIn: tokenResponse.expires_in 
+        });
+        
+        if (tokenResponse.access_token) {
+            cachedSessionToken = tokenResponse.access_token;
+            
+            if (window.gapi && window.gapi.client) {
+                window.gapi.client.setToken({ access_token: tokenResponse.access_token });
+            }
+
+            // 🔥 שמירה בשרת!
+            const serverType = type === "Program" ? "programs" : "guides";
+            await saveTokenToServer(tokenResponse.access_token, serverType);
+        }
+
+        callBack({ ...config, token: tokenResponse.access_token });
+        
+        if (type === "Program") {
+          expiresInSeconds.current = tokenResponse.expires_in
+          UpdateProgramsAuthStorage({ authResult: tokenResponse, timeStamp: Date.now() })
+        } else {
+          expiresInSeconds.current = tokenResponse.expires_in
+          UpdateGuidesAuthStorage({ authResult: tokenResponse, timeStamp: Date.now() })
+        }
+      },
+    });
+    
+    // 🔥 שינוי prompt מ-'' ל-'consent'
+    console.log('🔍 Requesting access token...');
+    tokenClientRef.current.requestAccessToken({ 
+      prompt: 'consent'
+    });
   }, [defaultScopes, type])
 
   const { searchFolder, createFolder, findOrCreateFolder } = useFolderFunctions()
