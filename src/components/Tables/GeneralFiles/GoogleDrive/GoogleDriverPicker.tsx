@@ -70,9 +70,9 @@ const GoogleDriverPicker = (props: ExtendedLinkCell) => {
       multiselect: true,
       customScopes: ["https://www.googleapis.com/auth/drive"],
       
-      setOrigin: env === 'production' 
-        ? "https://ruahmidbarproject.vercel.app" 
-        : "http://localhost:3666",
+     setOrigin: env === 'production' 
+  ? "https://schools-rho-ashen.vercel.app" 
+  : "http://localhost:3666",
 
       callbackFunction: (data: any) => {
         if (data.action === "picked") {
@@ -119,6 +119,13 @@ const GoogleDriverPicker = (props: ExtendedLinkCell) => {
     const info: any = await getInfo();
     const env = await getEnv()
     
+ // לוגים לדיבאג
+    console.log('🔍 Info from getInfo():', info);
+    console.log('🔍 clientId:', info?.clientId);
+    console.log('🔍 developerKey:', info?.developerKey);
+    console.log('🔍 env:', env);
+
+
     if (!Res) {
       openPicker(getObject(info, env))
     } else {

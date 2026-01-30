@@ -192,8 +192,8 @@ export const updateProfessions = async (
 
 export const getInfo = async () => {
   return {
-    clientId: process.env.clientId,
-    developerKey: process.env.developerKey,
+    clientId: process.env.NEXT_PUBLIC_CLIENT_ID,
+    developerKey: process.env.NEXT_PUBLIC_DEVELOPER_KEY,
   };
 };
 export const getEnv = async () => {
