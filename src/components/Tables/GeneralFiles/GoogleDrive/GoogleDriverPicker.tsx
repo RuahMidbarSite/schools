@@ -112,28 +112,47 @@ const GoogleDriverPicker = (props: ExtendedLinkCell) => {
     return obj
   }, [props])
 
-  const handleOpenPicker = useCallback(async () => {
-    const [res_1, res_2] = await Promise.all([getProgramAuth(), getGuidesAuth()]);
-    const Res: any = props.type === "Program" ? res_1.authResult : res_2.authResult
-    const openPicker = props.AuthenticateActivate('open');
-    const info: any = await getInfo();
-    const env = await getEnv()
-    
- // לוגים לדיבאג
-    console.log('🔍 Info from getInfo():', info);
-    console.log('🔍 clientId:', info?.clientId);
-    console.log('🔍 developerKey:', info?.developerKey);
-    console.log('🔍 env:', env);
+ const handleOpenPicker = useCallback(async () => {
+  const [res_1, res_2] = await Promise.all([getProgramAuth(), getGuidesAuth()]);
+  
+  // 🆕 לוגים חדשים
+  console.log('🔍 Auth Results:', {
+    programAuth: res_1,
+    guidesAuth: res_2,
+    selectedType: props.type
+  });
+  
+  const Res: any = props.type === "Program" ? res_1.authResult : res_2.authResult
+  
+  // 🆕 לוגים נוספים
+  console.log('🔍 Selected Auth:', Res);
+  console.log('🔍 Has access_token:', !!Res?.access_token);
+  console.log('🔍 Token expires:', Res?.expires_at);
+  
+  const openPicker = props.AuthenticateActivate('open');
+  const info: any = await getInfo();
+  const env = await getEnv()
+  
+  // לוגים קיימים
+  console.log('🔍 Info from getInfo():', info);
+  console.log('🔍 clientId:', info?.clientId);
+  console.log('🔍 developerKey:', info?.developerKey);
+  console.log('🔍 env:', env);
 
+  // 🆕 לוג נוסף
+  const pickerConfig = getObject(info, env);
+  console.log('🔍 Picker Configuration:', pickerConfig);
 
-    if (!Res) {
-      openPicker(getObject(info, env))
-    } else {
-      const token = Res.access_token;
-      var object = { ...getObject(info, env), token: token }
-      openPicker(object);
-    }
-  }, [getObject, props]);
+  if (!Res) {
+    console.log('🔍 Opening picker WITHOUT token');
+    openPicker(pickerConfig)
+  } else {
+    const token = Res.access_token;
+    console.log('🔍 Opening picker WITH token');
+    var object = { ...pickerConfig, token: token }
+    openPicker(object);
+  }
+}, [getObject, props]);
 
   return (
     <div className="w-full h-full flex justify-center items-center">
