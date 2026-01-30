@@ -75,14 +75,15 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
     if (typeof gapi === 'undefined') return;
     await gapi.client.init({
       apiKey: process.env.NEXT_PUBLIC_DEVELOPER_KEY,
-      clientId: process.env.NEXT_PUBLIC_CLIENT_ID,
       discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
     }).then(() => {
       console.log("Gapi initialized successfully");
       if (gapi.client.getToken()) {
           cachedSessionToken = gapi.client.getToken().access_token;
       }
-    })
+    }).catch(error => {
+      console.error("Failed to initialize gapi:", error);
+    });
   }, [])
   
   const onPickerApiLoad = async () => {
