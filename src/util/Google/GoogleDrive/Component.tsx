@@ -73,17 +73,22 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
 
   const gapiInted = useCallback(async () => {
     if (typeof gapi === 'undefined') return;
-    await gapi.client.init({
-      apiKey: process.env.NEXT_PUBLIC_DEVELOPER_KEY,
-      discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-    }).then(() => {
-      console.log("Gapi initialized successfully");
+    try {
+      await gapi.client.init({
+        apiKey: process.env.NEXT_PUBLIC_DEVELOPER_KEY,
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
+      });
+      
+      // 🔥 הוספה: טעינה מפורשת של ה-Drive client
+      await gapi.client.load('drive', 'v3');
+      
+      console.log("✅ Gapi and Drive client initialized successfully");
       if (gapi.client.getToken()) {
           cachedSessionToken = gapi.client.getToken().access_token;
       }
-    }).catch(error => {
-      console.error("Failed to initialize gapi:", error);
-    });
+    } catch (error) {
+      console.error("❌ Failed to initialize gapi:", error);
+    }
   }, [])
   
   const onPickerApiLoad = async () => {
@@ -246,6 +251,12 @@ export default function useDrivePicker(input_type: "Guide" | "Program"):
    if (!fileID) {
      callbackFunction({result:"Error",data:"Incorrect fileID"})
      return;
+   }
+
+   // 🔥 בדיקה שה-Drive אכן נטען לפני הגישה ל-files
+   if (!gapi.client.drive) {
+     console.log("⚠️ Drive client not found, loading now...");
+     await gapi.client.load('drive', 'v3');
    }
 
    gapi.client.drive.files.delete({
