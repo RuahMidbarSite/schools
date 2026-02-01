@@ -56,7 +56,7 @@ import useDrivePicker from "@/util/Google/GoogleDrive/Component";
 import {
   TableType,
   getModelFields,
-  getAllProfessions,
+  getAllProfessionTypes,
   getAllDistricts,
   getAllStatuses,
   getAllGuides,
@@ -138,7 +138,7 @@ export default function GuidesTable({
   const [AllAssigncandidates, setAllAssigncandidates] = useState<Guides_ToAssign[]>([])
   const [AllAssigned, setAllAssigned] = useState<Assigned_Guide[]>([])
   const [AllColorCandidates, setAllColorCandidates] = useState<ColorCandidate[]>([])
-
+const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
   const maxIndex = useRef<number>(0)
   const originalMaxIndex = useRef<number>(0) // לשמור את המקסימום המקורי לפני הוספת שורות חדשות
  
@@ -174,6 +174,34 @@ export default function GuidesTable({
     }
   }, [colState])
 
+ useEffect(() => {
+    // עדכן את ה-column definitions כשה-ProfessionTypes משתנה
+    if (colDefinition && ProfessionTypes && ProfessionTypes.length > 0 && gridRef.current?.api) {
+      
+      // המר את ProfessionTypes לפורמט הנכון: { label, value }[]
+      const formattedProfessions = ProfessionTypes.map(prof => ({
+        label: prof.ProfessionName,
+        value: prof.FieldName || prof.ProfessionName
+      }));
+      
+      console.log('🔍 Formatted professions:', formattedProfessions); // לבדיקה
+      
+      const updatedColDefs = colDefinition.map(col => {
+        if (col.field === 'Professions') {
+          return {
+            ...col,
+            cellEditorParams: {
+              professionsList: formattedProfessions
+            }
+          };
+        }
+        return col;
+      });
+      
+      setColDefs(updatedColDefs);
+      gridRef.current.api.setGridOption('columnDefs', updatedColDefs);
+    }
+  }, [ProfessionTypes]);
   const onColumnResized = useCallback((event) => {
     if (event.finished) {
       if (gridRef.current && gridRef.current.api) {
@@ -511,6 +539,9 @@ export default function GuidesTable({
           ...baseColDef,
           headerName: "מקצועות",
           cellEditor: ChooseProfessions,
+          cellEditorParams: {                    //  הוסף שורה זו
+            professionsList: ProfessionTypes     //  הוסף שורה זו
+          },                                      //  הוסף שורה זו
           cellRenderer: ProfCellRenderer,
         }
       }
@@ -579,6 +610,7 @@ export default function GuidesTable({
         setAllAssigncandidates(Candidates)
         setAllAssigned(AssignedGuides)
         setAllColorCandidates(ColorCandidates)
+        setProfessionTypes(Professions)
         maxIndex.current = Guides.length > 0 ? Math.max(...Guides.map((guide) => guide.Guideid)):0
 
 
@@ -587,7 +619,7 @@ export default function GuidesTable({
           getAllGuides(),
           getAllCities(),
           getAllReligionSectors(),
-          getAllProfessions(),
+          getAllProfessionTypes(),
           getModelFields("Profession"),
           getModelFields("Guide"),
           getAllDistricts(),
@@ -610,6 +642,7 @@ export default function GuidesTable({
           setAllAssigncandidates(candidates)
           setAllAssigned(assigned)
           setAllColorCandidates(colorcandidates)
+          setProfessionTypes(professions)
             maxIndex.current = guides.length > 0 ? Math.max(...guides.map((guide)=>guide.Guideid)):0
 
           updateStorage({ Guides: guides, Cities: cities, Religion: religions, Professions: professions, ProfessionsTablemodel: professions_model, Areas: areas, GuidesStatuses: statuses, Tablemodel: model })

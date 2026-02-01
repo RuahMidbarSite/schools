@@ -1,14 +1,11 @@
-import React, { useState, ChangeEvent, FormEvent, useContext, useMemo, useEffect } from 'react';
+"use client"
+import React, { useState, useContext, useMemo, useEffect } from 'react';
 import { deleteNamesFromCollection, insertNamesIntoCollection } from '@/db/generalrequests';
 import { CustomContext } from '@/app/settingsPage/context';
 import { updateStorage } from '../SettingsPage/Storage/Storage/SettingsDataStorage';
-import { listSubheaderClasses } from '@mui/material';
-import { MdAdminPanelSettings } from 'react-icons/md';
-import { EducationStage } from '@prisma/client';
 import { MapFromTableToField } from '@/offlineStorage/storage';
 import CreatableSelect from 'react-select/creatable';
 import { Button } from 'react-bootstrap';
-
 
 interface AddNamesFormProps {
   collectionName: string;
@@ -16,6 +13,7 @@ interface AddNamesFormProps {
   nameFieldName: string;
   placeHolder: string;
   onClose: () => void;
+  additionalFields?: Record<string, any>; // ← תמיכה בשדות נוספים למניעת חסימות אינדקסים
 }
 
 interface OptionType {
@@ -23,21 +21,18 @@ interface OptionType {
   label: string;
 }
 
-const AddNamesForm: React.FC<AddNamesFormProps> = ({ collectionName, idFieldName, nameFieldName, onClose, placeHolder }) => {
+const AddNamesForm: React.FC<AddNamesFormProps> = ({ 
+  collectionName, idFieldName, nameFieldName, onClose, placeHolder, additionalFields 
+}) => {
   const [selectedOptions, setSelectedOptions] = useState<OptionType[]>([]);
   const [options, setOptions] = useState<OptionType[]>([]);
-  const [data, setData] = useState([])
+  const [data, setData] = useState<any[]>([])
 
   const {
     Roles, Years, ProductTypes, Types, Stages, Religion, Areas, Cities, Orders, SchoolStatuses,
-    ProgramStatuses,
-    ContactsStatuses,
-    GuidesStatuses,
+    ProgramStatuses, ContactsStatuses, GuidesStatuses, ProfessionTypes,
     setRoles, setYears, setProductTypes, setTypes, setStages, setReligion, setAreas, setCities, setOrders,
-    setSchoolStatuses,
-    setProgramStatuses,
-    setContactsStatuses,
-    setGuidesStatuses,
+    setSchoolStatuses, setProgramStatuses, setContactsStatuses, setGuidesStatuses, setProfessionTypes,
   } = useContext(CustomContext);
 
   const mapping = useMemo(() => {
@@ -55,8 +50,9 @@ const AddNamesForm: React.FC<AddNamesFormProps> = ({ collectionName, idFieldName
     map.set('StatusContacts', { data: ContactsStatuses, setter: setContactsStatuses })
     map.set('StatusPrograms', { data: ProgramStatuses, setter: setProgramStatuses })
     map.set('StatusGuides', { data: GuidesStatuses, setter: setGuidesStatuses })
+    map.set('ProfessionTypes', { data: ProfessionTypes, setter: setProfessionTypes });
     return map;
-  }, [Roles, setRoles, Years, setYears, ProductTypes, setProductTypes, Types, setTypes, Stages, setStages, Religion, setReligion, Areas, setAreas, Cities, setCities, Orders, setOrders, SchoolStatuses, setSchoolStatuses, ContactsStatuses, setContactsStatuses, ProgramStatuses, setProgramStatuses, GuidesStatuses, setGuidesStatuses]);
+  }, [Roles, Years, ProductTypes, Types, Stages, Religion, Areas, Cities, Orders, SchoolStatuses, ContactsStatuses, ProgramStatuses, GuidesStatuses, ProfessionTypes]);
 
   useEffect(() => {
     const collectionData = mapping.get(collectionName);
@@ -71,16 +67,13 @@ const AddNamesForm: React.FC<AddNamesFormProps> = ({ collectionName, idFieldName
     }
   }, [collectionName, idFieldName, nameFieldName, mapping]);
 
-
   const handleChange = (selected: OptionType[] | null) => {
     setSelectedOptions(selected || []);
   };
 
-
   const handleUpdateCollection = async () => {
     onClose();
     try {
-      console.log(options);
       const existingNames = new Set(options.map(opt => opt.label));
       const selectedNames = new Set(selectedOptions.map(opt => opt.label));
 
@@ -88,48 +81,46 @@ const AddNamesForm: React.FC<AddNamesFormProps> = ({ collectionName, idFieldName
       const namesToRemove = [...existingNames].filter(name => !selectedNames.has(name));
 
       let insertedData = [];
-      let updatedData = []
-      // Insert new names
+      let updatedData = [];
+
       if (namesToAdd.length > 0) {
+        // הזרקת ה-FieldName הייחודי לתוך פונקציית ההוספה
         insertedData = await insertNamesIntoCollection(
           collectionName,
           idFieldName,
           nameFieldName,
-          namesToAdd
+          namesToAdd,
+          additionalFields // ← שולח את ה-FieldName הייחודי למונגו
         );
       }
-      // this returns the updated data
+
       if (namesToRemove.length > 0) {
         updatedData = await deleteNamesFromCollection(
           collectionName,
           nameFieldName,
-          insertedData.length > 0 ? [...insertedData.map((val)=>val[nameFieldName]),...Array.from(existingNames)]:Array.from(existingNames),
+          insertedData.length > 0 ? [...insertedData.map((val: any)=>val[nameFieldName]), ...Array.from(existingNames)] : Array.from(existingNames),
           namesToRemove,
           idFieldName
         );
       }
 
       const fieldName = MapFromTableToField.get(collectionName);
+      if (!fieldName) return;
 
-      let updatedList = namesToRemove.length > 0 ? updatedData : [...insertedData, ...data]
+      let updatedList = namesToRemove.length > 0 ? updatedData : [...insertedData, ...data];
       updatedList = updatedList.sort((a, b) => a[nameFieldName].localeCompare(b[nameFieldName], 'he'));
 
       updateStorage({ [fieldName]: updatedList });
-
       setData(updatedList);
 
-      // Use the mapped setter function to update the context
       const collectionData = mapping.get(collectionName);
       if (collectionData) {
         collectionData.setter(updatedList);
       }
-
-
     } catch (error) {
       console.error('Error updating names:', error);
     }
   };
-
 
   return (
     <div className="select-button-container">
@@ -141,13 +132,10 @@ const AddNamesForm: React.FC<AddNamesFormProps> = ({ collectionName, idFieldName
         isClearable={false}
         placeholder={placeHolder}
         closeMenuOnSelect={false}
-        formatCreateLabel={(inputValue) => `Add "${inputValue}"`} // Customize how the new option is displayed
+        formatCreateLabel={(inputValue) => `הוסף "${inputValue}"`}
       />
-      <br></br>
-      <Button
-        onClick={handleUpdateCollection}
-        className="submit-button"
-      >
+      <br />
+      <Button onClick={handleUpdateCollection} className="submit-button">
         עדכן טבלה
       </Button>
     </div>

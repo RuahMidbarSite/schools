@@ -100,6 +100,7 @@ MapFromTableToField.set('Profession','Professions')
 MapFromTableToField.set('Cities','Cities')
 MapFromTableToField.set('Distances','Distances')
 MapFromTableToField.set('Orders','Orders')
+MapFromTableToField.set('ProfessionTypes','ProfessionTypes')
 MapFromTableToField.set('Guides_ToAssign','Candidates')
 MapFromTableToField.set('Colors','Colors')
 MapFromTableToField.set('ColorCandidate','ColorCandidates')
@@ -203,7 +204,8 @@ ProgramsStatuses:[],
 ContactsStatuses:[],
 GuidesStatuses:[],
 Distances:[],
-Orders:[]
+Orders:[],
+ProfessionTypes: []
 }
 
 export const defaultPlacementObject: Required<DataTypePlacement> = {
@@ -271,7 +273,3 @@ export const ignoreFields = ["Tablemodel","rowData"]
 //type SmallContactsColumnsDataDeps
 
 //type SmallContactsColumnsDataDeps
-
-
-
-

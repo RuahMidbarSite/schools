@@ -4,7 +4,7 @@ import AddNamesForm from '../../components/AddNamesForm/AddNamesForm';
 import Select, { StylesConfig } from 'react-select'
 import { YearContext } from '@/context/YearContext';
 import { DataType, getFromStorage, updateStorage } from '@/components/SettingsPage/Storage/Storage/SettingsDataStorage';
-import { getAllCities, getAllDistricts, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getAllYears, getEducationStages, getOrders, getProductTypes, getRoles } from '@/db/generalrequests';
+import { getAllCities, getAllDistricts, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getAllYears, getEducationStages, getOrders, getProductTypes, getRoles, getAllProfessionTypes } from '@/db/generalrequests';
 import { getAllDistances } from '@/db/instructorsrequest'; 
 import { Areas, Cities, Distances, EducationStage, ProductTypes, ReligionSector, Role, SchoolTypes, Years, Orders, StatusPrograms, StatusContacts, StatusGuides, StatusSchools } from '@prisma/client';
 import { CustomContext } from './context';
@@ -52,6 +52,7 @@ const SettingsPage = () => {
   const [SchoolStatuses, setSchoolStatuses] = useState<StatusSchools[]>()
   const [Distances, setDistances] = useState<Distances[]>()
   const [Orders, setOrders] = useState<Orders[]>()
+  const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
 
   const [yearOptions, setYearOptions] = useState<any[]>([]);
   const [statusOptions, setStatusOptions] = useState<any[]>([])
@@ -79,6 +80,7 @@ const SettingsPage = () => {
                 setAreas(data.Areas); setCities(data.Cities); setProgramStatuses(data.ProgramsStatuses);
                 setSchoolStatuses(data.SchoolStatuses); setGuidesStatuses(data.GuidesStatuses);
                 setContactsStatuses(data.ContactsStatuses); setDistances(data.Distances); setOrders(data.Orders);
+                if (data.ProfessionTypes) setProfessionTypes(data.ProfessionTypes);
                 
                 if (data.Years) setYearOptions([...data.Years.map(y => ({ label: y.YearName, value: y.YearName })), { label: "הכל", value: undefined }]);
                 if (data.ProgramsStatuses) setStatusOptions([...data.ProgramsStatuses.map(s => ({ label: s.StatusName, value: s.StatusName })), { label: "הכל", value: undefined }]);
@@ -89,12 +91,12 @@ const SettingsPage = () => {
                     fetchedRoles, fetchedYears, fetchedProducts, fetchedTypes, fetchedStages, 
                     fetchedReligion, fetchedAreas, fetchedCities, fetchedContactStatus, 
                     fetchedProgramStatus, fetchedGuideStatus, fetchedSchoolStatus, 
-                    fetchedDistances, fetchedOrders
+                    fetchedDistances, fetchedOrders, fetchedProfessionTypes
                  ] = await Promise.all([
                     getRoles(), getAllYears(), getProductTypes(), getAllSchoolsTypes(), getEducationStages(),
                     getAllReligionSectors(), getAllDistricts(), getAllCities(), getAllStatuses("Contacts"),
                     getAllStatuses("Programs"), getAllStatuses("Guides"), getAllStatuses("Schools"),
-                    getAllDistances(), getOrders()
+                    getAllDistances(), getOrders(), getAllProfessionTypes()
                  ]);
 
                  setRoles(fetchedRoles);
@@ -111,6 +113,7 @@ const SettingsPage = () => {
                  setSchoolStatuses(fetchedSchoolStatus as StatusSchools[]);
                  setDistances(fetchedDistances);
                  setOrders(fetchedOrders);
+                 setProfessionTypes(fetchedProfessionTypes);
 
                  const yOpts = [...fetchedYears.map(y => ({ label: y.YearName, value: y.YearName })), { label: "הכל", value: undefined }];
                  setYearOptions(yOpts);
@@ -122,7 +125,7 @@ const SettingsPage = () => {
                     Stages: fetchedStages, Religion: fetchedReligion, Areas: fetchedAreas, Cities: fetchedCities,
                     SchoolStatuses: fetchedSchoolStatus as StatusSchools[], ProgramsStatuses: fetchedProgramStatus as StatusPrograms[], 
                     GuidesStatuses: fetchedGuideStatus as StatusGuides[], ContactsStatuses: fetchedContactStatus as StatusContacts[], 
-                    Distances: fetchedDistances, Orders: fetchedOrders
+                    Distances: fetchedDistances, Orders: fetchedOrders, ProfessionTypes: fetchedProfessionTypes
                  });
             }
         } catch (err) {
@@ -212,6 +215,17 @@ const SettingsPage = () => {
     { key: 'GuideStatuses', label: 'סטטוס מדריכים', formProps: { collectionName: "StatusGuides", idFieldName: "StatusId", nameFieldName: "StatusName", placeHolder: 'הוסף...' } },
     { key: 'ProgramStatuses', label: 'סטטוס תוכניות', formProps: { collectionName: "StatusPrograms", idFieldName: "StatusId", nameFieldName: "StatusName", placeHolder: 'הוסף...' } },
     { key: 'SchoolStatuses', label: 'סטטוס בתי ספר', formProps: { collectionName: "StatusSchools", idFieldName: "StatusId", nameFieldName: "StatusName", placeHolder: 'הוסף...' } },
+    { 
+      key: 'professions', 
+      label: 'מקצועות', 
+      formProps: { 
+        collectionName: "ProfessionTypes", 
+        idFieldName: "ProfessionId", 
+        nameFieldName: "ProfessionName", 
+        placeHolder: 'הוסף מקצוע...',
+        additionalFields: { FieldName: `ID_${Date.now()}` } // מונע כפילויות במונגו
+      } 
+    },
     { key: 'products', label: 'מוצרים', formProps: { collectionName: "ProductTypes", idFieldName: "ProductId", nameFieldName: "ProductName", placeHolder: 'הוסף...' } },
     { key: 'years', label: 'שנים', formProps: { collectionName: "Years", idFieldName: "YearId", nameFieldName: "YearName", placeHolder: 'הוסף...' } },
     { key: 'roles', label: 'תפקידים', formProps: { collectionName: "Role", idFieldName: "RoleId", nameFieldName: "RoleName", placeHolder: 'הוסף...' } },
@@ -219,7 +233,7 @@ const SettingsPage = () => {
   ];
 
   return (
-    <CustomContext.Provider value={{ Roles, Years, ProductTypes, Types, Stages, Religion, Areas, Cities, SchoolStatuses, ProgramStatuses, ContactsStatuses, GuidesStatuses, Orders, Distances }}>
+    <CustomContext.Provider value={{ Roles, Years, ProductTypes, Types, Stages, Religion, Areas, Cities, SchoolStatuses, ProgramStatuses, ContactsStatuses, GuidesStatuses, Orders, Distances, ProfessionTypes, setProfessionTypes }}>
       <div className="bg-slate-50 min-h-screen p-4 w-full flex flex-col gap-6" dir="rtl">
           
           <div className="w-full flex gap-6 items-start">

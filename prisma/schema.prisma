@@ -68,6 +68,14 @@ model Guide {
   Professions String?
   Profession             Profession?
 }
+
+model ProfessionTypes { 
+  Objectid       String @id @default(auto()) @map("_id") @db.ObjectId 
+  ProfessionId   Int    @unique 
+  ProfessionName String @unique 
+  FieldName      String? // חובה להסיר את ה-@unique כדי למנוע את שגיאת ה-500 שקיבלת
+}
+
 //TODO: go back to here when you check contacts.
 model Profession {
   Objectid String @id @default(auto()) @map("_id") @db.ObjectId

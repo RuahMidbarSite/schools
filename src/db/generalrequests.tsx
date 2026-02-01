@@ -497,44 +497,31 @@ export const insertNamesIntoCollection = async (
   collectionName: string,
   idField: string,
   nameField: string,
-  names: string[]
+  names: string[],
+  additionalFields?: Record<string, any> // ← קבלת FieldName
 ): Promise<any> => {
-
-  // Check if names is an array and contains valid data
   if (!Array.isArray(names) || names.length === 0) {
     throw new Error('Invalid names array');
   }
 
-
-
-
   return prisma[collectionName].findMany().then((collection) => {
-    const getMax = collection.length > 0 ? Math.max(...collection.map((val)=>val[idField])):0
-    // Create the insert payload for Prisma
+    const getMax = collection.length > 0 ? Math.max(...collection.map((val: any) => val[idField])) : 0;
+    
     const dataToInsert = names.map((name, index) => ({
-      [idField]: index + getMax + 1,  // Incrementing ID based on the index
+      [idField]: index + getMax + 1,
       [nameField]: name,
+      ...additionalFields // ← הזרקת FieldName למונגו
     }));
-    console.log('Data to insert:', dataToInsert);
-    // Insert into the collection (model)
+
     return prisma[collectionName].createMany({
       data: dataToInsert,
     }).then(() => {
-
-      // Assuming you want to fetch the created records afterward
+      // מחזירים את כל הטבלה כדי שהאפליקציה תתמלא בבת אחת
       return prisma[collectionName].findMany({
-        where: {
-          [nameField]: {
-            in: names,
-          },
-        }
+        orderBy: { [nameField]: 'asc' }
       });
-
-    })
-
-
-  })
-
+    });
+  });
 };
 
 export const deleteNamesFromCollection = async (
@@ -645,3 +632,25 @@ export const addSchoolStatuses = async (status: string) => {
     return null; 
   }
 }
+// הוסף את הפונקציה הזו ב-generalrequests.tsx (בסוף הקובץ או ליד getAllProfessions)
+
+export const getAllProfessionTypes = async () => {
+  try {
+    const professionTypes = await prisma.professionTypes.findMany({
+      orderBy: {
+        ProfessionName: 'asc',
+      },
+    });
+    return professionTypes;
+  } catch (error) {
+    console.error('Error fetching profession types:', error);
+    return [];
+  }
+}
+
+// זה יחזיר מערך של:
+// [
+//   { ProfessionId, ProfessionName, FieldName },
+//   { ProfessionId, ProfessionName, FieldName },
+//   ...
+// ]
