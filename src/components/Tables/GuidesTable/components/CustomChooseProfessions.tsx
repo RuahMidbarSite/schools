@@ -65,18 +65,18 @@ export const ChooseProfessions = forwardRef((props: ChooseProfessionsProps, ref:
           multiValueLabel: (data) => "border-[white] border-[2px] bg-white",
           menuList: () => "",
           menuPortal: () => "",
-          placeholder: () => "bg-[#4075be]",
+          placeholder: () => "bg-[#4075be] text-white text-center",
           multiValue: () => "",
-          option: () => "hover:bg-sky-700 bg-neutral-300",
+          option: () => "hover:bg-sky-700 bg-neutral-300 text-center",
           menu: () => "",
           container: () => "",
         }}
         menuPlacement={"auto"}
         menuPosition={"fixed"}
-       menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-
+        menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
         noOptionsMessage={() => "אין מקצועות זמינים"}
-        defaultMenuIsOpen={true}
+        autoFocus={true}
+        openMenuOnFocus={true}
         options={Choices}
         defaultValue={defaultValues}
         controlShouldRenderValue={true}

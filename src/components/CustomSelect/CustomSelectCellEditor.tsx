@@ -61,7 +61,7 @@ const CustomSelectCellEditor = forwardRef(({ values, value, cities, ids, ...prop
     option: (provided, state) => ({
       ...provided,
       backgroundColor: state.isFocused ? "#e0e0e0" : currentTheme.optionBackground,
-      color: state.isSelected ? "#000" : currentTheme.optionTextColor,
+      color: state.isSelected ? "#000" : currentTheme.optionTextColor, textAlign: "right",
     }),
     container: (provided) => ({
       ...provided,

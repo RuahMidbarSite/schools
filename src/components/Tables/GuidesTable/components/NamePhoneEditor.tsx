@@ -22,8 +22,12 @@ export const NamePhoneEditor = forwardRef(({ AllGuides, ...props }: NamePhoneEdi
         props.api.stopEditing();
     }, [cellPhone, props.api, props.node, props.data]);
 
-    React.useImperativeHandle(ref, () => ({
+  React.useImperativeHandle(ref, () => ({
         getValue: () => {
+            // שמירת הטלפון לפני שמחזירים את השם
+            if (cellPhone !== props.data?.CellPhone) {
+                props.node.setDataValue('CellPhone', cellPhone);
+            }
             return name;
         },
         

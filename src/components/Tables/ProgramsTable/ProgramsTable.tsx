@@ -173,7 +173,7 @@ const RegionSelectEditor = forwardRef((props: any, ref) => {
     return (
         <div style={{ width: '200px' }}>
             <Select value={selectedOption} onChange={handleChange} options={options} isMulti={false} isRtl={true} placeholder="בחר אזור..." menuPortalTarget={document.body}
-                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }), control: (base) => ({ ...base, borderColor: '#ccc', boxShadow: 'none', minHeight: '30px' }), valueContainer: (base) => ({...base, padding: '2px 8px'}) }}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }), control: (base) => ({ ...base, borderColor: '#ccc', boxShadow: 'none', minHeight: '30px' }), valueContainer: (base) => ({...base, padding: '2px 8px'}), option: (base) => ({...base, textAlign: 'right'}) }}
                 autoFocus menuIsOpen={true} />
         </div>
     );
@@ -341,6 +341,8 @@ if (paymentsData) {
             },
             { field: "Programid", header: "מזהה", width: 50, editable: false, cellStyle: STYLES.CENTER },
             // MOVED HERE: Order (הצעה)
+            { field: "Year", header: "שנה", width: 75, special: "year" },
+            { field: "Status", header: "סטטוס", width: 85, special: "status" },
             { field: "Order", header: "הצעה", width: 65, special: "drive" }, 
             { field: "ProgramName", header: "שם תוכנית", width: 100, special: "link" },
             // MOVED HERE: Date (תאריך)
@@ -348,9 +350,7 @@ if (paymentsData) {
             { field: "SchoolName", header: "שם בית ספר", width: 210, special: "school", editable: true },
             { field: "Area", header: "אזור", width: 70, editable: true, cellStyle: STYLES.GEO_COL, cellEditor: RegionSelectEditor, cellEditorParams: { values: areaValues }, singleClickEdit: true, filterParams: { values: areaValues } },
             { field: "CityName", colId: "City", header: "עיר", width: 100, cellStyle: STYLES.GEO_COL, filterParams: { values: getUniqueValues("CityName") } },
-            { field: "Year", header: "שנה", width: 55, special: "year" },
             { field: "ChosenDay", header: "יום נבחר", width: 65, special: "days" },
-            { field: "Status", header: "סטטוס", width: 85, special: "status" },
             { field: "SchoolsContact", header: "איש קשר", width: 140, special: "contact" },
             { field: "Assigned_guide", header: "מדריך משובץ", width: 60, special: "guide" },
             { field: "Grade", header: "שכבה", width: 60, cellStyle: STYLES.CENTER },
@@ -370,6 +370,7 @@ if (paymentsData) {
             { field: "Product", header: "מוצר", width: 70 },
             { field: "PricingPerPaidLesson", header: "מחיר לשיעור", width: 70, cellStyle: STYLES.FINANCE_COL },
             { field: "PaidLessonNumbers", header: "שיעורים לתשלום", width: 60, cellStyle: STYLES.FINANCE_COL },
+            { field: "AdditionalPayments", header: "תשלומים נוספים", width: 80, cellStyle: STYLES.FINANCE_COL },
             { 
                 field: "TotalAmountIncludingTaxes", 
                 header: "סה״כ כולל מע״מ", 
@@ -383,6 +384,7 @@ if (paymentsData) {
                     return (price * lessons) + extra;
                 }
             },
+            { field: "FreeLessonNumbers", header: "שיעורי בונוס", width: 60, cellStyle: STYLES.FINANCE_COL },
             { field: "FinalPrice", header: "מחיר לאחר הוצאות", width: 80 },
             { field: "EstimatedExpenses", header: "הוצאות משוערות", width: 80 },
 { 
@@ -403,8 +405,8 @@ if (paymentsData) {
                 valueFormatter: (params: any) => {
                     return params.value !== undefined ? params.value.toLocaleString() + ' ₪' : '';
                 }
-            },            { field: "FreeLessonNumbers", header: "שיעורי בונוס", width: 60, cellStyle: STYLES.FINANCE_COL },
-            { field: "AdditionalPayments", header: "תשלומים נוספים", width: 80, cellStyle: STYLES.FINANCE_COL },
+            },          
+          
             { field: "Notes", header: "הערות", width: 180 },
             { field: "Details", header: "פרטים נוספים", width: 140, hide: true },
             { field: "EstablishmentNumber", header: "סמל מוסד", width: 60 },

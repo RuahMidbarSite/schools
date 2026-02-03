@@ -236,7 +236,7 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
   }, []);
 
 
-  const onAddRowToolBarClick = useCallback(() => {
+ const onAddRowToolBarClick = useCallback(() => {
     onClearFilterButtonClick();
 
     gridRef.current?.api.applyColumnState({
@@ -282,9 +282,15 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
     setTimeout(() => {
        gridRef.current?.api.paginationGoToFirstPage();
        gridRef.current?.api.ensureIndexVisible(0);
+       
+       // פתיחה אוטומטית של עורך השם הפרטי עבור השורה החדשה
+       gridRef.current?.api.startEditingCell({
+         rowIndex: 0,
+         colKey: 'FirstName'
+       });
     }, 100);
 
-  }, [onClearFilterButtonClick]);
+  }, [onClearFilterButtonClick, InTheMiddleOfAddingRows]);
 
   const ValueFormatWhatsApp = useCallback((params) => {
     const { FirstName } = params.data;
@@ -337,8 +343,8 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
         FirstName: 75,      // שם פרטי
         LastName: 75,       // משפחה
         CellPhone: 90,      // טלפון (צפוף)
-        City: 100,           // יישוב
-        Area: 75,           // אזור
+        City: 150,           // יישוב
+        Area: 150,           // אזור
         
         // עמודות קטנות
         Status: 55,         // סטטוס
