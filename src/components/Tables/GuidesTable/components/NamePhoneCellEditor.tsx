@@ -1,73 +1,54 @@
-import { getProgramWithId } from "@/db/programsRequests";
-import { Guide, Program } from "@prisma/client";
-import { ICellEditorParams, ICellRendererParams } from "ag-grid-community";
-import React, { forwardRef, useCallback, useEffect, useRef, useState } from "react";
-import { MdInsertLink } from "react-icons/md";
+import { Guide } from "@prisma/client";
+import { ICellEditorParams } from "ag-grid-community";
+import React, { forwardRef, useCallback, useRef, useState } from "react";
 
-interface NamePhoneCellEditor extends ICellEditorParams<Guide> {
+interface NamePhoneCellEditorProps extends ICellEditorParams<Guide> {
     AllGuides: Guide[]
-
 }
 
-
-export const NamePhoneCellEditor = forwardRef(({ AllGuides, ...props }: NamePhoneCellEditor, ref: any) => {
-    const [CellPhone, setCellPhone] = useState<string>(props.data?.CellPhone || "")
-    const [Name, setName] = useState<string>(props.data?.FirstName || "")
+export const NamePhoneCellEditor = forwardRef(({ AllGuides, ...props }: NamePhoneCellEditorProps, ref: any) => {
+    // אתחול ה-state פעם אחת בלבד מה-props.data
+    const [cellPhone, setCellPhone] = useState<string>(props.data?.CellPhone || "");
+    const [name, setName] = useState<string>(props.data?.FirstName || "");
 
     const inputRefName = useRef<HTMLInputElement>(null);
     const inputRefPhone = useRef<HTMLInputElement>(null);
     
-    // חשיפת מתודות ל-ag-Grid דרך imperative handle
     React.useImperativeHandle(ref, () => ({
         getValue: () => {
-            // עדכון מלא של השורה כאשר העורך נסגר חיצונית
-            const nameValue = inputRefName.current?.value || Name;
-            const phoneValue = inputRefPhone.current?.value || CellPhone;
-            
-            const updatedData = {
-                ...props.node.data,
-                FirstName: nameValue,
-                CellPhone: phoneValue
-            };
-            
-            // שימוש ב-applyTransaction לעדכון
-            props.api.applyTransaction({ 
-                update: [updatedData] 
-            });
-            
-            // החזרת הערך של השדה הנוכחי (FirstName)
-            return nameValue;
+            // החזרת הערך הנוכחי של השם
+            return inputRefName.current?.value || name;
         },
-        isCancelAfterEnd: () => {
-            // לא לבטל את העריכה אחרי סיום
+        
+        // מונע ביטול עריכה בטעינה
+        isCancelBeforeStart: () => {
             return false;
+        },
+
+        // נותן פוקוס לשדה השם מיד כשהעורך נפתח
+        afterGuiAttached: () => {
+            if (inputRefName.current) {
+                inputRefName.current.focus();
+                inputRefName.current.select();
+            }
         }
     }));
     
-    useEffect(() => {
-        const getData = async () => {
-            if (!AllGuides || !props.data) return;
-
-            const guide: Guide = AllGuides.find((guide) => guide.Guideid === props.data.Guideid)
-
-            if (guide) {
-                setCellPhone(guide?.CellPhone || "")
-                setName(guide?.FirstName || "")
-            }
-        }
-        getData()
-
-    }, [AllGuides, props])
-
     const onSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        const nameValue = inputRefName.current?.value || "";
-        const phoneValue = inputRefPhone.current?.value || "";
+        const nameValue = inputRefName.current?.value?.trim() || "";
+        const phoneValue = inputRefPhone.current?.value?.trim() || "";
 
         console.log("🔵 Editor onSubmit called");
         console.log("📝 Name value:", nameValue);
         console.log("📱 Phone value:", phoneValue);
+
+        // וידוא שיש ערכים
+        if (!nameValue || !phoneValue) {
+            console.warn("⚠️ Missing required values");
+            return;
+        }
 
         // עדכון הנתונים בשורה הנוכחית
         const updatedData = {
@@ -88,81 +69,131 @@ export const NamePhoneCellEditor = forwardRef(({ AllGuides, ...props }: NamePhon
         // סגירת העורך
         props.api.stopEditing();
 
-    }, [props.node, props.api])
+    }, [props.node, props.api]);
 
-
-    const onInvalid = useCallback((event: React.FormEvent<HTMLInputElement>, name: string) => {
+    const onInvalid = useCallback((event: React.FormEvent<HTMLInputElement>, fieldName: string) => {
         if (event.currentTarget) {
-            if (name === "Name") {
-                event.currentTarget.setCustomValidity("חסר שם")
-            }
-            else {
-                event.currentTarget.setCustomValidity("חסר טלפון")
+            if (fieldName === "Name") {
+                event.currentTarget.setCustomValidity("חסר שם פרטי");
+            } else {
+                event.currentTarget.setCustomValidity("חסר מספר טלפון");
             }
         }
-
-    }, [])
+    }, []);
     
-    const onChange = useCallback((event: React.ChangeEvent<HTMLInputElement>, name: string) => {
+    const onChange = useCallback((event: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
         // איפוס הודעת השגיאה המותאמת אישית
         event.currentTarget.setCustomValidity("");
         
-        if (name === "Name") {
-            setName(event.target.value)
+        const value = event.target.value;
+        
+        if (fieldName === "Name") {
+            setName(value);
+        } else {
+            setCellPhone(value);
         }
-        else {
-            setCellPhone(event.target.value)
-        }
-    }, [])
+    }, []);
 
-    // פונקציה למניעת העברת אירועי מקלדת ל-ag-Grid
-    const onKeyDown = useCallback((event: React.KeyboardEvent) => {
+    // טיפול במקלדת - מאפשר Tab, Enter, ESC
+    const onKeyDown = useCallback((event: React.KeyboardEvent<HTMLFormElement>) => {
+        // ESC - ביטול עריכה
+        if (event.key === 'Escape') {
+            event.stopPropagation();
+            props.api.stopEditing(true);
+            return;
+        }
+        
+        // Tab - מעבר בין שדות (לא עוצרים propagation)
+        if (event.key === 'Tab') {
+            // אל תעצור את ה-propagation - תן ל-Tab לעבוד טבעי
+            return;
+        }
+        
+        // Enter - שליחת טופס (לא עוצרים propagation)
+        if (event.key === 'Enter') {
+            return;
+        }
+        
+        // חיצים - לא עוצרים כדי לאפשר תנועה בתוך השדה
+        if (event.key.startsWith('Arrow')) {
+            return;
+        }
+        
+        // לכל השאר - עצור propagation כדי שag-Grid לא יתפוס
         event.stopPropagation();
-    }, [])
+    }, [props.api]);
 
-    const getCell = useCallback(() => {
-        return (
-            <form 
-                className="max-w-sm mx-auto overflow-visible absolute bg-white w-[300px] z-10 shadow-lg border border-gray-200 rounded-lg p-4" 
-                onSubmit={onSubmit}
-                onKeyDown={onKeyDown}
+    // טיפול נפרד ב-Tab בשדות
+    const handleTabOnInput = useCallback((event: React.KeyboardEvent<HTMLInputElement>, isNameField: boolean) => {
+        if (event.key === 'Tab') {
+            event.preventDefault(); // עוצר את ההתנהגות הרגילה
+            
+            if (isNameField && !event.shiftKey) {
+                // Tab בשדה השם (קדימה) -> עבור לטלפון
+                inputRefPhone.current?.focus();
+            } else if (!isNameField && event.shiftKey) {
+                // Shift+Tab בשדה הטלפון (אחורה) -> עבור לשם
+                inputRefName.current?.focus();
+            }
+        }
+    }, []);
+
+    return (
+        <form 
+            className="max-w-sm mx-auto overflow-visible absolute bg-white w-[300px] z-[9999] shadow-lg border border-gray-200 rounded-lg p-4" 
+            onSubmit={onSubmit}
+            onKeyDown={onKeyDown}
+        >
+            <div className="mb-5">
+                <label 
+                    htmlFor="Name" 
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                >
+                    שם פרטי
+                </label>
+                <input 
+                    ref={inputRefName} 
+                    onChange={(event) => onChange(event, "Name")} 
+                    onInvalid={(event) => onInvalid(event, "Name")}
+                    onKeyDown={(event) => handleTabOnInput(event, true)}
+                    type="text"
+                    value={name}
+                    id="Name" 
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+                    placeholder="שם פרטי"
+                    required 
+                    autoComplete="off"
+                />
+            </div>
+            <div className="mb-5">
+                <label 
+                    htmlFor="CellPhone" 
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                >
+                    טלפון
+                </label>
+                <input 
+                    ref={inputRefPhone} 
+                    onChange={(event) => onChange(event, "CellPhone")} 
+                    onInvalid={(event) => onInvalid(event, "CellPhone")}
+                    onKeyDown={(event) => handleTabOnInput(event, false)}
+                    value={cellPhone}
+                    type="tel"
+                    id="CellPhone" 
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
+                    placeholder="מספר טלפון" 
+                    required 
+                    autoComplete="off"
+                />
+            </div>
+            <button 
+                type="submit" 
+                className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
             >
-                <div className="mb-5">
-                    <label htmlFor="Name" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">שם פרטי</label>
-                    <input 
-                        ref={inputRefName} 
-                        onChange={(event) => onChange(event, "Name")} 
-                        onInvalid={(event) => onInvalid(event, "Name")} 
-                        type="text"
-                        value={Name}
-                        id="ProgramName" 
-                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
-                        required 
-                    />
-                </div>
-                <div className="mb-5">
-                    <label htmlFor="CellPhone" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">טלפון</label>
-                    <input 
-                        ref={inputRefPhone} 
-                        onChange={(event) => onChange(event, "CellPhone")} 
-                        onInvalid={(event) => onInvalid(event, "CellPhone")} 
-                        value={CellPhone}
-                        type="text"
-                        id="CellPhone" 
-                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" 
-                        placeholder="טלפון" 
-                        required 
-                    />
-                </div>
-                <button type="submit" className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">שמור</button>
-            </form>
+                שמור
+            </button>
+        </form>
+    );
+});
 
-        )
-
-    }, [CellPhone, Name, onChange, onInvalid, onSubmit, onKeyDown])
-
-    return getCell()
-
-})
-
-NamePhoneCellEditor.displayName = "NamePhoneCellEditor"
+NamePhoneCellEditor.displayName = "NamePhoneCellEditor";

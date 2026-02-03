@@ -7,8 +7,16 @@ import {
 
 const CustomWhatsAppRenderer = forwardRef((props: ICellRendererParams,ref:any) => {
   
-  const [phoneNumber, setPhoneNumber] = useState(props.data.Cellphone);
-  const [NameAndRole, setNameAndRole] = useState(props.value);
+  // אתחול הסטייט עם תמיכה בשמות שדות שונים (אותיות גדולות/קטנות)
+  const [phoneNumber, setPhoneNumber] = useState(props.data.CellPhone || props.data.Cellphone || "");
+  const [NameAndRole, setNameAndRole] = useState(props.value || props.data.FirstName || "");
+
+  // זה הבלוק שהיה חסר - הוא דואג לסנכרון הנתונים כשהטבלה מתעדכנת
+  useEffect(() => {
+    setPhoneNumber(props.data.CellPhone || props.data.Cellphone || "");
+    setNameAndRole(props.value || props.data.FirstName || "");
+  }, [props.data, props.value]);
+  
   const changedValue = useCallback(
     (event: CellValueChangedEvent) => {
       const row: any = props.node;

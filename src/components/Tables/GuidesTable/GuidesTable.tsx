@@ -82,10 +82,11 @@ import { getFromStorage as getColumnStorage, GuidesStoreColumns, updateStorage a
 import CustomSelectCellEditor from "@/components/CustomSelect/CustomSelectCellEditor";
 import Redirect from "@/components/Auth/Components/Redirect";
 import CustomWhatsAppRenderer from "./components/CustomWhatsAppRenderer";
-import { NamePhoneCellEditor } from "./components/NamePhoneCellEditor";
+//import { NamePhoneCellEditor } from "./components/NamePhoneCellEditor";
 import { NamePhoneCellRenderer } from "./components/NamePhoneCellRenderer";
 import { getAssignedInstructores } from "@/db/programsRequests";
 import { GoogleDriveAuthStatus } from "@/components/GoogleDriveAuthStatus";
+import { NamePhoneEditor } from "./components/NamePhoneEditor";
 
 export default function GuidesTable({
   height,
@@ -402,70 +403,45 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
         };
       }
       if (value === "FirstName") {
-  return {
-    ...baseColDef,
-    singleClickEdit: false, // 👈 חשוב! מונע עריכה אוטומטית
-    cellEditor: NamePhoneCellEditor,
-    cellEditorParams: {
-      AllGuides: instructors
-    },
-    cellRenderer: (params: any) => {
-      if (!params.value) return "";
-      if (!params.data || !params.data.CellPhone) return params.value;
-
-      let phone = params.data.CellPhone.replace(/\D/g, '');
-      if (phone.startsWith('0')) {
-        phone = '972' + phone.substring(1);
-      }
-      const whatsappUrl = `whatsapp://send?phone=${phone}`;
-
-      return (
-        <div 
-          style={{ 
-            display: "flex",
-            alignItems: "center",
-            width: "100%",
-            height: "100%",
-            padding: "0 4px"
-          }}
-          onDoubleClick={(e) => {
-            // לחיצה כפולה על הרקע - נכנס לעריכה
-            if (e.target === e.currentTarget) {
-              params.api.startEditingCell({
-                rowIndex: params.node.rowIndex,
-                colKey: 'FirstName'
-              });
+        return {
+          ...baseColDef,
+          singleClickEdit: false,
+          cellEditor: NamePhoneEditor,
+          cellEditorParams: {
+            AllGuides: instructors
+          },
+          cellRenderer: (params: any) => {
+            if (!params.value) return "";
+            
+            // עיבוד מספר טלפון ל-WhatsApp
+            let phone = params.data?.CellPhone?.replace(/\D/g, '') || "";
+            if (phone.startsWith('0')) {
+              phone = '972' + phone.substring(1);
             }
-          }}
-        >
-          <a 
-            href={whatsappUrl}
-            onClick={(e) => {
-              // מונע לחלוטין כניסה לעריכה
-              e.preventDefault();
-              e.stopPropagation();
-              // פותח את WhatsApp
-              window.open(whatsappUrl, '_blank');
-            }}
-            onDoubleClick={(e) => {
-              // מונע כניסה לעריכה גם בלחיצה כפולה
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            style={{ 
-              textDecoration: "underline", 
-              color: "#2563eb", 
-              cursor: "pointer",
-              display: "inline-block"
-            }}
-          >
-            {params.value}
-          </a>
-        </div>
-      );
-    }
-  };
-}
+            const whatsappUrl = `whatsapp://send?phone=${phone}`;
+
+            return (
+              <div className="flex items-center w-full h-full px-1">
+                <a 
+                  href={whatsappUrl}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(whatsappUrl, '_blank');
+                  }}
+                  style={{ 
+                    textDecoration: "underline", 
+                    color: "#2563eb", 
+                    cursor: "pointer" 
+                  }}
+                >
+                  {params.value}
+                </a>
+              </div>
+            );
+          }
+        };
+      }
       if (value === "Status") {
         return {
           ...baseColDef,
@@ -1029,35 +1005,28 @@ const components = useMemo(
       </div>
     );
   }, [])
-  const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
+const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
     const keyboardEvent = event.event as unknown as KeyboardEvent;
-    keyboardEvent.stopPropagation()
-    if (keyboardEvent.key === "Tab" || keyboardEvent.key === "Enter" || keyboardEvent.key === "ArrowLeft" || keyboardEvent.key === "ArrowRight") {
-      const currentNode = event.api.getDisplayedRowAtIndex(event.rowIndex);
+    
+    // אם אנחנו כבר במצב עריכה, אל תתערב באירועי מקלדת כדי לא להפריע ל-Editor
+    if (event.api.getEditingCells().length > 0) return;
 
-      const currentColumnIndex = event.api.getAllDisplayedColumns().findIndex(
+    const keysToHandle = ["Tab", "Enter", "ArrowLeft", "ArrowRight"];
+    
+    if (keysToHandle.includes(keyboardEvent.key)) {
+      keyboardEvent.stopPropagation();
+      keyboardEvent.preventDefault();
+
+      const currentNode = event.api.getDisplayedRowAtIndex(event.rowIndex);
+      const displayedColumns = event.api.getAllDisplayedColumns();
+      const currentColumnIndex = displayedColumns.findIndex(
         col => col?.getColId() === event.column?.getColId()
       );
 
       let nextCell = null;
-      let prevCell = null
-      const displayedColumns = event.api.getAllDisplayedColumns();
-
       const isColumnEditable = (colDef, node) => {
-        if (typeof colDef.editable === 'function') {
-          return colDef.editable(node);
-        }
+        if (typeof colDef.editable === 'function') return colDef.editable(node);
         return !!colDef.editable;
-      };
-
-      const triggerCellRenderer = (params, column) => {
-        const renderer = column.getColDef().cellRenderer;
-        if (renderer) {
-          params.api.refreshCells({
-            columns: [column],
-            force: true,
-          });
-        }
       };
 
       for (let i = currentColumnIndex + 1; i < displayedColumns.length; i++) {
@@ -1068,46 +1037,18 @@ const components = useMemo(
         }
       }
 
-      if (!nextCell && event.rowIndex + 1 < event.api.getDisplayedRowCount()) {
-        for (let i = 0; i < displayedColumns.length; i++) {
-          const colDef = displayedColumns[i].getColDef();
-          if (isColumnEditable(colDef, event.api.getDisplayedRowAtIndex(event.rowIndex + 1)) || colDef.cellRenderer) {
-            nextCell = { rowIndex: event.rowIndex + 1, column: displayedColumns[i] };
-            break;
-          }
-        }
-      }
-
-      if (nextCell && keyboardEvent.key !== "ArrowRight") {
+      if (nextCell) {
         event.api.stopEditing();
-        event.api.setFocusedCell(nextCell.rowIndex, nextCell.column);
-
-        const nextCellDef = nextCell.column.getColDef();
-        if (nextCellDef.cellRenderer) {
-          triggerCellRenderer(event, nextCell.column);
-        } else {
+        event.api.setFocusedCell(nextCell.rowIndex, nextCell.column.getColId());
+        
+        const nextColDef = nextCell.column.getColDef();
+        if (!nextColDef.cellRenderer) {
           event.api.startEditingCell({
             rowIndex: nextCell.rowIndex,
             colKey: nextCell.column.getColId(),
           });
         }
-      } else {
-        event.api.stopEditing();
-        const displayedColumns = event.api.getAllDisplayedColumns();
-        const prevCol = displayedColumns[currentColumnIndex - 1]
-        event.api.setFocusedCell(event.rowIndex, prevCol.getColId());
-
-        const prevCellDef = prevCol.getColDef();
-        if (prevCellDef.cellRenderer) {
-          triggerCellRenderer(event, prevCell.column);
-        } else {
-          event.api.startEditingCell({
-            rowIndex: event.rowIndex,
-            colKey: prevCol.getColId(),
-          });
-        }
       }
-      event.event.preventDefault();
     }
   }, []);
 
@@ -1165,9 +1106,7 @@ const components = useMemo(
 >
   <LoadingOverlay />
   
-  <div suppressHydrationWarning>
-    <Redirect type={'Guides'} ScopeType={'Drive'} />
-  </div>
+ <div suppressHydrationWarning><Redirect type={'Guides'} ScopeType={'Drive'} /></div>
   
   
   <OverlayTrigger

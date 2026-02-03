@@ -78,8 +78,8 @@ const rightDefaultCol: any = [
 ];
 const leftDefaultCol: any = rightDefaultCol
 
-const releventFieldsRight: string[] = ["Guideid", "FirstName", "LastName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
-const releventFieldsLeft: string[] = ["Guideid", "FirstName", "LastName", "CV", "City", "Area", "ReligiousSector", "Notes", "WhatsApp", "isAssigned", "Professions"]
+const releventFieldsRight: string[] = ["WhatsApp", "LastName", "CV", "City", "Area", "ReligiousSector", "Professions", "Notes"];
+const releventFieldsLeft: string[] = releventFieldsRight;
 
 export default function PlacementTable() {
   console.log("PlacementTable Loaded");
@@ -172,7 +172,15 @@ export default function PlacementTable() {
   useExternalEffect(updateColState, [colState])
 
   const { onColumnMoved, onColumnResized } = useColumnHook(RightgridRef, rightColDef, setRightColDef, setColState, colState)
+// --- תוספת לפתרון שגיאת Hydration ---
+  const [isClient, setIsClient] = useState(false);
 
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  
+  // --- סוף תוספת ---
   const ValueFormatWhatsApp = useCallback((params) => {
     const { FirstName } = params.data;
     return `${FirstName}`;
@@ -226,231 +234,52 @@ export default function PlacementTable() {
 
 
   const GetDefaultDefinitionsLeft = useCallback((model, colors, colorcandidates): ColDef<Guide>[] => {
-    var coldef = model[0].map((value: any, index: any) => {
-      if (!releventFieldsLeft.includes(value)) {
-        return { field: value, hide: true }
-      }
-      if (value == "Guideid") {
-        return {
-          field: value,
-          hide: true,
-          headerName: model[1][index],
-          cellEditor: "agTextCellEditor",
-          editable: false,
-          filter: CustomFilter
+    var coldef = releventFieldsLeft.map((fieldKey) => {
+      const indexInModel = model[0].indexOf(fieldKey);
+      const headerName = indexInModel !== -1 ? model[1][indexInModel] : fieldKey;
 
-        };
-      }
-      if (value === "FirstName") {
-        return {
-          field: value,
-          hide: true,
-          editable: false,
-          headerName: model[1][index],
-          cellEditor: "agTextCellEditor",
-          filter: CustomFilter
-        };
-      }
-      if (value === "Professions") {
-        return {
-          field: "Professions",
-          headerName: "מקצועות",
-          editable: false,
-          singleClickEdit: true,
-          cellEditor: "CustomChooseProfessions",
-          cellRenderer: "ProfCellRenderer",
-          filter: CustomFilter
+      const baseDef: ColDef = { field: fieldKey, headerName: headerName, editable: false, filter: CustomFilter, suppressSizeToFit: true };
 
-        }
-      }
-      if (value === "WhatsApp") {
-        return {
-          field: "WhatsAppField",
-          headerName: "שם פרטי", 
-          editable: false,
-          cellRenderer: "CustomWhatsAppRenderer",
-          valueGetter: ValueFormatWhatsApp,
-          filter: CustomFilter
-        }
-      }
-      if (value === "isAssigned") {
-        return {
-          hide: true,
-          field: value,
-          headername: model[1][index],
-          editable: false,
-          filter: CustomFilter
-        }
-      }
-      
-      // Fixed CV Link
-      if (value === "CV") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          editable: false,
-          filter: CustomFilter,
-          cellRenderer: (params: ICellRendererParams) => {
-             if (!params.value) return "";
-             return (
-               <a 
-                 href={params.value} 
-                 target="_blank" 
-                 rel="noopener noreferrer"
-                 style={{ textDecoration: 'underline', color: 'blue', cursor: 'pointer' }}
-                 onClick={(e) => e.stopPropagation()} 
-               >
-                 קוח
-               </a>
-             );
-          }
-        }
-      }
-
-      return {
-        field: value,
-        editable: false,
-        headerName: model[1][index],
-        cellEditor: "agTextCellEditor",
-        filter: CustomFilter
-      };
+      if (fieldKey === "WhatsApp") return { ...baseDef, headerName: "פרטי", width: 90, cellRenderer: "CustomWhatsAppRenderer", valueGetter: (params) => params.data.FirstName || "" };
+      if (fieldKey === "LastName") return { ...baseDef, headerName: "משפחה", width: 110 };
+      if (fieldKey === "CV") return { ...baseDef, headerName: "קו''ח", width: 70, cellRenderer: (p) => p.value ? <a href={p.value} target="_blank" rel="noreferrer" style={{color: 'blue'}}>קוח</a> : "" };
+      if (fieldKey === "City") return { ...baseDef, headerName: "יישוב", width: 90 };
+      if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 90 };
+      if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 80 };
+      if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer" };
+      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160 };
+      return baseDef;
     });
 
-    const color_col = { 
-        field: 'color', 
-        filter: CustomFilter, 
-        headerName: "צבע", 
-        cellRenderer: "ColorPicker", 
-        cellRendererParams: { 
-            currentProgram: CurrentProgram, 
-            Colors: colors, 
-            AllColorCandidates: colorcandidates,
-            onColorChange: handleManualColorChange,
-            canClear: false 
-        }, 
-        checkboxSelection: true, 
-        headerCheckboxSelection: true, 
-        rowDrag: rowDragCheck,
-        width: 105, 
-        minWidth: 105, 
-        maxWidth: 105,
-        suppressSizeToFit: true,
-        resizable: false
-    }
-    const distance_col = { field: 'distance', headerName: "מרחק", filter: CustomFilter, editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms } }
-    coldef = [color_col, distance_col, ...coldef]
-    return coldef
-  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, ValueFormatWhatsApp, handleManualColorChange])
+    const color_col = { field: 'color', headerName: "צבע", width: 60, suppressSizeToFit: true, cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates, onColorChange: handleManualColorChange, canClear: false }, checkboxSelection: true, headerCheckboxSelection: true, rowDrag: (p) => rowDragCheck(p, "Left"), filter: CustomFilter };
+    const distance_col = { field: 'distance', headerName: "מרחק", width: 80, suppressSizeToFit: true, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter };
+    
+    return [color_col, distance_col, ...coldef];
+  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, handleManualColorChange]);
 
-  const GetDefaultDefinitionsRight = useCallback((model, colors, colorcandidates): ColDef<Guide>[] => {
-    var coldef = model[0].map((value: any, index: any) => {
-      if (!releventFieldsRight.includes(value)) {
-        return { field: value, hide: true }
-      }
-      
-      if (value === "CV") {
-        return {
-          field: value,
-          headerName: model[1][index],
-          editable: false,
-          filter: CustomFilter,
-          cellRenderer: (params: ICellRendererParams) => {
-             if (!params.value) return "";
-             return (
-               <a 
-                 href={params.value} 
-                 target="_blank" 
-                 rel="noopener noreferrer"
-                 style={{ textDecoration: 'underline', color: 'blue', cursor: 'pointer' }}
-                 onClick={(e) => e.stopPropagation()}
-               >
-                 קוח
-               </a>
-             );
-          }
-        }
-      }
+ const GetDefaultDefinitionsRight = useCallback((model, colors, colorcandidates): ColDef<Guide>[] => {
+    var coldef = releventFieldsRight.map((fieldKey) => {
+      const indexInModel = model[0].indexOf(fieldKey);
+      const headerName = indexInModel !== -1 ? model[1][indexInModel] : fieldKey;
 
-      if (value === "FirstName") {
-        return {
-          field: value,
-          hide: true,
-          editable: false,
-          headerName: model[1][index],
-          cellEditor: "agTextCellEditor",
-          filter: CustomFilter
-        }
-      }
-      if (value === "Professions") {
-        return {
-          field: "Professions",
-          headerName: "מקצועות",
-          editable: false,
-          singleClickEdit: true,
-          cellEditor: "CustomChooseProfessions",
-          cellRenderer: "ProfCellRenderer",
-          filter: CustomFilter
-        }
-      }
-      if (value === "WhatsApp") {
-        return {
-          field: "WhatsAppField",
-          headerName: "פרטי",
-          editable: false,
-          cellRenderer: "CustomWhatsAppRenderer",
-          valueGetter: ValueFormatWhatsApp,
-          filter: CustomFilter
-        }
-      }
-      if (value == "Guideid") {
-        return {
-          field: value,
-          hide: true,
-          headerName: model[1][index],
-          cellEditor: "agTextCellEditor",
-          rowDrag: false,
-          editable: false,
-          filter: CustomFilter
-        };
-      }
-      if (value === "isAssigned") {
-        return {
-          hide: true,
-          field: value,
-          headername: model[1][index],
-          editable: false,
-          filter: CustomFilter
-        }
-      }
-      return {
-        field: value,
-        headerName: model[1][index],
-        cellEditor: "agTextCellEditor",
-        editable: false,
-        filter: CustomFilter
-      };
+      const baseDef: ColDef = { field: fieldKey, headerName: headerName, editable: false, filter: CustomFilter, suppressSizeToFit: true };
+
+      if (fieldKey === "WhatsApp") return { ...baseDef, headerName: "פרטי", width: 90, cellRenderer: "CustomWhatsAppRenderer", valueGetter: (params) => params.data.FirstName || "" };
+      if (fieldKey === "LastName") return { ...baseDef, headerName: "משפחה", width: 110 };
+      if (fieldKey === "CV") return { ...baseDef, headerName: "קו''ח", width: 70, cellRenderer: (p) => p.value ? <a href={p.value} target="_blank" rel="noreferrer" style={{color: 'blue'}}>קוח</a> : "" };
+      if (fieldKey === "City") return { ...baseDef, headerName: "יישוב", width: 90 };
+      if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 90 };
+      if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 80 };
+      if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer" };
+      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160 };
+      return baseDef;
     });
-    const color_col = { 
-        field: 'color', 
-        headerName: "צבע", 
-        cellRenderer: "ColorPicker", 
-        cellRendererParams: { 
-            currentProgram: CurrentProgram, 
-            Colors: colors, 
-            AllColorCandidates: colorcandidates,
-            onColorChange: handleManualColorChange,
-            canClear: true 
-        }, 
-        rowDrag: rowDragCheck, 
-        filter: CustomFilter 
-    }
-    const distance_col = { field: 'distance', headerName: "מרחק", editable: false, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter }
-    coldef = [color_col, distance_col, ...coldef]
-    return coldef
 
-  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, ValueFormatWhatsApp, handleManualColorChange])
-
-
+    const color_col = { field: 'color', headerName: "צבע", width: 60, suppressSizeToFit: true, cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates, onColorChange: handleManualColorChange, canClear: true }, rowDrag: rowDragCheck, filter: CustomFilter };
+    const distance_col = { field: 'distance', headerName: "מרחק", width: 80, suppressSizeToFit: true, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter };
+    
+    return [color_col, distance_col, ...coldef];
+  }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, handleManualColorChange]);
   // --- onGridReady ---
   const onGridReady = useCallback(async (
     side: string,
@@ -1136,7 +965,7 @@ const updateLeftTable = () => {
           suppressMoveWhenRowDragging={true}
           enableRtl={true}
           getRowId={(params) => getRowId(side, params)}
-          autoSizeStrategy={{ type: "fitGridWidth" }}
+          autoSizeStrategy={{ type: "none" }}
           isExternalFilterPresent={side === "Right" ? isExternalFilterPresent : isExternalFilterPresent}
           doesExternalFilterPass={side === "Right" ? doesExternalFilterPassRight : doesExternalFilterPassLeft}
           components={side === "Left" ? components : components}
@@ -1171,9 +1000,19 @@ const updateLeftTable = () => {
     }
   };
 
+  // --- הקוד החדש שמונע את השגיאה ---
+  if (!isClient) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh', width: '100%' }}>
+        <Spinner animation="border" variant="primary" />
+        <span className="ms-3">טוען מערכת שיבוצים...</span>
+      </div>
+    );
+  }
+
   return (
-    <Suspense >
-      <div className="toolbar ">{getToolBar()}</div>
+    <Suspense fallback={<div>טוען...</div>}>
+      <div className="toolbar">{getToolBar()}</div>
       <div className="flex">
 
         {/* --- צד שמאל: מועמדים --- */}
@@ -1259,4 +1098,4 @@ const updateLeftTable = () => {
       </div>
     </Suspense>
   );
-} 
+} // סגירת הפונקציה PlacementTable
