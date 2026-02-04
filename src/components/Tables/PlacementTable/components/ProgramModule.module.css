@@ -1,0 +1,462 @@
+/* ProgramModule.module.css */
+
+/* עמודה שמאלית - כרטיסיית תוכניות */
+.leftColumn {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border-radius: 15px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  direction: rtl;
+}
+
+/* כרטיס פרטי התוכנית */
+.programCard {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  direction: rtl;
+}
+
+.programDetailsContainer {
+  width: 100%;
+  direction: rtl;
+}
+
+/* ללא כותרת "פרטי התוכנית" */
+.programCardTitle {
+  display: none;
+}
+
+/* כותרת פנימית - "כרטיסיית תוכניות" */
+.cardInnerTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+  text-align: right;
+  direction: rtl;
+}
+
+/* Grid של 2 עמודות - כמו בצילום המסך */
+.programCardGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  direction: rtl;
+}
+
+.programCardColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* כל פריט: ICON LABEL : VALUE */
+.programCardItem {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* עם RTL זה מצמיד ימינה */
+  gap: 0; /* ללא gap כללי */
+  direction: rtl; /* עם RTL הסדר יהפך: VALUE : LABEL ICON */
+}
+
+/* הערך - בימין, מודגש יותר */
+.itemValue {
+  color: #1a202c;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+  margin-left: 6px; /* רווח אחרי הערך */
+}
+
+/* הנקודותיים */
+.itemSeparator {
+  color: #718096;
+  font-weight: 600;
+  margin: 0 0 0 6px; /* רווח משמאל (לפני הערך) */
+}
+
+/* טקסט הלייבל */
+.itemLabelText {
+  font-weight: 600;
+  color: #718096;
+  font-size: 15px;
+  white-space: nowrap;
+  margin-right: 4px; /* רווח לפני הלייבל (אחרי הנקודותיים) */
+}
+
+/* האייקון */
+.itemIcon {
+  font-size: 15px;
+  margin-right: 4px; /* רווח לפני האייקון */
+}
+
+/* התווית עם אייקון - בשמאל (למקרים שעדיין משתמשים בה) */
+.itemLabel {
+  font-weight: 600;
+  color: #718096;
+  font-size: 15px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* סגנון למצב שבו לא נבחרה תוכנית */
+.noProgramSelected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  padding: 30px;
+}
+
+.noProgramIcon {
+  font-size: 48px;
+  margin-bottom: 15px;
+  opacity: 0.5;
+}
+
+.noProgramText {
+  font-size: 16px;
+  color: #718096;
+  font-weight: 500;
+}
+
+/* סקציית מדריכים */
+.guidesSection {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #e2e8f0;
+  direction: rtl;
+}
+
+.guidesSectionTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #4a5568;
+  margin-bottom: 10px;
+  text-align: right;
+}
+
+.noGuidesText {
+  font-size: 13px;
+  color: #a0aec0;
+  font-style: italic;
+  text-align: right;
+}
+
+/* מדריכים משובצים - בתוך הכרטיס, מתחת לפרטים */
+.assignedGuidesInline {
+  display: flex;
+  flex-direction: row; /* שינוי ל-row במקום column */
+  flex-wrap: wrap; /* מאפשר עטיפה לשורה חדשה אם צריך */
+  gap: 15px; /* רווח בין המדריכים */
+  direction: rtl;
+}
+
+.guideItemInline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  direction: rtl;
+}
+
+.guideNameInline {
+  color: #1a202c;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* המספר המעוצב - עיגול ורוד */
+.guideBadgeInline {
+  background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+  color: white;
+  font-weight: bold;
+  font-size: 15px; /* הגדלה מ-13 ל-15 */
+  width: 34px; /* הגדלה מ-30 ל-34 */
+  height: 34px; /* הגדלה מ-30 ל-34 */
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
+  flex-shrink: 0;
+}
+
+/* סקציית פרטים */
+.detailsSection {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #e2e8f0;
+  direction: rtl;
+}
+
+.detailsSectionTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #4a5568;
+  margin-bottom: 10px;
+  text-align: right;
+}
+
+.detailsContent {
+  font-size: 13px;
+  color: #718096;
+  text-align: right;
+  min-height: 40px;
+}
+
+/* הסתרה מלאה של הסקציה הישנה - מסומן X בתמונה */
+.assignedGuidesCard {
+  display: none !important;
+}
+
+.assignedGuidesTitle {
+  display: none !important;
+}
+
+.assignedGuidesGrid {
+  display: none !important;
+}
+
+.guideItem {
+  display: none !important;
+}
+
+.guideBadge {
+  display: none !important;
+}
+
+.guideName {
+  display: none !important;
+}
+
+/* כרטיס כפתורי פעולה */
+.actionButtonsCard {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.actionButtonsContainer {
+  display: flex;
+  gap: 12px;
+  direction: rtl;
+}
+
+.assignButton {
+  flex: 1;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+}
+
+.assignButton:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(245, 87, 108, 0.6);
+}
+
+/* הכפתור הישן - מוסתר (מסומן X למעלה) */
+.aiButton {
+  display: none !important;
+}
+
+/* כפתור AI החדש - במיקום השני (החץ בתמונה) */
+.aiButtonNew {
+  flex: 1;
+  background: white;
+  color: #3b82f6;
+  border: 2px solid #3b82f6;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.aiButtonNew:hover {
+  background: #eff6ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.aiButtonIcon {
+  font-size: 18px;
+}
+
+/* עמודה ימנית - שליחת הודעות */
+.rightColumn {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  border-radius: 15px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  height: fit-content;
+  direction: rtl;
+}
+
+.messageCard {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.messageCardTitle {
+  font-size: 18px;
+  font-weight: bold;
+  color: #2d3748;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  direction: rtl;
+}
+
+.sectionTitle {
+  font-size: 22px;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 3px solid rgba(255, 255, 255, 0.3);
+  text-align: center;
+}
+/* 🔥 תצוגת מדריכים אופקית עם מספרים מימין */
+.assignedGuidesGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  direction: rtl;
+}
+
+.guideItemHorizontal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 200px;
+  flex: 0 1 calc(50% - 5px); /* שני פריטים בשורה */
+  direction: rtl;
+}
+
+.guideNameHorizontal {
+  color: #1a202c;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: right;
+  flex: 1;
+}
+
+.guideActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guideBadgeHorizontal {
+  background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+  color: white;
+  font-weight: bold;
+  font-size: 13px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
+  flex-shrink: 0;
+}
+
+/* 🔥 כפתור הסרה */
+.removeGuideButton {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px; /* הקטנה מ-24 ל-20 */
+  height: 20px; /* הקטנה מ-24 ל-20 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px; /* הקטנה מ-12 ל-10 */
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.removeGuideButton:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+/* Responsive - שורה אחת במובייל */
+@media (max-width: 768px) {
+  .guideItemHorizontal {
+    flex: 0 1 100%;
+  }
+}
+
+/* 🔥 CSS למודאל AI */
+.ai-modal-draggable .modal-dialog {
+  transition: none !important;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
+
+.ai-modal-draggable .modal-content {
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.ai-modal-header {
+  cursor: move;
+  user-select: none;
+}
+
+.ai-modal-header:active {
+  cursor: grabbing;
+}
+
+/* אפשר גלילה בגוף העמוד */
+body.modal-open {
+  overflow: auto !important;
+  padding-right: 0 !important;
+}
+
+.modal-backdrop {
+  background-color: rgba(0, 0, 0, 0.3);
+}

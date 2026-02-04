@@ -790,33 +790,32 @@ const updateLeftTable = () => {
 
   const getToolBar = useCallback(() => {
     return (
-      <Container fluid={true} className="border-4 border-red-600 p-2"> 
-        <div className="max-w-[50%] float-right border-4 border-blue-600 flex flex-col p-2" > 
+      <Container fluid={true} className="p-2"> 
+        <div className="max-w-[50%] float-right flex flex-col p-2" > 
           <Row>
               <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </Row>
-
-          <div className="mt-4">
+<div className="mt-4">
               <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </div>
 
-          <Row className="mt-4 rtl d-flex justify-content-between">
-            <Col>
-               <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
-            </Col>
-
-            <Col>
-               <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
-            </Col>
-            
-            <Col>
+          <div className="d-flex gap-2" style={{marginTop: '-38px', direction: 'rtl', justifyContent: 'flex-start', paddingRight: '100px'}}>
+            <div style={{width: '100px', position: 'relative', zIndex: 10}}>
                <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
-            </Col>
-          </Row>
+            </div>
+
+            <div style={{width: '120px', position: 'relative', zIndex: 10}}>
+               <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
+            </div>
+            
+            <div style={{width: '160px', position: 'relative', zIndex: 10}}>
+               <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
+            </div>
+          </div>
 
         </div>
 
-        <div className="border-4 border-green-600"> 
+        <div className=""> 
         <ProgramModule
           setCurrentProgram={setCurrentProgram} CurrentProgram={CurrentProgram} LeftGridApi={leftApi}
           RightGridApi={rightApi} SelectedRows={SelectedRows} setAssigned_guides={setAllAssignedGuides}
@@ -826,6 +825,7 @@ const updateLeftTable = () => {
           setAllAssignedGuides_Details={setAllAssignedGuides_Details} AllYears={AllYears} AllStatuses={AllStatuses} setAllCandidates={setAllCandidates} setAllCandidates_Details={setAllCandidates_Details}
           AllColorCandidates={AllColorCandidates}
           setAllColorCandidates={setAllColorCandidates}
+          onAIConsultation={handleAISearch}
         />
         </div>
       </Container>
@@ -1076,7 +1076,7 @@ const updateLeftTable = () => {
                 disabled={isAiLoading}
                 className="d-flex align-items-center gap-1 shadow-sm"
                 title="שיבוץ אוטומטי עפ'י נתוני התוכנית"
-                style={{ zIndex: 10, position: 'relative' }} 
+                style={{ zIndex: 1, position: 'relative' }} 
             >
                 {isAiLoading ? <Spinner size="sm" animation="border" /> : <span>✨ AI</span>}
             </Button>

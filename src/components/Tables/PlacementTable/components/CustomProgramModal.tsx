@@ -29,7 +29,8 @@ type Data = {
   setAllCandidates_Details: any,
   setAllCandidates: any,
   AllColorCandidates: ColorCandidate[],
-  setAllColorCandidates: any
+  setAllColorCandidates: any,
+  onAIReady?: (aiFunc: () => void) => void; // 🔥 הוספה
 };
 
 // מבנה התשובה שאנו מצפים לקבל מה-AI
@@ -74,7 +75,8 @@ const CustomProgramModal = ({
   setAllAssignedGuides,
   setAllAssignedGuides_Details,
   AllColorCandidates,
-  setAllColorCandidates
+  setAllColorCandidates,
+  onAIReady // 🔥 הוספה
 }: Data) => {
   const [SchoolName, setSchoolName] = useState("");
   const [SchoolGrade, setSchoolGrade] = useState("");
@@ -121,7 +123,7 @@ const CustomProgramModal = ({
   }, []);
 
   // --- פונקציית ה-AI המעודכנת ---
-  const handleAiConsultation = async () => {
+  const handleAiConsultation = useCallback(async () => {
     setAiLoading(true);
     setAiResponse(null);
     setAiError(null);
@@ -137,14 +139,12 @@ const CustomProgramModal = ({
         let count = 0;
         LeftGridApi.forEachNodeAfterFilterAndSort((node) => {
           if (count < 10 && node.data) {
-            // בוחרים רק שדות רלוונטיים כדי לא להעמיס על ה-Prompt
             const { FirstName, LastName, City, CellPhone, Gender, Guideid } = node.data;
             topCandidates.push({
               id: Guideid,
               Name: `${FirstName} ${LastName}`,
               City: City || "לא צוין",
               Gender: Gender || "לא צוין",
-              // ניתן להוסיף שדות נוספים אם קיימים ב-Guide, כגון ניסיון או כישורים
             });
             count++;
           }
@@ -155,12 +155,10 @@ const CustomProgramModal = ({
         throw new Error("לא נמצאו מועמדים בטבלה (או שהטבלה ריקה). אנא וודא שיש מועמדים מוצגים.");
       }
 
-      // המרת רשימת המועמדים לטקסט
       const candidatesText = topCandidates.map(c => 
         `- שם: ${c.Name}, עיר: ${c.City}, מגדר: ${c.Gender}`
       ).join('\n');
 
-      // בניית ה-Prompt המלא
       const promptData = `
         אני זקוק לעזרה בשיבוץ מדריך לתוכנית חינוכית.
         
@@ -189,7 +187,6 @@ const CustomProgramModal = ({
         בחר את 3 המועמדים המתאימים ביותר מתוך הרשימה.
       `;
 
-      // שליחה לשרת
       const response = await fetch('/api/route-placement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -202,8 +199,7 @@ const CustomProgramModal = ({
         throw new Error(data.details || data.error || "שגיאת שרת");
       }
 
-      // השרת מחזיר JSON. אנחנו מניחים שהוא במבנה שביקשנו.
-      setAiResponse(data); // data אמור להכיל recommendations ו-summary
+      setAiResponse(data);
 
     } catch (err: any) {
       console.error("AI Error:", err);
@@ -211,8 +207,15 @@ const CustomProgramModal = ({
     } finally {
       setAiLoading(false);
     }
-  };
-  // -------------------------
+  }, [CurrentProgram, LeftGridApi, SchoolName, CityName, District, SchoolGrade, Details]);
+
+  // 🔥 העברת פונקציית ה-AI ל-ProgramModule דרך onAIReady
+  useEffect(() => {
+    if (onAIReady) {
+      onAIReady(handleAiConsultation);
+      console.log("✅ AI Function passed to ProgramModule via onAIReady");
+    }
+  }, [onAIReady, handleAiConsultation]);
 
   useEffect(() => {
     const updateGuides = () => {
@@ -441,16 +444,13 @@ const CustomProgramModal = ({
           </Alert>
         )}
 
-        {/* תצוגה ויזואלית משופרת של תשובת ה-AI */}
         {aiResponse && (
           <div className="mt-3 fade-in">
-             {/* כותרת וסיכום */}
              <div className="mb-3 p-2 bg-white rounded border shadow-sm">
                 <div className="text-primary font-bold mb-1">סיכום המערכת:</div>
                 <div style={{ fontSize: '0.9rem', color: '#555' }}>{aiResponse.summary}</div>
              </div>
 
-             {/* רשימת המומלצים */}
              <div className="d-flex flex-column gap-2">
                 {aiResponse.recommendations?.map((rec, index) => (
                   <Card key={index} className="border-0 shadow-sm" style={{ background: index === 0 ? '#f0f9ff' : 'white' }}>
@@ -475,7 +475,6 @@ const CustomProgramModal = ({
           </div>
         )}
       </Card.Body>
-      {/* ------------------------------------------------ */}
 
     </Card>
   );
