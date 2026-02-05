@@ -15,7 +15,7 @@ import {
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { Suspense, useCallback, useEffect, useRef, useState, useMemo, useContext } from "react";
-import { Button, Container, Row, Spinner, Col } from "react-bootstrap";
+import { Button, Container, Row, Spinner, Col, Alert, Badge, Card } from "react-bootstrap";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
@@ -112,6 +112,12 @@ export default function PlacementTable() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiRadius, setAiRadius] = useState(10);
   const [aiCount, setAiCount] = useState(1);
+  
+  // --- AI Consultation States (for left button) ---
+  const [leftAiLoading, setLeftAiLoading] = useState(false);
+  const [leftAiResponse, setLeftAiResponse] = useState<any>(null);
+  const [leftAiError, setLeftAiError] = useState<string | null>(null);
+  const [showLeftAiModal, setShowLeftAiModal] = useState(false);
 
   // --- Context States ---
   const selectedYear = useYear().selectedYear
@@ -172,15 +178,7 @@ export default function PlacementTable() {
   useExternalEffect(updateColState, [colState])
 
   const { onColumnMoved, onColumnResized } = useColumnHook(RightgridRef, rightColDef, setRightColDef, setColState, colState)
-// --- תוספת לפתרון שגיאת Hydration ---
-  const [isClient, setIsClient] = useState(false);
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  
-  // --- סוף תוספת ---
   const ValueFormatWhatsApp = useCallback((params) => {
     const { FirstName } = params.data;
     return `${FirstName}`;
@@ -596,6 +594,154 @@ setProfessions(professions)
     }
   };
 
+  // 🔥 פונקציית התייעצות AI לכפתור השמאלי
+  const handleLeftAiConsultation = useCallback(async () => {
+    setLeftAiLoading(true);
+    setLeftAiResponse(null);
+    setLeftAiError(null);
+    setShowLeftAiModal(true);
+
+    try {
+      if (!CurrentProgram?.label || CurrentProgram.value === -1) {
+        throw new Error("חסרים נתוני תוכנית לביצוע הבדיקה");
+      }
+
+      // שליפת פרטי התוכנית
+      const currentProgramData = AllPrograms?.find(p => p.Programid === CurrentProgram.value);
+      if (!currentProgramData) {
+        throw new Error("לא נמצאה תוכנית");
+      }
+
+      const currentSchool = AllSchools?.find(s => s.Schoolid === currentProgramData.Schoolid);
+
+      // שליפת 10 המועמדים מהטבלה השמאלית
+      const topCandidates: any[] = [];
+      if (leftApi) {
+        let count = 0;
+        leftApi.forEachNodeAfterFilterAndSort((node) => {
+          if (count < 10 && node.data) {
+            const { FirstName, LastName, City, Gender, Guideid } = node.data;
+            topCandidates.push({
+              id: Guideid,
+              Name: `${FirstName} ${LastName}`,
+              City: City || "לא צוין",
+              Gender: Gender || "לא צוין",
+            });
+            count++;
+          }
+        });
+      }
+
+      if (topCandidates.length === 0) {
+        throw new Error("לא נמצאו מועמדים בטבלה. אנא וודא שיש מועמדים מוצגים.");
+      }
+
+      const candidatesText = topCandidates.map(c => 
+        `- שם: ${c.Name}, עיר: ${c.City}, מגדר: ${c.Gender}`
+      ).join('\n');
+
+      const promptData = `
+        אני זקוק לעזרה בשיבוץ מדריך לתוכנית חינוכית.
+        
+        פרטי המוסד והתוכנית:
+        - שם בית ספר: ${currentSchool?.SchoolName || "לא צוין"}
+        - עיר: ${currentProgramData.CityName || "לא צוין"}
+        - אזור: ${currentProgramData.District || "לא צוין"}
+        - שכבה: ${currentProgramData.Grade || "לא צוין"}
+        - שם התוכנית: ${CurrentProgram.label}
+        - פרטים נוספים: ${currentProgramData.Details || "אין פרטים נוספים"}
+        
+        רשימת 10 המועמדים המובילים (לפי סינון קיים):
+        ${candidatesText}
+        
+        בבקשה ספק המלצה מקצועית:
+        1. דרג את המועמדים לפי התאמה (ציון 0-100)
+        2. הסבר את הסיבות לדירוג
+        3. תן המלצה ברורה למי לשבץ
+        
+        החזר תשובה בפורמט JSON הבא בלבד:
+        {
+          "recommendations": [
+            {
+              "name": "שם המדריך",
+              "score": 95,
+              "reason": "הסבר מפורט למה הוא מתאים"
+            }
+          ],
+          "summary": "סיכום קצר של ההמלצה הכללית"
+        }
+      `;
+
+      const response = await fetch("/api/route-placement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: promptData }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`שגיאת שרת: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setLeftAiResponse(data);
+
+    } catch (error: any) {
+      console.error("שגיאה בהתייעצות AI:", error);
+      setLeftAiError(error.message || "שגיאה לא ידועה");
+    } finally {
+      setLeftAiLoading(false);
+    }
+  }, [CurrentProgram, AllPrograms, AllSchools, leftApi]);
+
+  // 🔥 לוגיקת גרירה לחלון הצף של ה-AI השמאלי
+  useEffect(() => {
+    if (!showLeftAiModal) return;
+
+    const timer = setTimeout(() => {
+      const floatingWindow = document.querySelector('.left-ai-floating-window') as HTMLElement;
+      const header = document.querySelector('.left-ai-window-header') as HTMLElement;
+      
+      if (!floatingWindow || !header) return;
+
+      let isDragging = false;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      const onMouseDown = (e: MouseEvent) => {
+        isDragging = true;
+        offsetX = e.clientX - floatingWindow.offsetLeft;
+        offsetY = e.clientY - floatingWindow.offsetTop;
+        header.style.cursor = 'grabbing';
+      };
+
+      const onMouseMove = (e: MouseEvent) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        
+        floatingWindow.style.left = `${e.clientX - offsetX}px`;
+        floatingWindow.style.top = `${e.clientY - offsetY}px`;
+        floatingWindow.style.transform = 'none';
+      };
+
+      const onMouseUp = () => {
+        isDragging = false;
+        header.style.cursor = 'move';
+      };
+
+      header.addEventListener('mousedown', onMouseDown);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+
+      return () => {
+        header.removeEventListener('mousedown', onMouseDown);
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+      };
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [showLeftAiModal]);
+
 
   // --- onDragStop (Fixed with Unique ID) ---
   const onDragStop = useCallback(
@@ -791,7 +937,7 @@ const updateLeftTable = () => {
   const getToolBar = useCallback(() => {
     return (
       <Container fluid={true} className="p-2"> 
-        <div className="max-w-[50%] float-right flex flex-col p-2" > 
+        <div className="max-w-[33%] float-right flex flex-col p-2" > 
           <Row>
               <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </Row>
@@ -799,19 +945,27 @@ const updateLeftTable = () => {
               <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </div>
 
-          <div className="d-flex gap-2" style={{marginTop: '-38px', direction: 'rtl', justifyContent: 'flex-start', paddingRight: '100px'}}>
-            <div style={{width: '100px', position: 'relative', zIndex: 10}}>
-               <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
-            </div>
+          {/* שינוי ה-Layout של התפריטים להסרת ה-Margin השלילי ויישור נכון */}
+<div className="d-flex gap-2 flex-wrap" style={{ marginTop: '10px', direction: 'rtl', justifyContent: 'flex-start' }}>
+  <div style={{ width: '120px', position: 'relative', zIndex: 10 }}>
+     <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
+  </div>
 
-            <div style={{width: '120px', position: 'relative', zIndex: 10}}>
-               <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
-            </div>
-            
-            <div style={{width: '160px', position: 'relative', zIndex: 10}}>
-               <CustomSelectNoComp placeholder={"בחר תוכנית"} setProgram={setCurrentProgram} rightApi={rightApi} AllPrograms={AllPrograms} FilterYear={FilterYear} FilterStatus={FilterStatus} />
-            </div>
-          </div>
+  <div style={{ width: '130px', position: 'relative', zIndex: 10 }}>
+     <StatusSelect placeholder={"בחר סטטוס"} AllStatuses={AllStatuses} setFilterStatus={setFilterStatus} />
+  </div>
+  
+  <div style={{ width: '180px', position: 'relative', zIndex: 10 }}>
+     <CustomSelectNoComp 
+        placeholder={"בחר תוכנית"} 
+        setProgram={setCurrentProgram} 
+        rightApi={rightApi} 
+        AllPrograms={AllPrograms} 
+        FilterYear={FilterYear} 
+        FilterStatus={FilterStatus} 
+     />
+  </div>
+</div>
 
         </div>
 
@@ -1000,16 +1154,6 @@ const updateLeftTable = () => {
     }
   };
 
-  // --- הקוד החדש שמונע את השגיאה ---
-  if (!isClient) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh', width: '100%' }}>
-        <Spinner animation="border" variant="primary" />
-        <span className="ms-3">טוען מערכת שיבוצים...</span>
-      </div>
-    );
-  }
-
   return (
     <Suspense fallback={<div>טוען...</div>}>
       <div className="toolbar">{getToolBar()}</div>
@@ -1019,18 +1163,109 @@ const updateLeftTable = () => {
         <div className="w-1/2 border-4 border-orange-500 flex flex-col"> 
           
           <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
+  
+  <Button 
+      variant="primary" 
+      size="sm"
+      onClick={() => {
+        if (CurrentProgram.value === -1) {
+          alert("⚠️ אנא בחר תוכנית מהרשימה לפני השיבוץ");
+          return;
+        }
+        if (!SelectedRows || SelectedRows.length === 0) {
+          alert("⚠️ אנא בחר לפחות מדריך אחד לשיבוץ");
+          return;
+        }
+        
+        // שמור את המדריכים שנבחרו
+        const guidesToAssign = [...SelectedRows];
+        
+        guidesToAssign.forEach(guide => {
+          handleAssignCandidate(guide);
+          rightApi?.applyTransaction({ remove: [guide] });
+          const guideWithId = { ...guide, uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` };
+          leftApi?.applyTransaction({ add: [guideWithId] });
+        });
+        
+        // עדכן את הסטייט בפעם אחת
+        setTimeout(() => {
+          const updatedCandidates = [...(AllCandidates || [])];
+          const updatedDetails = [...(AllCandidates_Details || [])];
+          const updatedAssigned = [...(All_Assigned_Guides || [])];
+          const updatedAssignedDetails = [...(All_Assigned_Guides_Details || [])];
+          
+          guidesToAssign.forEach(guide => {
+            const exists = updatedCandidates.some(c => c.Guideid === guide.Guideid && c.Programid === CurrentProgram.value);
+            if (!exists) {
+              updatedCandidates.push({ Guideid: guide.Guideid, Programid: CurrentProgram.value, id: -1 });
+              updatedDetails.push(guide);
+            }
             
-            <input
-              type="text"
-              className="form-control"
-              placeholder="סינון..."
-              value={leftSearchText}
-              onChange={onLeftSearchChange}
-              style={{ direction: 'rtl', width: '200px', height: '35px' }}
-            />
-            
-            <h1 className="text-right m-0 text-xl font-bold"> {name_1}</h1>
-          </div>
+            // 🔥 עדכון All_Assigned_Guides - זה הקריטי לתצוגה בכרטיסיית התוכניות
+            const assignedExists = updatedAssigned.some(a => a.Guideid === guide.Guideid && a.Programid === CurrentProgram.value);
+            if (!assignedExists) {
+              updatedAssigned.push({ Guideid: guide.Guideid, Programid: CurrentProgram.value, id: -1 });
+              
+              // וודא שהמדריך לא כבר ברשימת הפרטים
+              const detailExists = updatedAssignedDetails.some(d => d.Guideid === guide.Guideid);
+              if (!detailExists) {
+                updatedAssignedDetails.push(guide);
+              }
+            }
+          });
+          
+          setAllCandidates(updatedCandidates);
+          setAllCandidates_Details(updatedDetails);
+          setAllAssignedGuides(updatedAssigned);
+          setAllAssignedGuides_Details(updatedAssignedDetails);
+          updateStorage({ Candidates: updatedCandidates });
+          
+          alert(`✅ שובצו בהצלחה ${guidesToAssign.length} מדריכים`);
+        }, 100);
+      }}
+  >
+      שיבוץ
+  </Button>
+
+  {/* 🔥 כפתור התייעצות AI חדש */}
+  <Button 
+      variant="info" 
+      size="sm"
+      onClick={handleLeftAiConsultation}
+      disabled={leftAiLoading}
+      className="d-flex align-items-center gap-2"
+      style={{ 
+        minWidth: '180px',
+        background: 'white',
+        color: '#3b82f6',
+        border: '2px solid #3b82f6',
+        fontWeight: '600'
+      }}
+  >
+      {leftAiLoading ? (
+        <>
+          <Spinner as="span" animation="border" size="sm" />
+          <span>מעבד...</span>
+        </>
+      ) : (
+        <>
+          <span style={{ fontSize: '18px' }}>✨</span>
+          התייעצות AI לשיבוץ
+        </>
+      )}
+  </Button>
+
+  <input
+    type="text"
+    className="form-control"
+    placeholder="סינון..."
+    value={leftSearchText}
+    onChange={onLeftSearchChange}
+    style={{ direction: 'rtl', width: '200px', height: '35px' }}
+  />
+  
+  <h1 className="text-right m-0 text-xl font-bold"> {name_1}</h1>
+</div>
 
           {getInnerGridCol("Left")}
         </div>
@@ -1096,6 +1331,137 @@ const updateLeftTable = () => {
           {getInnerGridCol("Right")}
         </div>
       </div>
+
+      {/* 🔥 חלון צף להתייעצות AI - צד שמאלי */}
+      {showLeftAiModal && (
+        <>
+          {/* רקע שקוף */}
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.3)',
+              zIndex: 1040,
+            }}
+            onClick={() => setShowLeftAiModal(false)}
+          />
+          
+          {/* החלון הצף */}
+          <div 
+            className="left-ai-floating-window"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '90%',
+              maxWidth: '800px',
+              maxHeight: '80vh',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+              zIndex: 1050,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* כותרת - ניתנת לגרירה */}
+            <div 
+              className="left-ai-window-header"
+              style={{
+                padding: '20px',
+                borderBottom: '2px solid #e2e8f0',
+                cursor: 'move',
+                userSelect: 'none',
+                background: '#f8f9fa',
+                borderRadius: '12px 12px 0 0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold', color: '#2d3748' }}>
+                ✨ התייעצות AI לשיבוץ מדריכים
+              </h3>
+              <button
+                onClick={() => setShowLeftAiModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#718096',
+                  padding: '0 10px',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* תוכן */}
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {leftAiLoading && (
+                <div className="text-center py-5">
+                  <Spinner animation="border" variant="primary" />
+                  <p className="mt-3" style={{ color: '#718096' }}>מעבד את הבקשה...</p>
+                </div>
+              )}
+
+              {leftAiError && (
+                <Alert variant="danger" style={{ fontSize: '0.95rem' }}>
+                  {leftAiError}
+                </Alert>
+              )}
+
+              {leftAiResponse && !leftAiLoading && (
+                <div>
+                  <div className="mb-4 p-3 bg-light rounded border">
+                    <div className="text-primary font-bold mb-2" style={{ fontSize: '1.1rem' }}>
+                      💡 סיכום המערכת:
+                    </div>
+                    <div style={{ fontSize: '1rem', color: '#555', lineHeight: '1.7' }}>
+                      {leftAiResponse.summary}
+                    </div>
+                  </div>
+
+                  <div className="d-flex flex-column gap-3">
+                    {leftAiResponse.recommendations?.map((rec: any, index: number) => (
+                      <Card key={index} className="border-0 shadow-sm" 
+                        style={{ background: index === 0 ? '#f0f9ff' : 'white' }}>
+                        <Card.Body className="p-3">
+                          <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="text-secondary" style={{ fontSize: '20px' }}>👤</span>
+                              <span className="font-bold text-dark" style={{ fontSize: '1.1rem' }}>
+                                {rec.name}
+                              </span>
+                            </div>
+                            <Badge bg={rec.score > 90 ? "success" : rec.score > 80 ? "info" : "warning"} 
+                              pill style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}>
+                              התאמה: {rec.score}%
+                            </Badge>
+                          </div>
+                          <div className="d-flex align-items-start gap-2">
+                            <span style={{ color: '#10b981', fontSize: '18px' }}>✓</span>
+                            <span style={{ fontSize: '1rem', color: '#444', lineHeight: '1.6' }}>
+                              {rec.reason}
+                            </span>
+                          </div>
+                        </Card.Body>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
     </Suspense>
   );
 } // סגירת הפונקציה PlacementTable

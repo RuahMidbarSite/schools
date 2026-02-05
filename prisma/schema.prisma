@@ -196,6 +196,7 @@ model Program {
   FreeLessonNumbers         Int? 
   AdditionalPayments        Int?  
   Details                   String?
+  msg                       String?
   Assigned_guide            String?
   ProgramName               String?
   ProgramLink               String?
@@ -317,7 +318,7 @@ Objectid String @id @default(auto()) @map("_id") @db.ObjectId
 Guideid Int?  
 Programid Int? 
 ColorHexCode String? @default("#FFFFFF")
- @@unique(fields:[Programid,Guideid])
+@@unique(fields:[Programid,Guideid])
 }
 
 model SchoolTypes {

@@ -344,3 +344,72 @@ export const getColorCandidate = async (Guideid: number, Programid: number): Pro
 
 }
 
+/**
+ * עדכון נוסח הודעה עבור תוכנית ספציפית בבסיס הנתונים
+ */
+/**
+ * עדכון נוסח הודעה עבור תוכנית ספציפית בבסיס הנתונים
+ */
+/**
+ * עדכון נוסח הודעה עבור תוכנית ספציפית בבסיס הנתונים
+ * שימוש ב-updateMany מאפשר עדכון גם כשהשדה אינו מוגדר כייחודי בפריזמה
+ */
+export const updateProgramMsg = async (Programid: number, msg: string) => {
+  "use server";
+  
+  console.log("=".repeat(50))
+  console.log("📝 updateProgramMsg נקראה")
+  console.log("📊 פרמטרים:", { Programid, msg })
+  console.log("=".repeat(50))
+  
+  try {
+    // בדיקה 1: האם התוכנית קיימת?
+    const existingProgram = await prisma.program.findFirst({
+      where: { Programid: Programid }
+    })
+    
+    if (!existingProgram) {
+      console.error("❌ תוכנית לא נמצאה:", Programid)
+      return { success: false, error: "Program not found" }
+    }
+    
+    console.log("✅ תוכנית נמצאה:", existingProgram.Programid, existingProgram.ProgramName)
+    console.log("📝 נוסח ישן:", existingProgram.msg)
+    console.log("📝 נוסח חדש:", msg)
+    
+    // בדיקה 2: עדכון
+    const result = await prisma.program.updateMany({
+      where: { 
+        Programid: Programid 
+      },
+      data: {
+        msg: msg
+      }
+    })
+    
+    console.log("📊 תוצאת updateMany:", result)
+    console.log(`✅ עודכנו ${result.count} רשומות`)
+    
+    // בדיקה 3: אימות שהעדכון עבד
+    const updatedProgram = await prisma.program.findFirst({
+      where: { Programid: Programid }
+    })
+    
+    console.log("🔍 אימות - נוסח לאחר עדכון:", updatedProgram?.msg)
+    
+    if (updatedProgram?.msg === msg) {
+      console.log("✅✅✅ העדכון הצליח! הנוסח נשמר במסד הנתונים")
+      return { success: true, count: result.count, verified: true }
+    } else {
+      console.error("❌ העדכון נכשל - הנוסח לא השתנה")
+      return { success: false, count: result.count, verified: false }
+    }
+    
+  } catch (error) {
+    console.error("❌❌❌ שגיאה חמורה ב-updateProgramMsg:")
+    console.error("Error name:", error.name)
+    console.error("Error message:", error.message)
+    console.error("Full error:", error)
+    return { success: false, error: error.message }
+  }
+};

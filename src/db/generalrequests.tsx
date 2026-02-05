@@ -322,13 +322,29 @@ export const getMessagePatterns = async (): Promise<MessagePattern[]> => {
   return patterns
 }
 
-export const addContactStatuses = async (status) => {
-  const newStatus = prisma.statusContacts.create({
-    data: {
-      StatusName: status, // Assuming "status" variable holds the value to insert
-    },
-  });
-  return newStatus
+export const addContactStatuses = async (status: string) => {
+  "use server";
+  try {
+    const existing = await prisma.statusContacts.findFirst({
+      where: { StatusName: status }
+    });
+    
+    if (existing) return existing;
+
+    const allStatuses = await prisma.statusContacts.findMany();
+    const maxId = allStatuses.length > 0 ? Math.max(...allStatuses.map((s: any) => s.StatusId)) : 0;
+
+    const newStatus = await prisma.statusContacts.create({
+      data: {
+        StatusId: maxId + 1,
+        StatusName: status, 
+      },
+    });
+    return newStatus;
+  } catch (error) {
+    console.error('Error adding contact status:', error);
+    return null;
+  }
 }
 
 export const deletePattern = async (Id) => {
@@ -613,22 +629,24 @@ export const updateSchoolStatus = async (status: string, schoolIds: any[]) => {
 export const addSchoolStatuses = async (status: string) => {
   "use server";
   try {
-    // בדיקה אם קיים כבר כדי למנוע כפילויות
     const existing = await prisma.statusSchools.findFirst({
       where: { StatusName: status }
     });
     
     if (existing) return existing;
 
+    const allStatuses = await prisma.statusSchools.findMany();
+    const maxId = allStatuses.length > 0 ? Math.max(...allStatuses.map((s: any) => s.StatusId)) : 0;
+
     const newStatus = await prisma.statusSchools.create({
       data: {
+        StatusId: maxId + 1,
         StatusName: status,
       },
     });
     return newStatus;
   } catch (error) {
     console.error('Error adding school status:', error);
-    // לא זורקים שגיאה קריטית כדי לא לעצור את התהליך אם הסטטוס כבר קיים
     return null; 
   }
 }

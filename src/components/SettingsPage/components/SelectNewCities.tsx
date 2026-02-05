@@ -73,48 +73,51 @@ export const SelectNewCities = ({ Cities, setCities }: CityTypeSelect) => {
         if (selectRef.current) selectRef.current.focus();
     }, [Key]);
 
-    // --- הפונקציה המעודכנת למניעת כפילויות ---
-    const onCityUploadClick = useCallback(async () => {
-        // מניעת ריצה אם כבר מתבצעת שליחה או אם אין בחירה
-        if (isSubmitting || selectedOptions.length === 0 || !AllData) return;
+   const onCityUploadClick = useCallback(async () => {
+    if (isSubmitting || selectedOptions.length === 0 || !AllData) return;
 
-        setIsSubmitting(true); // נעילת הכפתור
+    setIsSubmitting(true);
 
-        try {
-            const dataIDs = selectedOptions.map((val) => val.value);
-            
-            // סינון כפול: מוודאים שהעיר לא קיימת כבר ב-State המקומי למקרה של חוסר סנכרון
-            const existingIds = citiesState.map(c => c.CityCode);
-            const citiesToAdd = AllData.filter((val) => 
-                dataIDs.includes(val['סמל ישוב']) && !existingIds.includes(val['סמל ישוב'])
-            );
+    try {
+        const dataIDs = selectedOptions.map((val) => val.value);
+        const existingIds = citiesState.map(c => c.CityCode);
+        
+        // 1. מציאת ה-Cityid הכי גבוה הקיים כרגע
+        const maxCityId = citiesState.length > 0 
+            ? Math.max(...citiesState.map(c => c.Cityid || 0)) 
+            : 0;
 
-            if (citiesToAdd.length === 0) {
-                // אם הכל כבר קיים, רק מנקים את הבחירה
-                setSelectedOptions([]);
-                setOpen(false);
-                return;
-            }
+        // 2. הכנת האובייקטים להוספה עם ID סידורי
+        const citiesToAdd = AllData
+            .filter((val) => dataIDs.includes(val['סמל ישוב']) && !existingIds.includes(val['סמל ישוב']))
+            .map((val, index) => ({
+                CityName: val['תיאור ישוב'],
+                CityCode: val['סמל ישוב'],
+                // כל עיר מקבלת את ה-ID הבא בתור
+                Cityid: maxCityId + index + 1 
+            }));
 
-            // שליחה לשרת
-            const { Cities: updatedCities } = await AddCitiesDistances(citiesState, citiesToAdd, []);
-            
-            // עדכון ה-State
-            if (setCities) setCities(updatedCities);
-            setCitiesState(updatedCities);
-
-            // איפוס
+        if (citiesToAdd.length === 0) {
             setSelectedOptions([]);
             setOpen(false);
-
-        } catch (error) {
-            console.error("Failed to add cities:", error);
-            alert("אירעה שגיאה בהוספת העיר");
-        } finally {
-            setIsSubmitting(false); // שחרור הכפתור בכל מקרה
+            return;
         }
 
-    }, [AllData, citiesState, selectedOptions, setCities, isSubmitting]);
+        // 3. שליחה לשרת (הפונקציה AddCitiesDistances צריכה לתמוך בקבלת Cityid)
+        const { Cities: updatedCities } = await AddCitiesDistances(citiesState, citiesToAdd, []);
+        
+        if (setCities) setCities(updatedCities);
+        setCitiesState(updatedCities);
+        setSelectedOptions([]);
+        setOpen(false);
+
+    } catch (error) {
+        console.error("Failed to add cities:", error);
+        alert("אירעה שגיאה בהוספת העיר");
+    } finally {
+        setIsSubmitting(false);
+    }
+}, [AllData, citiesState, selectedOptions, setCities, isSubmitting]);
 
     const handleChange = useCallback((selectedOption: { value: number, label: string }[] | null) => {
         setSelectedOptions(selectedOption || []);

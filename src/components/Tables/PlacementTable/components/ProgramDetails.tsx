@@ -2,6 +2,8 @@ import { useMemo, useEffect } from "react";
 import { Program, School, Guide } from "@prisma/client";
 import styles from "./ProgramModule.module.css";
 
+// הוסר הייבוא של SendMessagesBox כי הוא כבר קיים במקום אחר בדף
+
 type ProgramDetailsProps = {
    CurrentProgram: { label: string, value: number };
    AllPrograms: Program[];
@@ -27,8 +29,6 @@ export const ProgramDetails = ({
       if (!program) {
          program = AllPrograms.find(p => (p as any).id === CurrentProgram.value);
       }
-      
-      console.log("🔍 Found Program:", program);
       return program;
    }, [AllPrograms, CurrentProgram.value]);
 
@@ -39,11 +39,6 @@ export const ProgramDetails = ({
       if (!school && (currentProgramData as any).schoolId) {
          school = AllSchools.find(s => s.Schoolid === (currentProgramData as any).schoolId);
       }
-      if (!school && (currentProgramData as any).school_id) {
-         school = AllSchools.find(s => s.Schoolid === (currentProgramData as any).school_id);
-      }
-      
-      console.log("🏫 Found School:", school);
       return school;
    }, [AllSchools, currentProgramData]);
 
@@ -56,21 +51,10 @@ export const ProgramDetails = ({
          .filter(ag => ag.Programid === CurrentProgram.value)
          .map(ag => ag.Guideid);
       
-      const guidesForCurrentProgram = All_Assigned_Guides_Details.filter(guide => 
+      return All_Assigned_Guides_Details.filter(guide => 
          currentProgramGuideIds.includes(guide.Guideid)
       );
-      
-      console.log("👥 Displaying Guides:", guidesForCurrentProgram);
-      return guidesForCurrentProgram;
    }, [All_Assigned_Guides, All_Assigned_Guides_Details, CurrentProgram.value]);
-
-   useEffect(() => {
-      if (currentProgramData) {
-         console.log("📊 ProgramDetails - Current Program:", currentProgramData);
-         console.log("📊 ProgramDetails - Current School:", currentSchool);
-         console.log("📊 ProgramDetails - Assigned Guides:", displayedGuides);
-      }
-   }, [currentProgramData, currentSchool, displayedGuides]);
 
    const handleRemoveClick = (guideId: number) => {
       if (onRemoveGuide && window.confirm("האם אתה בטוח שברצונך להסיר את המדריך משיבוץ זה?")) {
@@ -87,14 +71,6 @@ export const ProgramDetails = ({
       );
    }
 
-   // 🔥 שימוש בשדות הנכונים מהבסיס נתונים
-   const programName = CurrentProgram.label || currentProgramData.ProgramName || "לא צוין";
-   const schoolName = currentSchool?.SchoolName || currentSchool?.name || "לא צוין";
-   const grade = currentProgramData.Grade || currentSchool?.EducationStage || "לא צוין";
-   const city = currentProgramData.CityName || currentSchool?.City || "לא צוין";
-   const district = currentProgramData.District || "לא צוין";
-   const weeksNumber = currentProgramData.WeeksNumber || currentProgramData.Weeks || "לא צוין";
-
    return (
       <div className={styles.programDetailsContainer}>
          <div className={styles.cardInnerTitle}>כרטיסיית תוכניות</div>
@@ -105,19 +81,19 @@ export const ProgramDetails = ({
                   <span className={styles.itemIcon}>📘</span>
                   <span className={styles.itemLabelText}>תוכנית</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{programName}</span>
+                  <span className={styles.itemValue}>{currentProgramData.ProgramName || "לא צוין"}</span>
                </div>
                <div className={styles.programCardItem}>
                   <span className={styles.itemIcon}>🎓</span>
                   <span className={styles.itemLabelText}>שכבה</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{grade}</span>
+                  <span className={styles.itemValue}>{currentProgramData.Grade || "לא צוין"}</span>
                </div>
                <div className={styles.programCardItem}>
                   <span className={styles.itemIcon}>🏠</span>
                   <span className={styles.itemLabelText}>יישוב</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{city}</span>
+                  <span className={styles.itemValue}>{currentProgramData.CityName || "לא צוין"}</span>
                </div>
             </div>
 
@@ -126,38 +102,31 @@ export const ProgramDetails = ({
                   <span className={styles.itemIcon}>📅</span>
                   <span className={styles.itemLabelText}>שבועות</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{weeksNumber}</span>
+                  <span className={styles.itemValue}>{currentProgramData.WeeksNumber || "לא צוין"}</span>
                </div>
                <div className={styles.programCardItem}>
                   <span className={styles.itemIcon}>📍</span>
                   <span className={styles.itemLabelText}>אזור</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{district}</span>
+                  <span className={styles.itemValue}>{currentProgramData.District || "לא צוין"}</span>
                </div>
             </div>
          </div>
 
-         {/* 🔥 סקציית מדריכים - המספר עכשיו מימין */}
          <div className={styles.guidesSection}>
             <div className={styles.guidesSectionTitle}>מדריכים</div>
             {displayedGuides.length > 0 ? (
                <div className={styles.assignedGuidesInline}>
                   {displayedGuides.map((guide, index) => (
                      <div key={guide.Guideid || index} className={styles.guideItemInline}>
-                        {/* 🔥 המספר - מימין */}
                         <span className={styles.guideBadgeInline}>{index + 1}</span>
-                        
-                        {/* 🔥 השם - באמצע */}
                         <span className={styles.guideNameInline}>
                            {guide.FirstName} {guide.LastName}
                         </span>
-                        
-                        {/* 🔥 כפתור X - משמאל */}
                         {onRemoveGuide && (
                            <button 
                               className={styles.removeGuideButton}
                               onClick={() => handleRemoveClick(guide.Guideid)}
-                              title="הסר מדריך"
                            >
                               ✖
                            </button>
@@ -176,6 +145,8 @@ export const ProgramDetails = ({
                {currentProgramData.Details || currentProgramData.Notes || "אין פרטים נוספים"}
             </div>
          </div>
+         
+         {/* הוסר החלק של שליחת הודעות מפה כדי למנוע כפילות */}
       </div>
    );
 };

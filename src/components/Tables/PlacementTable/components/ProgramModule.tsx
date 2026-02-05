@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { Col, Row } from "react-bootstrap";
 import ProgramModal from "./CustomProgramModal";
@@ -282,36 +284,6 @@ export const ProgramModule = ({
                   />
                </div>
 
-               <div className={styles.actionButtonsCard}>
-                  <div className={styles.actionButtonsContainer}>
-                     <AssignGuides
-                        CurrentProgram={CurrentProgram}
-                        LeftGridApi={LeftGridApi}
-                        setChosenCandidate={setChosenCandidate}
-                        setAllAssignedGuides={setAllAssignedGuides}
-                        setAllAssignedGuides_Details={setAllAssignedGuides_Details}
-                     />
-                     
-                     {/* 🔥 כפתור AI החדש - כעת פועל! */}
-                     <button 
-                        className={styles.aiButtonNew}
-                        onClick={handleAiConsultation}
-                        disabled={CurrentProgram.value === -1 || aiLoading}
-                     >
-                        {aiLoading ? (
-                           <>
-                              <Spinner as="span" animation="border" size="sm" />
-                              <span>מעבד...</span>
-                           </>
-                        ) : (
-                           <>
-                              <span className={styles.aiButtonIcon}>✨</span>
-                              התייעצות AI לשיבוץ
-                           </>
-                        )}
-                     </button>
-                  </div>
-               </div>
 
                {/* 🔥 חלון צף פשוט לתוצאות AI */}
                {showAiModal && (
@@ -445,25 +417,23 @@ export const ProgramModule = ({
             </div>
          </Col>
 
-         {/* עמודה ימנית - שליחת הודעות */}
-         <Col xs={12} md={12} lg={4}>
-            <div className={styles.rightColumn}>
-               <div className={styles.sectionTitle}>
-                  💬 שליחת הודעות
-               </div>
-               
-               <div className={styles.messageCard}>
-                  <div className={styles.messageCardTitle}>
-                     <span>📧</span>
-                     {TitleMessage}
-                  </div>
-                  <SendMessagesBox 
-                     Inner_SelectedRows={SelectedRows} 
-                     LeftGridApi={LeftGridApi} 
-                  />
-               </div>
-            </div>
-         </Col>
+        {/* עמודה ימנית - שליחת הודעות */}
+<Col xs={12} md={12} lg={4}>
+   <div className={styles.rightColumn}>
+      <div className={styles.sectionTitle}>
+         💬 שליחת הודעות
+      </div>
+      
+      <div className={styles.messageCard}>
+   {/* הוספנו בדיקה AllPrograms? כדי למנוע את שגיאת ה-undefined */}
+   <SendMessagesBox 
+      Inner_SelectedRows={SelectedRows} 
+      LeftGridApi={LeftGridApi} 
+      currentProgramData={AllPrograms?.find(p => p.Programid === CurrentProgram.value)}
+   />
+</div>
+   </div>
+</Col>
 
          {/* 🔥 CustomProgramModal מוסתר אבל פעיל - לשיבוץ מדריכים */}
          <div style={{ display: 'none' }}>
