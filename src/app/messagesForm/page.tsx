@@ -412,19 +412,46 @@ export default function MessagesPage() {
   const handleContactStatusesSelectionChange = (selected: string[]) => { setSelectedContactStatuses(selected); };
   const handleSchoolStatusesSelectionChange = (selected: React.SetStateAction<never[]>) => { setSelectedSchoolStatuses(selected); };
 
-  const handlePatternChange = (selected: any) => {
+  const handlePatternChange = async (selected: any) => {
     if (selected === null) {
       clearPattern();
       return;
     }
     setSelectedOption(selected);
     const selectedObject = patterns.find(option => option.PatternId === selected.value);
+    
     if (selectedObject) {
-      setPatternTitle(selectedObject.Caption)
-      setMsg1(selectedObject.Message1)
-      setMsg2(selectedObject.Message2)
+      setPatternTitle(selectedObject.Caption);
+      setMsg1(selectedObject.Message1);
+      setMsg2(selectedObject.Message2);
       setFileName(selectedObject.File);
-      setSelectedPattern(patterns.find(pattern => pattern.PatternId === selected.value));
+      setSelectedPattern(selectedObject);
+
+      // --- לוגיקת טעינת הקובץ מחדש ---
+      if (selectedObject.File) {
+        try {
+          // נתיב הקובץ בשרת - וודא שהנתיב תואם להגדרות ה-BackEnd שלך
+          const fileUrl = `/api/uploads/${selectedObject.PatternId}_${selectedObject.File}`;
+          
+          const response = await fetch(fileUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            // המרה חזרה לאובייקט File כדי שהשליחה תזהה אותו
+            const file = new File([blob], selectedObject.File, { type: blob.type });
+            setAddedFile(file);
+            console.log("✅ הקובץ נטען בהצלחה מהשרת");
+          } else {
+            console.error("❌ לא ניתן היה למשוך את הקובץ מהשרת");
+            setAddedFile(null);
+          }
+        } catch (error) {
+          console.error("Error fetching pattern file:", error);
+          setAddedFile(null);
+        }
+      } else {
+        setAddedFile(null);
+      }
+      // -------------------------------
     }
   };
 
@@ -439,41 +466,87 @@ export default function MessagesPage() {
   }
 
   const addPatternHandler = async () => {
-    if (patternTitle !== "") {
-      let fileName = "";
-      if (addedFile !== null) {
-        fileName = addedFile.name;
-      }
-      setFileName(fileName);
-      const id = patterns.length + 1;
-      Promise.all([addPattern(id, patternTitle, msg1, msg2, fileName), savePatternFile(id, addedFile)]).then(([new_pattern, add_file_result]) => {
-        setPatterns(prevPatterns => [...prevPatterns, new_pattern]);
-        if (new_pattern.PatternId && new_pattern.Caption) {
-          setOptions(prevOptions => [
-            ...prevOptions,
-            { value: new_pattern.PatternId, label: new_pattern.Caption }
-          ]);
-        }
-      })
-      clearPattern();
-    } else {
+    if (patternTitle === "") {
       alert("יש להזין כותרת לתבנית");
+      return;
+    }
+
+    let fileName = addedFile ? addedFile.name : "";
+    setFileName(fileName);
+
+    // --- תיקון: חישוב ID חדש על בסיס הערך הגבוה ביותר הקיים ---
+    const maxId = patterns.length > 0 
+      ? Math.max(...patterns.map(p => p.PatternId || 0)) 
+      : 0;
+    const nextId = maxId + 1;
+    // --------------------------------------------------------
+
+    try {
+      // 1. שמירה בבסיס הנתונים עם ה-ID הייחודי החדש
+      const new_pattern = await addPattern(nextId, patternTitle, msg1, msg2, fileName);
+
+      // 2. שמירת הקובץ הפיזי בשרת הווצאפ
+      if (addedFile) {
+        await savePatternFile(new_pattern.PatternId || nextId, addedFile);
+      }
+
+      // 3. עדכון הסטורג' המקומי (פותר את הצורך במחיקה ידנית)
+      const currentData = await getFromStorage();
+      const updatedPatterns = [...(currentData.messagePatterns || []), new_pattern];
+      await updateStorage({
+        ...currentData,
+        messagePatterns: updatedPatterns
+      });
+
+      // 4. עדכון התצוגה (UI) בזמן אמת
+      setPatterns(updatedPatterns);
+      setOptions(updatedPatterns.map(p => ({ value: p.PatternId, label: p.Caption })));
+
+      clearPattern();
+      alert("התבנית נשמרה וסונכרנה בהצלחה! ✅");
+    } catch (error) {
+      console.error("❌ שגיאה בשמירת התבנית:", error);
+      alert("שגיאה: ייתכן והמזהה כבר קיים. נסה שוב.");
     }
   };
 
-  const handleDeletePattern = () => {
-    const newOptions = options.filter(option => option != selectedOption)
-    const newPatterns = patterns.filter(pattern => pattern != selectedPattern);
-    Promise.all([deletePattern(selectedPattern.PatternId), deletePatternFile(selectedPattern.PatternId)]).then((res) => {
-      console.log(res)
-    })
-    setSelectedOption(null);
-    setSelectedPattern(null);
-    setOptions(newOptions);
-    setPatterns(newPatterns);
-    clearPattern();
-  }
+  const handleDeletePattern = async () => {
+    if (!selectedPattern) {
+      alert("אנא בחר תבנית למחיקה");
+      return;
+    }
 
+    if (window.confirm(`האם אתה בטוח שברצונך למחוק את התבנית: ${selectedPattern.Caption}?`)) {
+      try {
+        // 1. מחיקה מה-DB ומהשרת (קובץ)
+        await Promise.all([
+          deletePattern(selectedPattern.PatternId),
+          deletePatternFile(selectedPattern.PatternId)
+        ]);
+
+        // 2. עדכון הסטורג' המקומי (IndexedDB) - כדי שלא תצטרך למחוק סטורג' ידנית
+        const currentData = await getFromStorage();
+        const updatedPatterns = (currentData.messagePatterns || []).filter(
+          (p: any) => p.PatternId !== selectedPattern.PatternId
+        );
+        
+        await updateStorage({
+          ...currentData,
+          messagePatterns: updatedPatterns
+        });
+
+        // 3. עדכון ה-UI בזמן אמת
+        setPatterns(updatedPatterns);
+        setOptions(updatedPatterns.map(p => ({ value: p.PatternId, label: p.Caption })));
+        
+        clearPattern();
+        alert("התבנית נמחקה בהצלחה! 🗑️");
+      } catch (error) {
+        console.error("Error deleting pattern:", error);
+        alert("שגיאה במחיקת התבנית");
+      }
+    }
+  };
   const handleIsRepChange = (value) => { setIsRep(value); };
 
   const handleSchoolAmountChange = (e) => {

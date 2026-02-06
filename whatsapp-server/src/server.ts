@@ -66,7 +66,18 @@ const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDirectory),
   filename: (req, file, cb) => {
     const PatternID = req.params.id;
-    cb(null, file.fieldname + "-" + PatternID + path.extname(file.originalname));
+    
+    // ניסיון לתיקון קידוד עברית (למניעת ג'יבריש)
+    let originalName = file.originalname;
+    try {
+        // המרה מ-Latin1 ל-UTF8 פותרת לרוב בעיות עברית ב-Multer
+        originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    } catch (e) {
+        // אם ההמרה נכשלת, נשאר עם השם המקורי
+    }
+
+    // בניית שם הקובץ: file-15-שם_מקורי.pdf
+    cb(null, `file-${PatternID}-${originalName}`);
   },
 });
 
@@ -110,6 +121,33 @@ app.get("/status", async (req: Request, res: Response) => {
     return res.status(500).json({ connected: false, error: String(err) });
   }
 });
+
+// --- קוד חדש: מאפשר לאפליקציה למשוך את קובץ התבנית מהשרת המקומי ---
+app.get("/GetPatternFile/:id", (req: Request, res: Response) => {
+  const patternId = req.params.id;
+  const directoryPath = path.join(__dirname, "uploads");
+  
+  try {
+    if (!fs.existsSync(directoryPath)) {
+        return res.status(404).send("Uploads directory not found");
+    }
+    const files = fs.readdirSync(directoryPath);
+    // מחפש קובץ שמתחיל במזהה התבנית
+    const fileName = files.find(f => f.startsWith(`file-${patternId}`));
+
+    if (fileName) {
+      const filePath = path.join(directoryPath, fileName);
+      // שליחת הקובץ להורדה עם שמו המקורי
+      res.download(filePath, fileName.split('-').slice(2).join('-') || fileName);
+    } else {
+      res.status(404).send("File not found");
+    }
+  } catch (error) {
+    console.error("Error in GetPatternFile:", error);
+    res.status(500).send("Error accessing files");
+  }
+});
+// --- סוף קוד חדש ---
 
 // 🆕 GetQR endpoint - משופר להחזיר QR מהזיכרון
 app.get("/GetQR", async (req: Request, res: Response) => {
@@ -284,14 +322,19 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
           console.log("✅ Found pattern file:", found_file);
           const filePath = path.join(uploadDirectory, found_file);
           const multerFile = createMulterFileObject(filePath);
+
+          // --- תיקון: ניקוי הקידומת 'file-15-' מהשם ---
+          // אנחנו מפצלים לפי מקפים, ומחברים מחדש החל מהחלק השלישי (אחרי file ואחרי ה-ID)
+          const cleanFileName = found_file.split('-').slice(2).join('-');
+          // ---------------------------------------------
           
           const media = new MessageMedia(
             multerFile.mimetype || 'image/png',
             multerFile.buffer.toString("base64"),
-            multerFile.originalname
+            cleanFileName // שולחים את השם הנקי בלבד!
           );
           
-          console.log("📤 Sending pattern file...");
+          console.log(`📤 Sending pattern file as: ${cleanFileName}`);
           const response = await client.sendMessage(chatId, media, {
             sendSeen: false
           });
