@@ -389,8 +389,44 @@ app.delete("/DeletePatternFile/:PatternID", (req, res) => {
     return res.status(404).json({ status: "Error" });
 });
 
+// --- הוסף את הפונקציה הזו לקראת סוף הקובץ ---
+const startRealTimeListeners = async () => {
+  console.log("🎧 Attaching real-time listeners...");
+  try {
+    // משיג את הלקוח הקיים או יוצר חדש
+    const client = await GetClientOrInitialize();
+
+    // 1. מאזין לשינויי מצב (כמו חיבור/ניתוק אינטרנט זמני)
+    client.on('change_state', (state) => {
+      console.log('🔄 WhatsApp State Changed:', state);
+    });
+
+    // 2. מאזין לניתוק יזום (Log out מהטלפון) - זה התיקון הקריטי!
+    client.on('disconnected', async (reason) => {
+      console.log('❌ WhatsApp Disconnected!', reason);
+      console.log('🧹 Resetting client session to update status...');
+      
+      // איפוס הלקוח יגרום ל-Status להחזיר false בפעם הבאה
+      try {
+        await resetClient(); 
+        console.log('✅ Client reset successfully.');
+      } catch (err) {
+        console.error('⚠️ Error resetting client:', err);
+      }
+    });
+
+    console.log("✅ Real-time listeners attached successfully.");
+  } catch (err) {
+    console.error("❌ Failed to attach listeners:", err);
+  }
+};
+
+// --- עדכן את ה-app.listen בסוף הקובץ כך שיקרא לפונקציה ---
 app.listen(port, '0.0.0.0', () => {
   console.log(`\n🚀 WhatsApp Server is LIVE on port: ${port}`);
   console.log(`🌐 Access via ngrok for Vercel`);
   console.log(`⏰ Startup time: ${new Date().toISOString()}\n`);
+
+  // 🔥 הפעלת המאזינים עם עליית השרת
+  startRealTimeListeners();
 });

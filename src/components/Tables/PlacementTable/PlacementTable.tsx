@@ -82,6 +82,10 @@ const releventFieldsRight: string[] = ["WhatsApp", "LastName", "CV", "City", "Ar
 const releventFieldsLeft: string[] = releventFieldsRight;
 
 export default function PlacementTable() {
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
   console.log("PlacementTable Loaded");
 
   const [leftApi, setLeftApi] = useState<GridApi | null>(null);
@@ -1153,7 +1157,7 @@ const updateLeftTable = () => {
       leftApi.setGridOption('quickFilterText', value);
     }
   };
-
+if (!isMounted) return null;
   return (
     <Suspense fallback={<div>טוען...</div>}>
       <div className="toolbar">{getToolBar()}</div>

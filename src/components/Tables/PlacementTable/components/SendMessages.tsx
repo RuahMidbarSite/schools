@@ -3,6 +3,8 @@ import { updateProgramMsg } from "@/db/instructorsrequest"
 import { Guide, Program } from "@prisma/client"
 import { GridApi } from "ag-grid-community"
 import { useCallback, useState, useEffect } from "react"
+// ייבוא פונקציות ה-Storage כדי לסנכרן את הנתונים לאחר השמירה
+import { getFromStorage, updateStorage } from "@/components/Tables/PlacementTable/Storage/PlacementDataStorage";
 
 type Data = {
   Inner_SelectedRows: Guide[] | undefined,
@@ -13,52 +15,92 @@ type Data = {
 const SendMessagesBox = ({ Inner_SelectedRows, LeftGridApi, currentProgramData }: Data) => {
   const [inputValue, setInputValue] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [isSending, setIsSending] = useState(false) // אינדיקציה למצב שליחה
 
- useEffect(() => {
+  // טעינת הנוסח מה-DB ברגע שבוחרים תוכנית
+  useEffect(() => {
     if (currentProgramData) {
-      // כעת השדה msg אמור להיות מזוהה בזכות ה-generate המוצלח
       setInputValue(currentProgramData.msg || "");
-      console.log("📥 נטען נוסח עבור תוכנית:", currentProgramData.Programid);
     } else {
       setInputValue("");
     }
   }, [currentProgramData]);
 
-  const onClickSend = useCallback(() => {
-    const promises = []
-    if (Inner_SelectedRows && Inner_SelectedRows.length > 0) {
-      for (const guide of Inner_SelectedRows) {
-        const phone: string = guide.CellPhone || ""
-        if (phone) {
-          promises.push(sendMessageViaWhatsApp(inputValue, undefined, undefined, phone, "972", undefined))
-        }
-      }
-      
-      Promise.all(promises).then((results) => {
-        alert("ההודעות נשלחו בהצלחה");
-        if (LeftGridApi) LeftGridApi.deselectAll();
-      }).catch(err => console.error("שגיאה בשליחה:", err));
-    } else {
+  // פונקציית שליחה הכוללת בדיקת חיבור ל-WhatsApp והתאמה אישית של השם
+  const onClickSend = useCallback(async () => {
+    if (!Inner_SelectedRows || Inner_SelectedRows.length === 0) {
       alert("לא נבחרו מדריכים למשלוח");
+      return;
     }
-  }, [Inner_SelectedRows, LeftGridApi, inputValue])
 
+    // 1. בדיקת חיבור ל-WhatsApp מול השרת (בדיוק כמו בדף ההודעות)
+    try {
+      const statusRes = await fetch('http://localhost:3994/status');
+      const statusData = await statusRes.json();
+      
+      if (!statusData.connected) {
+        alert("נדרש חיבור ל-WhatsApp! אנא וודא שהכפתור בסרגל העליון ירוק (סרוק QR במידת הצורך).");
+        return;
+      }
+    } catch (err) {
+      alert("שגיאה בתקשורת עם שרת ה-WhatsApp. וודא שהוא פועל.");
+      return;
+    }
+
+    setIsSending(true);
+    const promises = []
+    
+    for (const guide of Inner_SelectedRows) {
+      const phone: string = guide.CellPhone || ""
+      if (phone) {
+        // 2. התאמה אישית: החלפת {name} בשם הפרטי של המדריך
+        const personalizedMsg = inputValue.replace(/{name}/g, guide.FirstName || "");
+        
+        promises.push(sendMessageViaWhatsApp(personalizedMsg, undefined, undefined, phone, "972", undefined))
+      }
+    }
+    
+    try {
+      await Promise.all(promises);
+      alert("ההודעות המותאמות אישית נשלחו בהצלחה");
+      if (LeftGridApi) LeftGridApi.deselectAll();
+    } catch (err) {
+      console.error("שגיאה בתהליך השליחה:", err);
+      alert("חלק מההודעות לא נשלחו. בדוק את חיבור הווצאפ.");
+    } finally {
+      setIsSending(false);
+    }
+  }, [Inner_SelectedRows, LeftGridApi, inputValue]);
+
+  // פונקציית שמירה המעדכנת גם את ה-DB וגם את ה-Storage המקומי
   const onSaveMsg = useCallback(async () => {
-    // בדיקה קריטית: האם התוכנית עברה לקומפוננטה
     if (!currentProgramData?.Programid) {
-      console.error("❌ שגיאה: currentProgramData חסר או לא מכיל Programid");
-      alert("לא ניתן לשמור: לא נבחרה תוכנית או שהנתונים לא עברו כראוי");
+      alert("לא ניתן לשמור: לא נבחרה תוכנית");
       return;
     }
 
     setIsSaving(true);
     try {
-      console.log(`💾 מנסה לשמור נוסח לתוכנית ${currentProgramData.Programid}...`);
+      // 1. עדכון בבסיס הנתונים
       await updateProgramMsg(currentProgramData.Programid, inputValue);
-      alert("✅ הנוסח נשמר בהצלחה במסד הנתונים");
+
+      // 2. עדכון ה-Storage המקומי (פותר את בעיית הרענון)
+      const currentCache = await getFromStorage();
+      if (currentCache && currentCache.Programs) {
+        const updatedPrograms = currentCache.Programs.map((p: any) => 
+          p.Programid === currentProgramData.Programid ? { ...p, msg: inputValue } : p
+        );
+        
+        await updateStorage({ 
+          ...currentCache, 
+          Programs: updatedPrograms 
+        });
+      }
+
+      alert("✅ הנוסח נשמר בהצלחה בבסיס הנתונים ובמטמון המקומי");
     } catch (error) {
-      console.error("❌ שגיאה בשמירת הנוסח:", error);
-      alert("נכשלה שמירת הנוסח. וודא שהוספת את שדה msg ל-Schema והרצת generate");
+      console.error("שגיאה בשמירה:", error);
+      alert("נכשלה שמירת הנוסח.");
     } finally {
       setIsSaving(false);
     }
@@ -76,7 +118,7 @@ const SendMessagesBox = ({ Inner_SelectedRows, LeftGridApi, currentProgramData }
       <textarea
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        placeholder="רשום הודעה לשמירה כשבלונה..."
+        placeholder="רשום הודעה לשמירה. השתמש ב-{name} לשם פרטי..."
         style={{
           flex: 1,
           width: '100%',
@@ -103,9 +145,10 @@ const SendMessagesBox = ({ Inner_SelectedRows, LeftGridApi, currentProgramData }
         <button
           className="bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded border-b-4 border-blue-700"
           onClick={onClickSend}
-          style={{ flex: 1 }}
+          disabled={isSending} // נטרול הכפתור בזמן שליחה
+          style={{ flex: 1, opacity: isSending ? 0.7 : 1 }}
         >
-          שלח הודעה
+          {isSending ? "שולח..." : "שלח הודעה"}
         </button>
       </div>
     </div>
