@@ -330,18 +330,30 @@ export const removeAllColorsCandidatesByProgramids = async (Programids: number[]
 }
 
 export const getColorCandidate = async (Guideid: number, Programid: number): Promise<{ Guideid: number, Programid: number, ColorHexCode: string }> => {
+  // 1. הגנה: אם אחד המזהים חסר או לא תקין, נחזיר לבן בלי ליצור רשומה ב-DB
+  if (!Programid || Programid <= 0 || !Guideid || Guideid <= 0) {
+    return { Guideid, Programid, ColorHexCode: "#FFFFFF" };
+  }
 
-  return prisma.colorCandidate.findFirst({ where: { Guideid: Guideid, Programid: Programid } }).then((res) => {
+  try {
+    const res = await prisma.colorCandidate.findFirst({ 
+      where: { Guideid: Guideid, Programid: Programid } 
+    });
 
+    // 2. אם לא נמצאה רשומה, נחזיר צבע לבן כברירת מחדל לאפליקציה במקום ליצור רשומה חדשה
     if (res === null) {
-      prisma.colorCandidate.create({ data: { Guideid: Guideid, Programid: Programid } }).then((val) => { return { Guideid: Guideid, Programid: Programid, ColorHexCode: "#FFFFFF" } });
+      return { Guideid, Programid, ColorHexCode: "#FFFFFF" };
     }
-    return { Guideid: res.Guideid, Programid: res.Programid, ColorHexCode: res.ColorHexCode };
 
-  })
-
-
-
+    return { 
+      Guideid: res.Guideid, 
+      Programid: res.Programid, 
+      ColorHexCode: res.ColorHexCode 
+    };
+  } catch (error) {
+    console.error("Error in getColorCandidate:", error);
+    return { Guideid, Programid, ColorHexCode: "#FFFFFF" };
+  }
 }
 
 /**

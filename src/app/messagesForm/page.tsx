@@ -44,6 +44,7 @@ import { title } from "process";
 import { deletePatternFile, savePatternFile, sendMessageViaWhatsApp } from "@/db/whatsapprequests";
 import { DataType, getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
 import { updateStorage as updateSchoolStorage } from "@/components/Tables/SchoolTable/Storage/SchoolDataStorage";
+import { MessageMonitor } from "./MessageMonitor";
 import { getSmartMessageDelay, formatDelayMessage, estimateRemainingTime } from './utils/delayUtils';
 
 export type FilterOptions = {
@@ -119,6 +120,9 @@ export default function MessagesPage() {
   const [options, setOptions] = useState<{ value: number; label: string }[]>([]);
   const [newStatus, setNewStatus] = useState<any>("");
   const [schoolAmount, setSchoolAmount] = useState(0);
+  const [showMonitor, setShowMonitor] = useState(false);
+  const [delayHistory, setDelayHistory] = useState<{delay: number, type: string}[]>([]);
+  const [estimatedFinish, setEstimatedFinish] = useState("");
   const [schoolAmountError, setSchoolAmountError] = useState(false);
   const [newStatusError, setNewStatusError] = useState(false);
   const [sendingStats, setSendingStats] = useState({ success: 0, missing: 0, error: 0 });
@@ -914,14 +918,35 @@ gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'sta
                       // ========================================
                       // 🎲 DELAY חכם לפני ההודעה הבאה
                       // ========================================
-                      if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
-                        const delay = getSmartMessageDelay(contactsToSend.length, index);
-                        const formattedDelay = formatDelayMessage(delay);
-                        const remaining = estimateRemainingTime(contactsToSend.length, index);
-                        
-                        console.log(`⏳ Waiting ${formattedDelay} before next message... (Est. remaining: ${remaining})`);
-                        await sleep(delay);
-                      }
+                      // ========================================
+// ========================================
+// 🎲 ניטור ומדידת זמן המתנה אמיתי
+// ========================================
+if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
+    const startTime = Date.now(); // תחילת מדידת זמן אמת
+    
+    // שליפת הנתונים מתוך delayUtils
+    const delayMs = getSmartMessageDelay(contactsToSend.length, index);
+    const timeRemaining = estimateRemainingTime(contactsToSend.length, index);
+    setEstimatedFinish(timeRemaining);
+
+    // המתנה בפועל
+    await sleep(delayMs);
+
+    // חישוב הזמן שעבר באמת בשניות
+    const actualDelaySec = Math.round((Date.now() - startTime) / 1000);
+
+    // קביעת סוג לפי הזמן האמיתי שנמדד בפועל
+    let type = "normal";
+    if (actualDelaySec > 25) {
+        type = "coffee"; // הפסקת קפה
+    } else if ((index + 1) % 10 === 0) {
+        type = "milestone"; // פאוזה של כל 10 הודעות
+    }
+
+    // עדכון ההיסטוריה לגרף - רק עבור המתנה שבין הודעה להודעה
+    setDelayHistory(prev => [...prev, { delay: actualDelaySec, type }]);
+}
                     } // סוף לולאה
 
                     // סיום התהליך
@@ -961,6 +986,18 @@ gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'sta
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', color: 'green' }}><strong>נשלחו בהצלחה:</strong><span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>{sendingStats.success}</span></div>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', color: '#d63384' }}><strong>חסר טלפון ("להשיג"):</strong><span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>{sendingStats.missing}</span></div>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', color: 'red' }}><strong>תקלות ("שגוי"):</strong><span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>{sendingStats.error}</span></div>
+            </div>
+            {/* כפתור ורכיב ניטור זמנים */}
+            <div className="mt-2 d-flex flex-column align-items-center">
+              <Button variant="outline-secondary" size="sm" onClick={() => setShowMonitor(!showMonitor)}>
+                {showMonitor ? "הסתר ניטור זמנים 📊" : "הצג ניטור זמנים 📊"}
+              </Button>
+              
+              {showMonitor && (
+                <div style={{ width: '100%' }}>
+                  <MessageMonitor history={delayHistory} isSending={isSending} />
+                </div>
+              )}
             </div>
           </Col>
         </Row>

@@ -297,22 +297,6 @@ Objectid String @id @default(auto()) @map("_id") @db.ObjectId
   File      String?
 }
 
-model Program_Schedule {
-Objectid String @id @default(auto()) @map("_id") @db.ObjectId
-Programid Int? @unique
-Sunday Boolean @default(false)
-Monday Boolean @default(false)
-Tuesday Boolean @default(false)
-Wednesday Boolean @default(false)
-Thursday Boolean @default(false)
-Friday Boolean @default(false)
-Saturday Boolean @default(false)
-
-
-
-}
-
-
 model ColorCandidate {
 Objectid String @id @default(auto()) @map("_id") @db.ObjectId
 Guideid Int?  
