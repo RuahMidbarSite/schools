@@ -213,7 +213,11 @@ export const PaymentsTable = () => {
           Promise.all([
             getPrograms(), getAllSchools(), getAllContacts(), getYears(), getPayments(), getPendingPayments()
           ]).then(([programsData, schoolsData, contacts, yearsData, paymentsData, pendingPaymentsData]) => {
-            const formattedOptions = [{ label: 'הכל', value: undefined }].concat(yearsData.map(y => ({ label: y.YearName, value: y.YearName })));
+            
+            // מיון השנים בסדר יורד (השנה החדשה ביותר למעלה)
+            const sortedYearsData = (yearsData || []).sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1));
+            
+            const formattedOptions = [{ label: 'הכל', value: undefined }].concat(sortedYearsData.map(y => ({ label: y.YearName, value: y.YearName })));
             const initialSelectedOption = formattedOptions.find(option => option.value === selectedYear);
             let AllProgramsSchool = [...programsData.map((program) => program.Schoolid)]
             let AllSchoolsWithPrograms = schoolsData.filter((school) => AllProgramsSchool.includes(school.Schoolid))

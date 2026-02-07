@@ -57,8 +57,14 @@ export const YearFilter = forwardRef<FilterType, any>((props: any, ref) => {
       });
     }
 
+   // בקובץ YearFilter.tsx - סביב שורה 67
+
     let array = Array.from(uniqueValues);
-    // וידוא שהשנה המוגדרת כברירת מחדל תופיע ברשימת הפילטר גם אם אין שורות עבורה
+    
+    // הוספת המיון כאן (זה מה שקובע את הסדר בתפריט)
+    array.sort((a: string, b: string) => (a > b ? -1 : 1));
+
+    // וידוא שהשנה המוגדרת כברירת מחדל תופיע ברשימה
     if (defaultYear.current && !array.includes(defaultYear.current)) {
       array = [defaultYear.current, ...array];
     }

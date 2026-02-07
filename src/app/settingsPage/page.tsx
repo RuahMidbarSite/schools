@@ -74,15 +74,20 @@ const SettingsPage = () => {
             const data: DataType = await getFromStorage();
 
             if (data && data.Role && data.Years) {
-                console.log("Loading from storage...");
-                setRoles(data.Role); setYears(data.Years); setProductTypes(data.ProductTypes);
+    console.log("Loading from storage...");
+    // מיון השנים מהחדשה לישנה
+    const sortedYears = [...data.Years].sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1));
+    
+    setRoles(data.Role); 
+    setYears(sortedYears); // משתמש ברשימה הממוינת
+    setProductTypes(data.ProductTypes);
                 setTypes(data.SchoolTypes); setStages(data.Stages); setReligion(data.Religion);
                 setAreas(data.Areas); setCities(data.Cities); setProgramStatuses(data.ProgramsStatuses);
                 setSchoolStatuses(data.SchoolStatuses); setGuidesStatuses(data.GuidesStatuses);
                 setContactsStatuses(data.ContactsStatuses); setDistances(data.Distances); setOrders(data.Orders);
                 if (data.ProfessionTypes) setProfessionTypes(data.ProfessionTypes);
                 
-                if (data.Years) setYearOptions([...data.Years.map(y => ({ label: y.YearName, value: y.YearName })), { label: "הכל", value: undefined }]);
+                if (data.Years) setYearOptions([...sortedYears.map(y => ({ label: y.YearName, value: y.YearName })), { label: "הכל", value: undefined }]);
                 if (data.ProgramsStatuses) setStatusOptions([...data.ProgramsStatuses.map(s => ({ label: s.StatusName, value: s.StatusName })), { label: "הכל", value: undefined }]);
             } 
             else {
@@ -121,7 +126,7 @@ const SettingsPage = () => {
                  setStatusOptions(sOpts);
 
                  updateStorage({
-                    Role: fetchedRoles, Years: fetchedYears, ProductTypes: fetchedProducts, SchoolTypes: fetchedTypes, 
+                    Role: fetchedRoles, Years: sortedYears, ProductTypes: fetchedProducts, SchoolTypes: fetchedTypes, 
                     Stages: fetchedStages, Religion: fetchedReligion, Areas: fetchedAreas, Cities: fetchedCities,
                     SchoolStatuses: fetchedSchoolStatus as StatusSchools[], ProgramsStatuses: fetchedProgramStatus as StatusPrograms[], 
                     GuidesStatuses: fetchedGuideStatus as StatusGuides[], ContactsStatuses: fetchedContactStatus as StatusContacts[], 

@@ -334,6 +334,8 @@ export default function PlacementTable() {
 
           Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts()])
             .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities, areas]) => {
+              const sortedYears = (years || []).sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1));
+    setAllYears(sortedYears);
               const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates)
               const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates)
               setLeftColDef(coldefleft)
@@ -370,7 +372,7 @@ setProfessions(professions)
               updateStorage({
                 Professions: professions, Schools: schools,
                 Programs: programs, Candidates: candidates, AssignedGuides: assigned_guides,
-                Tablemodel: model, Colors: colors, schoolsContacts: contacts, ColorCandidates: color_candidates, Years: years,
+                Tablemodel: model, Colors: colors, schoolsContacts: contacts, ColorCandidates: color_candidates, Years: sortedYears,
                 ProgramsStatuses: statuses, Distances: distances, Cities: cities, Guides: guides, Filters: [], Areas: areas
               })
             })

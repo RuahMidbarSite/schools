@@ -406,7 +406,7 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
       if (value === "FirstName") {
         return {
           ...baseColDef,
-          singleClickEdit: false,
+          singleClickEdit: true,
           cellEditor: NamePhoneEditor,
           cellEditorParams: {
             AllGuides: instructors
