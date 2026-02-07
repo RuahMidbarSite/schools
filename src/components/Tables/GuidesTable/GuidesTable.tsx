@@ -246,7 +246,6 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
       defaultState: { sort: null } 
     });
 
-    // שמירת המקסימום המקורי רק בפעם הראשונה שמוסיפים שורות
     if (!InTheMiddleOfAddingRows) {
       originalMaxIndex.current = maxIndex.current;
     }
@@ -254,15 +253,13 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
     const newId = maxIndex.current + 1;
 
     gridRef.current?.api.applyTransaction({
-      add: [
-        {
+      add: [{
           Guideid: newId,
           ReligiousSector: "יהודי",
           Documents: "",
           PoliceApproval: "",
           Aggrement: "",
-        },
-      ],
+        }],
       addIndex: 0
     });
     
@@ -271,24 +268,22 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
     SetInTheMiddleOfAddingRows(true);
     
     const element: any = document.getElementById("savechangesbutton");
-    if (element !== null) {
-      element.style.display = "block";
-    }
+    if (element) element.style.display = "block";
     const element_2: any = document.getElementById("cancelchangesbutton");
-    if (element_2 !== null) {
-      element_2.style.display = "block";
-    }
+    if (element_2) element_2.style.display = "block";
 
+    // --- התיקון כאן ---
     setTimeout(() => {
        gridRef.current?.api.paginationGoToFirstPage();
        gridRef.current?.api.ensureIndexVisible(0);
        
-       // פתיחה אוטומטית של עורך השם הפרטי עבור השורה החדשה
+       // הגדרת פוקוס רשמי לפני תחילת עריכה - מעלים קווים אדומים ועובד יציב
+       gridRef.current?.api.setFocusedCell(0, 'FirstName');
        gridRef.current?.api.startEditingCell({
          rowIndex: 0,
          colKey: 'FirstName'
        });
-    }, 100);
+    }, 200);
 
   }, [onClearFilterButtonClick, InTheMiddleOfAddingRows]);
 
@@ -699,7 +694,7 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
     }
   }
 
-  if (!InTheMiddleOfAddingRows) {
+if (!InTheMiddleOfAddingRows && event.data.Guideid && event.newValue !== event.oldValue) {
     updateInstructorsColumn(
       event.column.getColId(),
       event.newValue,
@@ -890,12 +885,13 @@ const validateCellphone = (cellphone: any, numbers: string[]) => {
   if (saveBtn) saveBtn.style.display = "none";
   if (cancelBtn) cancelBtn.style.display = "none";
   
-  SetInTheMiddleOfAddingRows(false);
-  gridRef.current.api.deselectAll();
+    gridRef.current.api.deselectAll();
   setAmount(0);
 }, []);
 
   const onCancelChangeButtonClick = useCallback(() => {
+    gridRef.current.api.stopEditing(true); // true = cancel
+    SetInTheMiddleOfAddingRows(false);
     const prev_data: Guide[] = [];
     
     gridRef.current.api.forEachNode((node: any) => {

@@ -13,20 +13,39 @@ export const NamePhoneEditor = forwardRef(({ AllGuides, ...props }: NamePhoneEdi
     const nameInputRef = useRef<HTMLInputElement>(null);
     const phoneInputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const isCancelledRef = useRef<boolean>(false);
+    
+    // *** פוקוס אוטומטי כשהקומפוננטה נטענת ***
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (nameInputRef.current) {
+                nameInputRef.current.focus();
+                nameInputRef.current.select();
+            }
+        }, 0);
+        return () => clearTimeout(timer);
+    }, []);
     
     const saveAndClose = useCallback(() => {
-        // שמירת מספר הטלפון בנפרד
-        if (cellPhone !== props.data?.CellPhone) {
+        // עדכון הטלפון רק אם זו שורה קיימת (יש GuideID) ויש שינוי
+        if (props.data?.Guideid && cellPhone !== (props.data?.CellPhone || "")) {
             props.node.setDataValue('CellPhone', cellPhone);
         }
-        props.api.stopEditing();
+        // false = שמור את השינויים (הערך החדש של name יוחזר מ-getValue)
+        props.api.stopEditing(false);
     }, [cellPhone, props.api, props.node, props.data]);
+    
+    const cancelAndClose = useCallback(() => {
+        isCancelledRef.current = true;
+        // true = בטל את השינויים
+        props.api.stopEditing(true);
+    }, [props.api]);
 
   React.useImperativeHandle(ref, () => ({
         getValue: () => {
-            // שמירת הטלפון לפני שמחזירים את השם
-            if (cellPhone !== props.data?.CellPhone) {
-                props.node.setDataValue('CellPhone', cellPhone);
+            // אם בוטל, החזר את הערך המקורי
+            if (isCancelledRef.current) {
+                return props.data?.FirstName || "";
             }
             return name;
         },
@@ -36,10 +55,7 @@ export const NamePhoneEditor = forwardRef(({ AllGuides, ...props }: NamePhoneEdi
         },
 
         afterGuiAttached: () => {
-            setTimeout(() => {
-                nameInputRef.current?.focus();
-                nameInputRef.current?.select();
-            }, 10);
+            // *** לא צריך יותר - ה-useEffect עושה את העבודה ***
         }
     }));
     
@@ -57,9 +73,9 @@ export const NamePhoneEditor = forwardRef(({ AllGuides, ...props }: NamePhoneEdi
         } else if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
-            props.api.stopEditing(true);
+            cancelAndClose();
         }
-    }, [saveAndClose, props.api]);
+    }, [saveAndClose, cancelAndClose]);
 
     const handlePhoneKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Tab') {
@@ -82,9 +98,9 @@ export const NamePhoneEditor = forwardRef(({ AllGuides, ...props }: NamePhoneEdi
         } else if (event.key === 'Escape') {
             event.preventDefault();
             event.stopPropagation();
-            props.api.stopEditing(true);
+            cancelAndClose();
         }
-    }, [saveAndClose, props.api]);
+    }, [saveAndClose, cancelAndClose]);
 
    // מניעת פעולות ברירת מחדל של AG Grid
 useEffect(() => {
@@ -146,7 +162,7 @@ useEffect(() => {
             <div className="flex justify-end gap-2 mt-1">
                 <button
                     type="button"
-                    onClick={() => props.api.stopEditing(true)}
+                    onClick={cancelAndClose}
                     onMouseDown={(e) => e.preventDefault()}
                     className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
                 >
