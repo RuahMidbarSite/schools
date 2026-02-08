@@ -2,8 +2,6 @@ import { useMemo, useEffect } from "react";
 import { Program, School, Guide } from "@prisma/client";
 import styles from "./ProgramModule.module.css";
 
-// הוסר הייבוא של SendMessagesBox כי הוא כבר קיים במקום אחר בדף
-
 type ProgramDetailsProps = {
    CurrentProgram: { label: string, value: number };
    AllPrograms: Program[];
@@ -76,18 +74,57 @@ export const ProgramDetails = ({
          <div className={styles.cardInnerTitle}>כרטיסיית תוכניות</div>
          
          <div className={styles.programCardGrid}>
+            {/* טור 1 */}
             <div className={styles.programCardColumn}>
                <div className={styles.programCardItem}>
                   <span className={styles.itemIcon}>📘</span>
                   <span className={styles.itemLabelText}>תוכנית</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{currentProgramData.ProgramName || "לא צוין"}</span>
+                  <span className={styles.itemValue}>
+                     {currentProgramData.ProgramLink && currentProgramData.ProgramLink !== "" ? (
+                        <a 
+                           href={currentProgramData.ProgramLink} 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           style={{ 
+                              color: '#007bff', 
+                              textDecoration: 'none',
+                              fontWeight: '600'
+                           }}
+                           onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                           onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                        >
+                           {currentProgramData.ProgramName || "לא צוין"}
+                        </a>
+                     ) : (
+                        currentProgramData.ProgramName || "לא צוין"
+                     )}
+                  </span>
                </div>
                <div className={styles.programCardItem}>
-                  <span className={styles.itemIcon}>🎓</span>
-                  <span className={styles.itemLabelText}>שכבה</span>
+                  <span className={styles.itemIcon}>📄</span>
+                  <span className={styles.itemLabelText}>הצעה</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{currentProgramData.Grade || "לא צוין"}</span>
+                  <span className={styles.itemValue}>
+                     {currentProgramData.Proposal && currentProgramData.Proposal !== "" ? (
+                        <a 
+                           href={currentProgramData.Proposal} 
+                           target="_blank" 
+                           rel="noopener noreferrer"
+                           style={{ 
+                              color: '#007bff', 
+                              textDecoration: 'none',
+                              fontWeight: '600'
+                           }}
+                           onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                           onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                        >
+                           הצעה
+                        </a>
+                     ) : (
+                        "לא צוין"
+                     )}
+                  </span>
                </div>
                <div className={styles.programCardItem}>
                   <span className={styles.itemIcon}>🏠</span>
@@ -97,18 +134,51 @@ export const ProgramDetails = ({
                </div>
             </div>
 
+            {/* טור 2 */}
             <div className={styles.programCardColumn}>
                <div className={styles.programCardItem}>
-                  <span className={styles.itemIcon}>📅</span>
-                  <span className={styles.itemLabelText}>שבועות</span>
+                  <span className={styles.itemIcon}>⏰</span>
+                  <span className={styles.itemLabelText}>שיעורים ביום</span>
                   <span className={styles.itemSeparator}>:</span>
-                  <span className={styles.itemValue}>{currentProgramData.WeeksNumber || "לא צוין"}</span>
+                  <span className={styles.itemValue}>{currentProgramData.LessonsPerDay || "לא צוין"}</span>
+               </div>
+               <div className={styles.programCardItem}>
+                  <span className={styles.itemIcon}>🎓</span>
+                  <span className={styles.itemLabelText}>שכבה</span>
+                  <span className={styles.itemSeparator}>:</span>
+                  <span className={styles.itemValue}>{currentProgramData.Grade || "לא צוין"}</span>
                </div>
                <div className={styles.programCardItem}>
                   <span className={styles.itemIcon}>📍</span>
                   <span className={styles.itemLabelText}>אזור</span>
                   <span className={styles.itemSeparator}>:</span>
                   <span className={styles.itemValue}>{currentProgramData.District || "לא צוין"}</span>
+               </div>
+            </div>
+
+            {/* טור 3 */}
+            <div className={styles.programCardColumn}>
+               <div className={styles.programCardItem}>
+                  <span className={styles.itemIcon}>🗓️</span>
+                  <span className={styles.itemLabelText}>תאריך התחלה</span>
+                  <span className={styles.itemSeparator}>:</span>
+                  <span className={styles.itemValue}>
+                     {currentProgramData.Date 
+                        ? new Date(currentProgramData.Date).toLocaleDateString('he-IL') 
+                        : "לא צוין"}
+                  </span>
+               </div>
+               <div className={styles.programCardItem}>
+                  <span className={styles.itemIcon}>📆</span>
+                  <span className={styles.itemLabelText}>ימים</span>
+                  <span className={styles.itemSeparator}>:</span>
+                  <span className={styles.itemValue}>{currentProgramData.Days || "לא צוין"}</span>
+               </div>
+               <div className={styles.programCardItem}>
+                  <span className={styles.itemIcon}>📅</span>
+                  <span className={styles.itemLabelText}>שבועות</span>
+                  <span className={styles.itemSeparator}>:</span>
+                  <span className={styles.itemValue}>{currentProgramData.Weeks || "לא צוין"}</span>
                </div>
             </div>
          </div>
@@ -145,8 +215,6 @@ export const ProgramDetails = ({
                {currentProgramData.Details || currentProgramData.Notes || "אין פרטים נוספים"}
             </div>
          </div>
-         
-         {/* הוסר החלק של שליחת הודעות מפה כדי למנוע כפילות */}
       </div>
    );
 };

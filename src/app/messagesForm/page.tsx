@@ -169,9 +169,17 @@ export default function MessagesPage() {
           setStatusesOptions(transformedStatuses);
           setStages(stages);
 
-          setPatterns(messagePatternsData);
-          const formattedOptions = messagePatternsData.map(option => ({ value: option.PatternId, label: option.Caption }));
-          setOptions(formattedOptions);
+        // שמירת כל התבניות ב-State
+setPatterns(messagePatternsData);
+
+// סינון: מציגים רק מה ששייך לשיווק או ללא הגדרה (General/Marketing)
+const marketingPatterns = messagePatternsData.filter(p => p.MessageContext !== "Placement");
+
+const formattedOptions = marketingPatterns.map(option => ({ 
+  value: option.PatternId, 
+  label: option.Caption 
+}));
+setOptions(formattedOptions);
           setSchoolTypes(schoolTypes);
 
         } else {
@@ -214,8 +222,15 @@ export default function MessagesPage() {
             setStages(stages);
 
             setPatterns(messagePatternsData);
-            const formattedOptions = messagePatternsData.map(option => ({ value: option.PatternId, label: option.Caption }));
-            setOptions(formattedOptions);
+
+// סינון תבניות שיווק בלבד עבור דף זה
+const filteredForMarketing = messagePatternsData.filter(p => p.MessageContext !== "Placement");
+
+const formattedOptions = filteredForMarketing.map(option => ({ 
+  value: option.PatternId, 
+  label: option.Caption 
+}));
+setOptions(formattedOptions);
             setSchoolTypes(schoolTypes);
           })
         }
@@ -498,9 +513,15 @@ export default function MessagesPage() {
         messagePatterns: updatedPatterns
       });
 
-      // 4. עדכון התצוגה (UI) בזמן אמת
-      setPatterns(updatedPatterns);
-      setOptions(updatedPatterns.map(p => ({ value: p.PatternId, label: p.Caption })));
+ // 4. עדכון התצוגה (UI) בזמן אמת - עם סינון נוסחי שיבוץ
+setPatterns(updatedPatterns);
+
+const filteredForUI = updatedPatterns.filter(p => p.MessageContext !== "Placement");
+
+setOptions(filteredForUI.map(p => ({ 
+  value: p.PatternId, 
+  label: p.Caption 
+})));
 
       clearPattern();
       alert("התבנית נשמרה וסונכרנה בהצלחה! ✅");

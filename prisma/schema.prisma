@@ -295,6 +295,7 @@ Objectid String @id @default(auto()) @map("_id") @db.ObjectId
   Message1  String?
   Message2  String?
   File      String?
+  MessageContext String? @default("Marketing")
 }
 
 model ColorCandidate {

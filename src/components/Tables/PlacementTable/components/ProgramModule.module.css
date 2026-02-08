@@ -47,10 +47,9 @@
   direction: rtl;
 }
 
-/* Grid של 2 עמודות - כמו בצילום המסך */
 .programCardGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 20px;
   direction: rtl;
 }

@@ -321,7 +321,22 @@ export const getMessagePatterns = async (): Promise<MessagePattern[]> => {
   });
   return patterns
 }
-
+export const getPatternsByContext = async (context: string) => {
+  "use server";
+  try {
+    return await prisma.messagePattern.findMany({
+      where: {
+        MessageContext: context,
+      },
+      orderBy: {
+        PatternId: "asc",
+      },
+    });
+  } catch (error) {
+    console.error(`Error fetching patterns for context ${context}:`, error);
+    return [];
+  }
+};
 export const addContactStatuses = async (status: string) => {
   "use server";
   try {
@@ -357,7 +372,7 @@ export const deletePattern = async (Id) => {
 
   return deletedPattern;
 };
-export const addPattern = async (id, title, msg1, msg2, fileName) => {
+export const addPattern = async (id, title, msg1, msg2, fileName, messageContext = "Marketing") => {
   const newPattern = prisma.messagePattern.create({
     data: {
       PatternId: id,
@@ -365,6 +380,7 @@ export const addPattern = async (id, title, msg1, msg2, fileName) => {
       ...(msg1 && msg1 !== "" && { Message1: msg1 }),
       ...(msg2 && msg2 !== "" && { Message2: msg2 }),
       ...(fileName && fileName !== "" && { File: fileName }),
+      MessageContext: messageContext, // הוספת השדה החדש
     },
   });
 
