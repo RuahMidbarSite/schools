@@ -12,11 +12,24 @@ const { theme } = useContext(ThemeContext)
 const name_cancel = "cancelchangesbutton-minicontacts".concat(' ',SchoolID)
 const name_save = "savechangesbutton-minicontacts".concat(' ',SchoolID)
 const name_delete = "savedeletions-mini".concat(' ',SchoolID)
+
+// חישוב הצבע בזמן אמת בכל פעם שהפונקציה רצה
+const isDark = theme === "dark-theme"
+const navbarBg = isDark 
+  ? 'linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%)'
+  : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #cbd5e1 100%)'
+
   return (
 
       <Navbar
         id={"ContactNavBar".concat(' ',SchoolID)}
-        className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%] w-screen"
+        className="w-screen"
+        style={{
+          background: navbarBg,
+          minHeight: '64px',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          borderBottom: '1px solid rgba(71, 85, 105, 0.5)'
+        }}
       > 
         <LoadingOverlay/>
         <OverlayTrigger

@@ -81,7 +81,34 @@ const leftDefaultCol: any = rightDefaultCol
 const releventFieldsRight: string[] = ["WhatsApp", "LastName", "CV", "City", "Area", "ReligiousSector", "Professions", "Notes"];
 const releventFieldsLeft: string[] = releventFieldsRight;
 
+// 🎨 פונקציה דינמית ליצירת צבע ייחודי לכל מקצוע
+const getProfessionColor = (profession: string) => {
+  // יצירת hash מהמחרוזת
+  let hash = 0;
+  for (let i = 0; i < profession.length; i++) {
+    hash = profession.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  // פלטת צבעים נעימה ועדינה
+  const colors = [
+    { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd' },  // כחול
+    { bg: '#e0e7ff', text: '#3730a3', border: '#a5b4fc' },  // סגול-כחול
+    { bg: '#fce7f3', text: '#831843', border: '#f9a8d4' },  // ורוד
+    { bg: '#d1fae5', text: '#065f46', border: '#6ee7b7' },  // ירוק
+    { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },  // צהוב
+    { bg: '#f3e8ff', text: '#581c87', border: '#d8b4fe' },  // סגול
+    { bg: '#fed7aa', text: '#7c2d12', border: '#fdba74' },  // כתום
+    { bg: '#fecaca', text: '#991b1b', border: '#fca5a5' },  // אדום בהיר
+    { bg: '#ccfbf1', text: '#134e4a', border: '#5eead4' },  // טורקיז
+    { bg: '#e0f2fe', text: '#075985', border: '#7dd3fc' },  // תכלת
+  ];
+  
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+};
+
 export default function PlacementTable() {
+  
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
@@ -189,24 +216,31 @@ export default function PlacementTable() {
   }, []);
 
 
-  /** we put draggable only if not assigned  */
+  /** we put draggable only if not assigned IN THE CURRENT PROGRAM */
   const rowDragCheck = useCallback((params: ICellRendererParams<Guide>, side?: string) => {
     const p = params as any
+    
     if (side) {
-      if (All_Assigned_Guides && All_Assigned_Guides.length > 0) {
-        const ids = [...All_Assigned_Guides.map((val) => val.Guideid)]
-        if (ids.includes(params.data.Guideid)) {
-          p.node.isDraggable = false
-          return false
+      if (All_Assigned_Guides && All_Assigned_Guides.length > 0 && CurrentProgram.value !== -1) {
+        // 🔥 תיקון: בדוק רק משובצים **בתוכנית הנוכחית**
+        const currentProgramAssignedIds = All_Assigned_Guides
+          .filter((val) => val.Programid === CurrentProgram.value)
+          .map((val) => val.Guideid);
+        
+        if (currentProgramAssignedIds.includes(params.data.Guideid)) {
+          p.node.isDraggable = false;
+          return false;
         }
       }
     }
+    
     if (CurrentProgram.value === -1) {
-      return false
-      p.node.isDraggable = true
+      p.node.isDraggable = false;
+      return false;
     }
-    p.node.isDraggable = true
-    return true
+    
+    p.node.isDraggable = true;
+    return true;
 
   }, [All_Assigned_Guides, CurrentProgram])
 
@@ -296,15 +330,18 @@ export default function PlacementTable() {
       setRightApi(params.api);
 
       getFromStorage().then(({ Professions, Schools, ProgramsStatuses, Programs, AssignedGuides, Candidates, Tablemodel, Colors, ColorCandidates, schoolsContacts, Years, Distances, Guides, Cities, Filters, Areas }: Required<DataType>) => {
+        
+        // 1. טעינה ראשונית מהזיכרון (כדי שהמשתמש לא יחכה)
         if (Professions && Schools && ProgramsStatuses && Programs && AssignedGuides && Candidates && Tablemodel && Colors && ColorCandidates && schoolsContacts && Years && Distances && Guides && Cities && Filters && Areas) {
           const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(Tablemodel, Colors, ColorCandidates)
           const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(Tablemodel, Colors, ColorCandidates)
+          
           setLeftColDef(coldefleft !== null ? coldefleft : [])
-// 🔥 תיקון: סנן כפילויות מ-Guides
-    const uniqueGuides = Guides.filter((guide, index, self) => 
-      index === self.findIndex((t) => t.Guideid === guide.Guideid)
-    );
-    setAllGuides(uniqueGuides != null ? uniqueGuides : [])
+          
+          const uniqueGuides = Guides.filter((guide, index, self) => 
+            index === self.findIndex((t) => t.Guideid === guide.Guideid)
+          );
+          setAllGuides(uniqueGuides != null ? uniqueGuides : [])
           setRightColDef(coldef)
           setProfessions(Professions)
           setAllPrograms(Programs) 
@@ -319,64 +356,66 @@ export default function PlacementTable() {
           setAllCandidates(Candidates)
           setAllAssignedGuides(AssignedGuides)
           setAllFilters(Filters)
-          // find the details of all candidates and assigned candidates and save them.
+          setAreas(Areas)
+
           const candidates_ids = Candidates.map((res) => res.Guideid)
           const assigned_ids = AssignedGuides.map((res) => res.Guideid)
           const assigned_details = Guides.filter((res) => assigned_ids.includes(res.Guideid))
           const candidates_details = Guides.filter((res) => candidates_ids.includes(res.Guideid))
           setAllCandidates_Details(candidates_details)
           setAllAssignedGuides_Details(assigned_details)
-
-          setAreas(Areas)
-
-    setRightRowData(uniqueGuides != null ? uniqueGuides : [])
-        } else {
-
-          Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts()])
-            .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities, areas]) => {
-              const sortedYears = (years || []).sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1));
-    setAllYears(sortedYears);
-              const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates)
-              const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates)
-              setLeftColDef(coldefleft)
-// 🔥 תיקון: סנן כפילויות מ-guides
-      const uniqueGuides = guides.filter((guide, index, self) => 
-  index === self.findIndex((t) => t.Guideid === guide.Guideid)
-);
-setAllGuides(uniqueGuides != null ? uniqueGuides : [])
-      
-setRightColDef(coldef)
-setProfessions(professions)
-              setAllPrograms(programs) 
-              setAllSchools(schools)
-              setAllYears(years)
-              setAllDistances(distances)
-              setAllStatuses(statuses)
-              setAllCities(cities)
-              setAllContacts(contacts)
-              setColors(colors)
-              setAllColorCandidates(color_candidates)
-              setAllCandidates(candidates)
-              setAllAssignedGuides(assigned_guides)
-              setAreas(areas)
-              // find the details of all candidates and assigned candidates and save them.
-              const candidates_ids = candidates.map((res) => res.Guideid)
-              const assigned_ids = assigned_guides.map((res) => res.Guideid)
-              const assigned_details = guides.filter((res) => assigned_ids.includes(res.Guideid))
-              const candidates_details = guides.filter((res) => candidates_ids.includes(res.Guideid))
-              setAllCandidates_Details(candidates_details)
-              setAllAssignedGuides_Details(assigned_details)
-
-
-      setRightRowData(uniqueGuides != null ? uniqueGuides : [])
-              updateStorage({
-                Professions: professions, Schools: schools,
-                Programs: programs, Candidates: candidates, AssignedGuides: assigned_guides,
-                Tablemodel: model, Colors: colors, schoolsContacts: contacts, ColorCandidates: color_candidates, Years: sortedYears,
-                ProgramsStatuses: statuses, Distances: distances, Cities: cities, Guides: guides, Filters: [], Areas: areas
-              })
-            })
+          setRightRowData(uniqueGuides != null ? uniqueGuides : [])
         }
+
+        // 2. 🔥 תמיד למשוך נתונים עדכניים מהשרת (Background Refresh) 🔥
+        Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts()])
+          .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities, areas]) => {
+            
+            const sortedYears = (years || []).sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1));
+            setAllYears(sortedYears);
+            
+            const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates)
+            const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates)
+            setLeftColDef(coldefleft)
+            
+            const uniqueGuides = guides.filter((guide, index, self) => 
+               index === self.findIndex((t) => t.Guideid === guide.Guideid)
+            );
+            setAllGuides(uniqueGuides != null ? uniqueGuides : [])
+      
+            setRightColDef(coldef)
+            setProfessions(professions)
+            setAllPrograms(programs) 
+            setAllSchools(schools)
+            setAllDistances(distances)
+            setAllStatuses(statuses)
+            setAllCities(cities)
+            setAllContacts(contacts)
+            setColors(colors)
+            setAllColorCandidates(color_candidates)
+            setAllCandidates(candidates)
+            setAllAssignedGuides(assigned_guides) // <--- התיקון הקריטי: מעדכן משובצים מהשרת
+            setAreas(areas)
+
+            const candidates_ids = candidates.map((res) => res.Guideid)
+            const assigned_ids = assigned_guides.map((res) => res.Guideid)
+            const assigned_details = guides.filter((res) => assigned_ids.includes(res.Guideid))
+            const candidates_details = guides.filter((res) => candidates_ids.includes(res.Guideid))
+            setAllCandidates_Details(candidates_details)
+            setAllAssignedGuides_Details(assigned_details)
+
+            setRightRowData(uniqueGuides != null ? uniqueGuides : [])
+            
+            // עדכון ה-Storage בנתונים החדשים
+            updateStorage({
+              Professions: professions, Schools: schools,
+              Programs: programs, Candidates: candidates, AssignedGuides: assigned_guides,
+              Tablemodel: model, Colors: colors, schoolsContacts: contacts, ColorCandidates: color_candidates, Years: sortedYears,
+              ProgramsStatuses: statuses, Distances: distances, Cities: cities, Guides: guides, Filters: [], Areas: areas
+            })
+            
+            console.log("✅ Data synced with DB successfully");
+          })
       })
     }
   }, [GetDefaultDefinitionsLeft, GetDefaultDefinitionsRight]);
@@ -882,39 +921,77 @@ setProfessions(professions)
     // החלף את הפונקציה updateLeftTable בשורה 460 בקוד שלך
 // עם הקוד הזה:
 
+// תיקון לבעיית כפילויות ברשימת מועמדים
+// הבעיה: מדריכים משובצים מופיעים פעמיים ברשימת המועמדים
+
+// החלף את הפונקציה updateLeftTable (שורה 892-935) בקוד המתוקן הזה:
+
 const updateLeftTable = () => {
   if (AllCandidates && AllCandidates_Details && CurrentProgram && CurrentProgram.value !== -1) {
     
     // 🔥 תיקון 1: השתמש ב-Set למניעת כפילויות ב-IDs
-    const program_guides = AllCandidates.filter((res) => res.Programid === CurrentProgram.value)
-    const uniqueIds = [...new Set(program_guides.map((res) => res.Guideid))]
-    const guides = AllCandidates_Details.filter((res) => uniqueIds.includes(res.Guideid))
+    const program_guides = AllCandidates.filter((res) => res.Programid === CurrentProgram.value);
+    const uniqueIds = [...new Set(program_guides.map((res) => res.Guideid))];
     
-    // 🔥 תיקון 2: סנן כפילויות מ-AllGuides לפני שימוש
+    // 🔥 תיקון 2: סנן כפילויות מ-AllCandidates_Details
+    const uniqueCandidatesDetails = AllCandidates_Details.filter((guide, index, self) => 
+      index === self.findIndex((t) => t.Guideid === guide.Guideid)
+    );
+    
+    // 🔥 תיקון 3: **קבל רשימת משובצים לתוכנית הנוכחית**
+    const all_assigned_ids = All_Assigned_Guides
+      .filter((g) => g.Programid === CurrentProgram.value)
+      .map((val) => val.Guideid);
+    
+    // 🔥 תיקון 4: **סנן משובצים גם מרשימת המועמדים!**
+    const candidateIdsNotAssigned = uniqueIds.filter((id) => !all_assigned_ids.includes(id));
+    
+    // רק מועמדים שלא משובצים
+    const guides = uniqueCandidatesDetails.filter((res) => candidateIdsNotAssigned.includes(res.Guideid));
+    
+    // 🔥 תיקון 5: סנן כפילויות מ-AllGuides לפני שימוש
     const uniqueAllGuides = AllGuides.filter((guide, index, self) => 
       index === self.findIndex((t) => t.Guideid === guide.Guideid)
     );
     
-    let rest_of_guides = uniqueAllGuides.filter((res) => !uniqueIds.includes(res.Guideid))
-
-    const all_assigned_ids = All_Assigned_Guides
-      .filter((g) => g.Programid === CurrentProgram.value)
-      .map((val) => val.Guideid)
+    // המדריכים שלא מועמדים ולא משובצים - לטבלה הימנית
+    let rest_of_guides = uniqueAllGuides.filter((res) => 
+      !uniqueIds.includes(res.Guideid) && !all_assigned_ids.includes(res.Guideid)
+    );
     
-    rest_of_guides = rest_of_guides.filter((g) => !all_assigned_ids.includes(g.Guideid))
+    // 🔥 תיקון 6: סנן כפילויות מ-guides לפני יצירת uniqueGuides
+    const uniqueGuidesBeforeMapping = guides.filter((guide, index, self) => 
+      index === self.findIndex((t) => t.Guideid === guide.Guideid)
+    );
     
-    const uniqueGuides = guides.map(guide => ({
+    const uniqueGuides = uniqueGuidesBeforeMapping.map(guide => ({
       ...guide,
       uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` 
     }));
 
-    setLeftRowData(uniqueGuides)
-    setRightRowData(rest_of_guides)
-    const [left, right] = updateDragAndColor()
-    updateDistances(left, right)
-    ProgramID.current = CurrentProgram.value
+    setLeftRowData(uniqueGuides);
+    setRightRowData(rest_of_guides);
+    const [left, right] = updateDragAndColor();
+    updateDistances(left, right);
+    ProgramID.current = CurrentProgram.value;
   }
 }
+
+// הסבר על התיקון:
+// ===================
+// הבעיה הייתה שהקוד הישן סינן משובצים רק מ-rest_of_guides (הטבלה הימנית),
+// אבל לא סינן אותם מ-guides (הטבלה השמאלית - רשימת המועמדים).
+//
+// התיקון:
+// 1. קודם מוצאים את כל המשובצים לתוכנית הנוכחית (all_assigned_ids)
+// 2. אז מסננים את המועמדים כך שלא יכללו משובצים (candidateIdsNotAssigned)
+// 3. זה מבטיח שמדריך משובץ לא יופיע ברשימת המועמדים בצד שמאל
+// 4. גם סינון הטבלה הימנית מתחשב במשובצים כדי שלא יופיעו שם
+//
+// התוצאה:
+// ✅ מדריך משובץ לא יופיע ברשימת המועמדים
+// ✅ מדריך שבוטל שיבוצו יחזור לרשימת המועמדים
+// ✅ אין כפילויות
     updateLeftTable()
 
   }, [AllCandidates, AllCandidates_Details, CurrentProgram, rowDragCheck, AllColorCandidates, All_Assigned_Guides, handleManualColorChange])
@@ -1021,12 +1098,41 @@ const updateLeftTable = () => {
 
   }, [FilterProf, FilterAreas])
 
-  const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) =>
-
-    <div className="max-w-[150px] max-h-[50px] overflow-y-hidden whitespace-nowrap text-ellipsis hover:text-clip truncate  hover:overflow-x-auto hover:whitespace-nowra">
-      {props.data.Professions}
-
-    </div>, [])
+  const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) => {
+    const professionsText = props.data.Professions || '';
+    
+    // אם אין מקצועות, לא להציג כלום
+    if (!professionsText.trim()) {
+      return <div></div>;
+    }
+    
+    // פיצול המקצועות לפי פסיקים
+    const professions = professionsText
+      .split(',')
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+    
+    return (
+      <div className="flex flex-wrap gap-1 py-1" style={{ maxWidth: '150px' }}>
+        {professions.map((profession, index) => {
+          const colors = getProfessionColor(profession);
+          return (
+            <span
+              key={index}
+              className="inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
+              style={{
+                backgroundColor: colors.bg,
+                color: colors.text,
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              {profession}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }, [])
 
   const doesExternalFilterPassLeft = useCallback((node: IRowNode<Guide>): boolean => {
     return true
@@ -1161,77 +1267,94 @@ const updateLeftTable = () => {
   };
 if (!isMounted) return null;
   return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%)',
+      padding: '0',
+    }}>
     <Suspense fallback={<div>טוען...</div>}>
       <div className="toolbar">{getToolBar()}</div>
-      <div className="flex">
+      <div className="flex gap-2">
 
         {/* --- צד שמאל: מועמדים --- */}
-        <div className="w-1/2 border-4 border-orange-500 flex flex-col"> 
+        <div className="w-1/2 flex flex-col"> 
           
           <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
   
   <Button 
-      variant="primary" 
-      size="sm"
-      onClick={() => {
-        if (CurrentProgram.value === -1) {
-          alert("⚠️ אנא בחר תוכנית מהרשימה לפני השיבוץ");
-          return;
-        }
-        if (!SelectedRows || SelectedRows.length === 0) {
-          alert("⚠️ אנא בחר לפחות מדריך אחד לשיבוץ");
-          return;
-        }
-        
-        // שמור את המדריכים שנבחרו
-        const guidesToAssign = [...SelectedRows];
-        
-        guidesToAssign.forEach(guide => {
-          handleAssignCandidate(guide);
-          rightApi?.applyTransaction({ remove: [guide] });
-          const guideWithId = { ...guide, uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` };
-          leftApi?.applyTransaction({ add: [guideWithId] });
-        });
-        
-        // עדכן את הסטייט בפעם אחת
-        setTimeout(() => {
-          const updatedCandidates = [...(AllCandidates || [])];
-          const updatedDetails = [...(AllCandidates_Details || [])];
-          const updatedAssigned = [...(All_Assigned_Guides || [])];
-          const updatedAssignedDetails = [...(All_Assigned_Guides_Details || [])];
+    variant="primary" 
+    size="sm"
+    onClick={() => {
+      console.log("🖱️ [Client] Assign Button Clicked");
+
+      if (CurrentProgram.value === -1) {
+        alert("⚠️ אנא בחר תוכנית מהרשימה לפני השיבוץ");
+        return;
+      }
+      if (!SelectedRows || SelectedRows.length === 0) {
+        alert("⚠️ אנא בחר לפחות מדריך אחד לשיבוץ");
+        return;
+      }
+      
+      const guidesToAssign = [...SelectedRows];
+      console.log(`📋 [Client] Selected ${guidesToAssign.length} guides to assign`); 
+
+      import("@/db/instructorsrequest").then(({ addAssignedInstructors }) => {
           
           guidesToAssign.forEach(guide => {
-            const exists = updatedCandidates.some(c => c.Guideid === guide.Guideid && c.Programid === CurrentProgram.value);
-            if (!exists) {
-              updatedCandidates.push({ Guideid: guide.Guideid, Programid: CurrentProgram.value, id: -1 });
-              updatedDetails.push(guide);
-            }
+            console.log(`🔄 [Client] Processing Guide ${guide.Guideid}: Setting as Candidate...`);
+            handleAssignCandidate(guide);
             
-            // 🔥 עדכון All_Assigned_Guides - זה הקריטי לתצוגה בכרטיסיית התוכניות
-            const assignedExists = updatedAssigned.some(a => a.Guideid === guide.Guideid && a.Programid === CurrentProgram.value);
-            if (!assignedExists) {
-              updatedAssigned.push({ Guideid: guide.Guideid, Programid: CurrentProgram.value, id: -1 });
-              
-              // וודא שהמדריך לא כבר ברשימת הפרטים
-              const detailExists = updatedAssignedDetails.some(d => d.Guideid === guide.Guideid);
-              if (!detailExists) {
-                updatedAssignedDetails.push(guide);
-              }
-            }
+            rightApi?.applyTransaction({ remove: [guide] });
+            const guideWithId = { ...guide, uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` };
+            leftApi?.applyTransaction({ add: [guideWithId] });
+
+            console.log(`💾 [Client] Saving Guide ${guide.Guideid} to Assigned_Guide DB table...`);
+            const new_assigned_guide = { Guideid: guide.Guideid, Programid: CurrentProgram.value };
+            
+            addAssignedInstructors(CurrentProgram.value, guide.Guideid, new_assigned_guide)
+                .then(() => console.log(`✅ [Client] Guide ${guide.Guideid} Saved to DB successfully!`))
+                .catch((err) => console.error(`❌ [Client] Failed to save Guide ${guide.Guideid} to DB:`, err));
           });
+
+      });
+      
+      setTimeout(() => {
+        const updatedCandidates = [...(AllCandidates || [])];
+        const updatedDetails = [...(AllCandidates_Details || [])];
+        const updatedAssigned = [...(All_Assigned_Guides || [])];
+        const updatedAssignedDetails = [...(All_Assigned_Guides_Details || [])];
+        
+        guidesToAssign.forEach(guide => {
+          const exists = updatedCandidates.some(c => c.Guideid === guide.Guideid && c.Programid === CurrentProgram.value);
+          if (!exists) {
+            updatedCandidates.push({ Guideid: guide.Guideid, Programid: CurrentProgram.value, id: -1 });
+            updatedDetails.push(guide);
+          }
           
-          setAllCandidates(updatedCandidates);
-          setAllCandidates_Details(updatedDetails);
-          setAllAssignedGuides(updatedAssigned);
-          setAllAssignedGuides_Details(updatedAssignedDetails);
-          updateStorage({ Candidates: updatedCandidates });
-          
-          alert(`✅ שובצו בהצלחה ${guidesToAssign.length} מדריכים`);
-        }, 100);
-      }}
-  >
-      שיבוץ
-  </Button>
+          const assignedExists = updatedAssigned.some(a => a.Guideid === guide.Guideid && a.Programid === CurrentProgram.value);
+          if (!assignedExists) {
+            updatedAssigned.push({ Guideid: guide.Guideid, Programid: CurrentProgram.value, id: -1 });
+            
+            const detailExists = updatedAssignedDetails.some(d => d.Guideid === guide.Guideid);
+            if (!detailExists) {
+              updatedAssignedDetails.push(guide);
+            }
+          }
+        });
+        
+        setAllCandidates(updatedCandidates);
+        setAllCandidates_Details(updatedDetails);
+        setAllAssignedGuides(updatedAssigned);
+        setAllAssignedGuides_Details(updatedAssignedDetails);
+        updateStorage({ Candidates: updatedCandidates }); // <--- הבעיה הייתה כאן: עדכנו רק מועמדים
+        
+        alert(`✅ שובצו בהצלחה ${guidesToAssign.length} מדריכים`);
+      }, 100);
+    }}
+>
+    שיבוץ
+</Button>
 
   {/* 🔥 כפתור התייעצות AI חדש */}
   <Button 
@@ -1277,7 +1400,7 @@ if (!isMounted) return null;
         </div>
 
         {/* --- צד ימין: מדריכים --- */}
-        <div className="w-1/2 border-4 border-purple-500 flex flex-col"> 
+        <div className="w-1/2 flex flex-col"> 
           
           <div className="d-flex justify-content-end align-items-center p-2 border-bottom gap-3">
             
@@ -1468,6 +1591,7 @@ if (!isMounted) return null;
         </>
       )}
 
-    </Suspense>
+   </Suspense>
+    </div>
   );
 } // סגירת הפונקציה PlacementTable

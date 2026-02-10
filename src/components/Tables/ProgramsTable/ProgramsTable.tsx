@@ -653,8 +653,15 @@ const checkDriveStatus = useCallback(async () => {
   }, []);
   return (
     <>
-     <Navbar id="ProgramsNavBar" className="bg-[#12242E] flex justify-between items-center p-2 shadow-sm">
-  
+<Navbar 
+  id="ProgramsNavBar" 
+  className="flex justify-between items-center p-2 shadow-sm"
+  style={{
+    background: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)',
+    minHeight: '64px',
+    borderBottom: '1px solid rgba(203, 213, 225, 0.3)'
+  }}
+>  
   <div className="flex items-center">
     <div className="bg-blue-100 px-4 py-2 rounded-lg border border-blue-300 shadow-sm">
       <GoogleDriveAuthStatus
@@ -686,8 +693,7 @@ const checkDriveStatus = useCallback(async () => {
       onInput={(e: any) => gridRef.current?.api.setQuickFilter(e.target.value)} 
     />
     
-    <div className="flex flex-row-reverse items-center gap-2 bg-[#1b2e3a] p-1 rounded border border-gray-700 mx-2">
-      <button 
+<div className="flex flex-row-reverse items-center gap-2 bg-slate-200 p-1 rounded border border-slate-300 mx-2"><button 
         id="savechangesbutton" 
         onClick={onSaveChangeButtonClick} 
         className={`hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white ${hasNewRows ? '' : 'hidden'}`}
@@ -712,15 +718,15 @@ const checkDriveStatus = useCallback(async () => {
       )}
       
       <input 
-        type="text" 
-        className="bg-transparent text-white border-none text-right outline-none px-2" 
-        placeholder="הזנה חכמה..." 
-        value={aiInput} 
-        onChange={(e) => setAiInput(e.target.value)} 
-        onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()} 
-        style={{ direction: 'rtl', width: '660px', fontSize: '14px' }} 
-        disabled={aiLoading} 
-      />
+  type="text" 
+  className="bg-white text-gray-700 border border-gray-300 text-right outline-none px-2 rounded" 
+  placeholder="הזנה חכמה..." 
+  value={aiInput} 
+  onChange={(e) => setAiInput(e.target.value)} 
+  onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()} 
+  style={{ direction: 'rtl', width: '660px', fontSize: '14px' }} 
+  disabled={aiLoading} 
+/>
     </div>
   </div>
 </Navbar>

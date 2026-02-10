@@ -1,4 +1,5 @@
 "use client";
+import { StatusBadgeRenderer } from "../../GeneralFiles/Renderers/StatusBadgeRenderer"; // שים לב לנתיב
 import { School, ReligionSector, Cities, SchoolsContact, EducationStage, SchoolTypes, StatusSchools } from "@prisma/client";
 import {
   useState,
@@ -85,6 +86,8 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
               valueListMaxWidth: 120
             },
             filter: "CustomFilter",
+            cellRenderer: StatusBadgeRenderer,
+            cellStyle: { display: 'flex', alignItems: 'center' }  
           };
         }
         if (value === "Schoolid") {
@@ -107,11 +110,11 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
             sortable: true,
           };
         }
-        if (value === "EducationStage") {
+      if (value === "EducationStage") {
           return {
             field: value,
             headerName: model[1][index],
-            width: 120,
+            width: 130, // הרחבתי קצת ל-130
             editable: true,
             cellEditor: CustomSelectCellEditor,
             singleClickEdit: true,
@@ -119,8 +122,11 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
               values: edustages.map((val) => val.StageName),
               valueListMaxWidth: 120
             },
-            cellStyle: { padding: 0 },
             filter: "CustomFilter",
+            
+            // 👇 השינויים החדשים:
+            cellRenderer: StatusBadgeRenderer,
+            cellStyle: { display: 'flex', alignItems: 'center' } // במקום padding:0
           }
         }
         if (value === "SchoolType") {

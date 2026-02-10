@@ -224,8 +224,27 @@ export const deleteAssignedInstructorsManyAccordingToProgramToProgramIds = async
 }
 
 export const addAssignedInstructors = async (programID: number, GuideID: number, Guide: Partial<Assigned_Guide>) => {
-  return prisma.assigned_Guide.create({ data: Guide as Assigned_Guide })
+  console.log(`📡 [Server] addAssignedInstructors Called -> Guide: ${GuideID}, Program: ${programID}`);
+  
+  try {
+    // שימוש ב-upsert במקום create כדי למנוע שגיאות כפילות
+    const result = await prisma.assigned_Guide.upsert({
+      where: {
+        Programid_Guideid: { // מפתח ייחודי מורכב (לפי הסכמה של Prisma)
+          Programid: programID,
+          Guideid: GuideID
+        }
+      },
+      update: { ...Guide }, // אם קיים - עדכן (לא יעשה נזק)
+      create: { ...Guide as Assigned_Guide } // אם לא קיים - צור חדש
+    });
 
+    console.log(`✅ [Server] Saved/Updated Successfully in DB: Guide ${GuideID} -> Program ${programID}`);
+    return result;
+  } catch (error) {
+    console.error(`❌ [Server] Error saving assignment:`, error);
+    throw error;
+  }
 }
 
 export const getGuidesById = async (ids: number[]): Promise<Guide[]> => {

@@ -9,7 +9,7 @@ import {
   useEffect,
 } from "react";
 import { AgGridReact } from "ag-grid-react";
-import "bootstrap/dist/css/bootstrap.min.css";
+//import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css"; 
 import Spinner from "react-bootstrap/Spinner";
@@ -208,27 +208,36 @@ export default function SchoolsTable() {
 
   return (
     <>
-      <Navbar
-        id="SchoolNavBar"
-        className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%] flex-row-reverse"
-        suppressHydrationWarning
-      >
-        <LoadingOverlay />
-        {ToolBar(
-          onClearFilterButtonClick, 
-          setColumnWindowOpen, 
-          onAddRowToolBarClick, 
-          onCancelChangeButtonClick, 
-          onSaveChangeButtonClick, 
-          onSaveDeletions, 
-          checkedAmount, 
-          onFilterTextBoxChanged, 
-          onDisplayProgramsClicked, 
-          LoadingOverlay, 
-          checkContactsStatus, 
-          onDisconnectContacts
-        )}
-      </Navbar>
+  <nav
+  id="SchoolNavBar"
+  className="flex-row-reverse shadow-lg"
+  suppressHydrationWarning
+style={{
+  background: theme === "dark-theme" 
+    ? 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)'
+    : 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)',
+  minHeight: '64px',
+  width: '100%',
+  borderBottom: '1px solid rgba(203, 213, 225, 0.3)',
+  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+}}
+>
+  <LoadingOverlay />
+  {ToolBar(
+    onClearFilterButtonClick, 
+    setColumnWindowOpen, 
+    onAddRowToolBarClick, 
+    onCancelChangeButtonClick, 
+    onSaveChangeButtonClick, 
+    onSaveDeletions, 
+    checkedAmount, 
+    onFilterTextBoxChanged, 
+    onDisplayProgramsClicked, 
+    LoadingOverlay, 
+    checkContactsStatus, 
+    onDisconnectContacts
+  )}
+</nav>
       <Suspense>
         <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark w-full flex-grow overflow-x-hidden" : "ag-theme-quartz w-full flex-grow overflow-x-hidden"} style={{ width: "100%", height: "1000px" }}>
           <AgGridReact

@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
+import { ThemeContext } from "@/context/Theme/Theme"; // הוסף את השורה הזו
 import React, { ChangeEvent, Suspense, useRef } from "react";
 import Select from 'react-select';
 import CreatableSelect from 'react-select/creatable';
@@ -66,7 +67,7 @@ export type ContactFilterOptions = {
 
 export default function MessagesPage() {
   const router = useRouter(); 
- 
+  const { theme } = useContext(ThemeContext);
   const gridRef: any = useRef(null);
 
   const [isSending, setIsSending] = useState(false); 
@@ -592,484 +593,439 @@ setOptions(filteredForUI.map(p => ({
     let result = message.replace(/{name}/gi, contact.FirstName || "");
     return result;
   };
-  return (
+ return (
     <>
-      <Container fluid className="formGrid text-end bg-transparent">
-        <Row className="borderedColumns flex-row-reverse">
-          <Col className="square border border-dark custom-col">
-            <Row className="mb-3 justify-content-end">
-              <Col><h4>תוכן ההודעה</h4></Col>
-            </Row>
-            <Row className="mb-3">
-              <Col><Button variant="info" onClick={addPatternHandler}>{pageText.addMessagePattern}</Button></Col>
-            </Row>
-            <Row className="mb-3">
-              <Col><InputGroup className="mb-3">
-                <Form.Control placeholder={patternTitle} style={{ direction: "rtl", textAlign: "right" }} onBlur={(e) => { setPatternTitle(e.target.value); }} />
-              </InputGroup></Col>
-            </Row>
-            <Row className="mb-3">
-              <Col>
-                <Select options={options} value={selectedOption} onChange={handlePatternChange} placeholder="..בחר תבנית הודעות" isClearable />
-                <br></br>
-                <Button onClick={handleDeletePattern}>{pageText.deleteMessagePattern}</Button>
-              </Col>
-            </Row>
-            <Row className="mb-3">
-              <Form.Group as={Col} controlId="formMsgText1">
-                <Form.Label>{pageText.msgTextLabel}</Form.Label>
-                <Form.Control as="textarea" rows={5} value={msg1} style={{ direction: "rtl", textAlign: "right" }} onChange={(e) => setMsg1(e.target.value)} />
-              </Form.Group>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formMsgText2">
+      <Container fluid className="p-4" style={{ direction: 'rtl' }}>
+        <Row className="g-4"> {/* g-4 מוסיף רווח חכם בין הכרטיסים */}
+          <Col lg={4} md={12}>
+            <div className="custom-card h-100">
+              {/* כותרת הכרטיס */}
+              <div className="custom-card-header bg-gradient-to-l from-teal-50 to-white text-teal-800 border-b border-teal-100">
+                <h4>✍️ תוכן ההודעה</h4>
+              </div>
+              
+              <div className="custom-card-body d-flex flex-column gap-3">
+                {/* כפתור הוספה */}
+                <button className="custom-btn custom-btn-info w-100 justify-content-center" onClick={addPatternHandler}>
+                  {pageText.addMessagePattern}
+                </button>
+
+                <InputGroup>
+                  <Form.Control 
+                    className="custom-input" 
+                    placeholder={patternTitle} 
+                    style={{ direction: "rtl", textAlign: "right" }} 
+                    onBlur={(e) => { setPatternTitle(e.target.value); }} 
+                  />
+                </InputGroup>
+
+                <div>
+                  <Select options={options} value={selectedOption} onChange={handlePatternChange} placeholder="..בחר תבנית הודעות" isClearable className="mb-2" />
+                  <button className="custom-btn custom-btn-danger custom-btn-sm" onClick={handleDeletePattern}>
+                    {pageText.deleteMessagePattern}
+                  </button>
+                </div>
+
+                <Form.Group controlId="formMsgText1">
+                  <Form.Label>{pageText.msgTextLabel}</Form.Label>
+                  <Form.Control 
+                    as="textarea" 
+                    className="custom-textarea" 
+                    rows={5} 
+                    value={msg1} 
+                    style={{ direction: "rtl", textAlign: "right" }} 
+                    onChange={(e) => setMsg1(e.target.value)} 
+                  />
+                </Form.Group>
+
+                <Form.Group controlId="formMsgText2">
                   <Form.Label>{pageText.msgFileLabel}</Form.Label>
                   <input type="file" id="fileInput" onChange={handleFileChange} style={{ display: 'none' }} />
-                  <br></br>
-                  <Button className="file-input-button" onClick={() => document.getElementById('fileInput')?.click()}>
-                    {fileName ? fileName : "..בחר קובץ"}
-                  </Button>
+                  <button className="custom-btn custom-btn-secondary w-100" onClick={() => document.getElementById('fileInput')?.click()}>
+                    {fileName ? `📎 ${fileName}` : "📂 בחר קובץ.."}
+                  </button>
                 </Form.Group>
-              </Row>
-              <Row className="mb-3"></Row>
-              <Form.Group as={Col} controlId="formMsgText3">
-                <Form.Label>{pageText.msgTextLabel}</Form.Label>
-                <Form.Control as="textarea" rows={5} value={msg2} style={{ direction: "rtl", textAlign: "right" }} onChange={(e) => { setMsg2(e.target.value); }} />
-              </Form.Group>
-            </Row>
-            <Row>
-              <Col>
-                <Button variant="danger" onClick={() => { }}>{pageText.testButton}</Button>
-              </Col>
-            </Row>
+
+                <Form.Group controlId="formMsgText3">
+                  <Form.Label>הודעה משלימה</Form.Label>
+                  <Form.Control 
+                    as="textarea" 
+                    className="custom-textarea" 
+                    rows={5} 
+                    value={msg2} 
+                    style={{ direction: "rtl", textAlign: "right" }} 
+                    onChange={(e) => { setMsg2(e.target.value); }} 
+                  />
+                </Form.Group>
+
+                <button className="custom-btn custom-btn-ghost w-100" onClick={() => { }}>
+                  🧪 {pageText.testButton}
+                </button>
+              </div>
+            </div>
           </Col>
 
-          <Col className="square border border-dark">
-            <Form>
-              <Row className="mb-3"><Col><h2>בחר בתי ספר</h2></Col></Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formSchoolAmount">
-                  <Form.Label>{pageText.schoolAmountLabel}</Form.Label>
-                  <Form.Control type="number" value={schoolAmount} onChange={handleSchoolAmountChange} step={5} />
-                  {schoolAmountError ? <p className="errorMessage">{pageText.schoolAmountError}</p> : null}
-                </Form.Group>
-              </Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formSchoolStatuses">
-                  <Form.Label>{pageText.schoolStatusesLabel}</Form.Label>
-                  <MultiSelectSearchBar selected={selectedSchoolStatuses} setSelected={handleSchoolStatusesSelectionChange} options={SchoolStatuses} placeholder="" labelKey={searchBarLabelKey} />
-                  <Form.Text className="text-muted">{pageText.noneChosenNote}</Form.Text>
-                </Form.Group>
-              </Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formNewStatus">
-                  <Form.Label>שלבי חינוך</Form.Label>
-                  <MultiSelectSearchBar selected={selectedEductionStages} setSelected={handleStagesSelectionChange} options={stages} placeholder="" labelKey={searchBarLabelKey} />
-                </Form.Group>
-              </Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formNewStatus">
-                  <Form.Label>מגזרים</Form.Label>
-                  <MultiSelectSearchBar selected={selectedSectors} setSelected={handleSectorSelectionChange} options={sectors} placeholder="" labelKey={searchBarLabelKey} />
-                </Form.Group>
-              </Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formNewStatus">
-                  <Form.Label>סוגים</Form.Label>
-                  <MultiSelectSearchBar selected={selectedTypes} setSelected={handleTypeSelectionChange} options={schoolTypes} placeholder="" labelKey={searchBarLabelKey} />
-                </Form.Group>
-              </Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formNewStatus">
-                  <Form.Label>ערים</Form.Label>
-                  <MultiSelectSearchBar selected={selectedCities} setSelected={handleCitySelectionChange} options={Cities} placeholder="" labelKey={searchBarLabelKey} />
-                </Form.Group>
-              </Row>
-            </Form>
+          
+          <Col lg={4} md={12}>
+            <div className="custom-card h-100">
+              <div className="custom-card-header bg-gradient-to-l from-indigo-50 to-white text-indigo-800 border-b border-indigo-100">
+                <h4>🏫 בחר בתי ספר</h4>
+              </div>
+              <div className="custom-card-body d-flex flex-column gap-3">
+                <Form>
+                  <Form.Group className="mb-3" controlId="formSchoolAmount">
+                    <Form.Label>{pageText.schoolAmountLabel}</Form.Label>
+                    <Form.Control 
+                      type="number" 
+                      className="custom-input" 
+                      value={schoolAmount} 
+                      onChange={handleSchoolAmountChange} 
+                      step={5} 
+                    />
+                    {schoolAmountError && <p className="text-danger small">{pageText.schoolAmountError}</p>}
+                  </Form.Group>
+
+                  <Form.Group className="mb-3">
+                    <Form.Label>{pageText.schoolStatusesLabel}</Form.Label>
+                    <MultiSelectSearchBar selected={selectedSchoolStatuses} setSelected={handleSchoolStatusesSelectionChange} options={SchoolStatuses} placeholder="" labelKey={searchBarLabelKey} />
+                  </Form.Group>
+
+                  <Form.Group className="mb-3">
+                    <Form.Label>שלבי חינוך</Form.Label>
+                    <MultiSelectSearchBar selected={selectedEductionStages} setSelected={handleStagesSelectionChange} options={stages} placeholder="" labelKey={searchBarLabelKey} />
+                  </Form.Group>
+
+                  <Form.Group className="mb-3">
+                    <Form.Label>מגזרים</Form.Label>
+                    <MultiSelectSearchBar selected={selectedSectors} setSelected={handleSectorSelectionChange} options={sectors} placeholder="" labelKey={searchBarLabelKey} />
+                  </Form.Group>
+
+                  <Form.Group className="mb-3">
+                    <Form.Label>סוגים</Form.Label>
+                    <MultiSelectSearchBar selected={selectedTypes} setSelected={handleTypeSelectionChange} options={schoolTypes} placeholder="" labelKey={searchBarLabelKey} />
+                  </Form.Group>
+
+                  <Form.Group className="mb-3">
+                    <Form.Label>ערים</Form.Label>
+                    <MultiSelectSearchBar selected={selectedCities} setSelected={handleCitySelectionChange} options={Cities} placeholder="" labelKey={searchBarLabelKey} />
+                  </Form.Group>
+                </Form>
+              </div>
+            </div>
           </Col>
 
-          <Col className="square border border-dark">
-            <Form>
-              <Row className="mb-3"><Col><h2>{pageText.chooseContacts}</h2></Col></Row>
-              <Row className="mb-3"><Col><b>{pageText.setPriority}</b></Col></Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formContactIsRep">
-                  <Form.Label>{pageText.contactIsRepLabel}</Form.Label>
-                  <Form.Check inline type="radio" label={pageText.yes} name="isRepRadios" id="isRepRadios1" onClick={() => handleIsRepChange(true)} checked={isRep === true} />
-                  <Form.Check inline type="radio" label={pageText.no} name="isRepRadios" id="isRepRadios2" onClick={() => handleIsRepChange(false)} checked={isRep === false} />
-                  <Form.Check inline type="radio" label={pageText.both} name="isRepRadios" id="isRepRadios3" onClick={() => handleIsRepChange(null)} checked={isRep === null} />
-                </Form.Group>
-              </Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formNewStatus">
-                  <Form.Label>תפקידים</Form.Label>
-                  <MultiSelectSearchBar selected={selectedRoles} setSelected={handleRoleSelectionChange} options={roles} placeholder="" labelKey={searchBarLabelKey} />
-                </Form.Group>
-              </Row>
-              <Row className="mb-3">
-                <Form.Group as={Col} controlId="formNewStatus">
-                  <Form.Label>סטטוסים של אנשי קשר</Form.Label>
-                  <MultiSelectSearchBar selected={selectedContactStatuses} setSelected={handleContactStatusesSelectionChange} options={ContactStatuses} placeholder="" labelKey={searchBarLabelKey} />
-                </Form.Group>
-              </Row>
-            </Form>
-            <Row className="mb-3"><Col></Col></Row>
-            <Row className="mb-3"><Col><Button variant="primary" onClick={() => { }}>{pageText.addPriority}</Button></Col></Row>
-            <Row className="mb-3">
-              <Col>
-                <Button variant="primary" onClick={async () => {
-                  console.log("\n=== 📋 בחירת אנשי קשר מבתי ספר מסוננים ===");
-                  if (selectedSchools.length === 0) {
-                    alert("אנא בחר בתי ספר תחילה (השתמש בסינון או בכמות)");
-                    return;
-                  }
+          <Col lg={4} md={12}>
+            <div className="custom-card h-100">
+              <div className="custom-card-header bg-gradient-to-l from-orange-50 to-white text-orange-800 border-b border-orange-100">
+                <h4>👥 בחר אנשי קשר</h4>
+              </div>
 
-                  const selectedSchoolsIds = selectedSchools.map((school: { Schoolid: any }) => school.Schoolid);
-                  const allContacts = await selectContacts(selectedSchoolsIds);
-                  setSelectedContacts(allContacts);
+              <div className="custom-card-body d-flex flex-column gap-3">
+                <Form>
+                  {/* אזור בחירת נציג - מעוצב */}
+                  <div className="bg-slate-50 p-3 rounded border mb-3">
+                    <Form.Label className="fw-bold mb-2">{pageText.contactIsRepLabel}</Form.Label>
+                    <div className="d-flex gap-3">
+                      <Form.Check inline type="radio" label={pageText.yes} name="isRepRadios" id="isRepRadios1" onClick={() => handleIsRepChange(true)} checked={isRep === true} />
+                      <Form.Check inline type="radio" label={pageText.no} name="isRepRadios" id="isRepRadios2" onClick={() => handleIsRepChange(false)} checked={isRep === false} />
+                      <Form.Check inline type="radio" label={pageText.both} name="isRepRadios" id="isRepRadios3" onClick={() => handleIsRepChange(null)} checked={isRep === null} />
+                    </div>
+                  </div>
 
-                  const filtered = allContacts.filter((contact: any) => {
-                    const contactIsRep = contact.IsRepresentative === true ||
-                      contact.isRepresentative === true ||
-                      contact.IsRepresentive === true ||
-                      contact.IsRep === true;
-                    const repMatch = isRep === null ||
-                      (isRep === true && contactIsRep) ||
-                      (isRep === false && !contactIsRep);
-                    const roleMatch = selectedRoles.length === 0 || selectedRoles.includes(contact.Role);
-                    const statusMatch = selectedContactStatuses.length === 0 ||
-                      selectedContactStatuses.includes(contact.Status);
-                    return repMatch && roleMatch && statusMatch;
-                  });
+                  <Form.Group className="mb-3">
+                    <Form.Label>תפקידים</Form.Label>
+                    <MultiSelectSearchBar selected={selectedRoles} setSelected={handleRoleSelectionChange} options={roles} placeholder="" labelKey={searchBarLabelKey} />
+                  </Form.Group>
 
-                  setFilteredContacts(filtered);
-                  setMsgStatuses([]);
-                  setRowData(selectedSchools);
+                  <Form.Group className="mb-3">
+                    <Form.Label>סטטוסים של אנשי קשר</Form.Label>
+                    <MultiSelectSearchBar selected={selectedContactStatuses} setSelected={handleContactStatusesSelectionChange} options={ContactStatuses} placeholder="" labelKey={searchBarLabelKey} />
+                  </Form.Group>
+                </Form>
 
-                  const resultMsg = `נמצאו ${filtered.length} אנשי קשר מתוך ${allContacts.length}\nבתי ספר: ${selectedSchools.length}\nנציג: ${isRep === null ? "הכל" : (isRep ? "רק נציגים" : "לא נציגים")}\nתפקידים: ${selectedRoles.length === 0 ? "הכל" : selectedRoles.length}\nסטטוסים: ${selectedContactStatuses.length === 0 ? "הכל" : selectedContactStatuses.length}`.trim();
-                  alert(resultMsg);
-                }}>
-                  {pageText.chooseContacts}
-                </Button>
-              </Col>
-            </Row>
-
-            <Row className="mb-3">
-              <Form.Group as={Col} controlId="formNewStatus">
-                <Form.Label>בחר סטטוס</Form.Label>
-                <CreatableSelect value={newStatus} onChange={handleStatusChange} options={statusesOptions} isClearable placeholder="..בחר סטטוס או הקלד חדש" />
-              </Form.Group>
-            </Row>
-            <Row className="mb-3">
-              <Col style={{ display: "flex", gap: "10px" }}>
-                {/* === כפתור שליחה מעודכן === */}
-                <Button
-                  variant="primary"
-                  disabled={isSending}
-onClick={async () => {
-  console.log("\n=== 🚀 תחילת תהליך שליחה ===");
-  
-  // ✅ בדיקה ישירה מול השרת במקום שימוש ב-qrCodeRef שנמחק
-  try {
-    console.log("🔍 בודק חיבור ל-WhatsApp...");
-    const statusRes = await fetch('http://localhost:3994/status');
-    const statusData = await statusRes.json();
-    
-    if (!statusData.connected) {
-      console.log("❌ לא מחובר ל-WhatsApp");
-      alert("נדרש חיבור ל-WhatsApp כדי לשלוח הודעות.\nאנא וודא שהאינדיקטור בסרגל העליון ירוק.");
-      setIsSending(false);
-      return;
-    }
-    
-    console.log("✅ WhatsApp מחובר - ממשיך בשליחה");
-  } catch (err) {
-    console.error("❌ שגיאה בתקשורת עם השרת:", err);
-    alert("שגיאה בתקשורת עם שרת ה-WhatsApp. וודא שהוא פועל.");
-    setIsSending(false);
-    return;
-  }               setNewStatusError(false);
-                    // איפוס State של React
-                    setSendingStats({ success: 0, missing: 0, error: 0 });
-                    
-                    let localSuccessCount = 0;
-                    let localErrorCount = 0;
-                    let localMissingCount = 0;
-
-                    shouldStopRef.current = false; 
-                    setIsSending(true); 
-
-                    console.log("\n=== 🚀 Starting Batch Send ===");
-// ========================================
-
-
-                    // 👇 קוד חדש 1: הכנה - טעינת הנתונים המקומיים פעם אחת בהתחלה
-                    let currentStorageData: any = null;
-                    let localContactsList: any[] = [];
-                    try {
-                      currentStorageData = await getFromStorage();
-                      if (currentStorageData && currentStorageData.schoolsContacts) {
-                        localContactsList = currentStorageData.schoolsContacts;
-                      }
-                    } catch (e) {
-                      console.error("Failed to load initial storage", e);
-                    }
-                    // 👆 סוף קוד חדש 1
-
-                    if (filteredContacts.length === 0) {
-                      alert("לא נבחרו אנשי קשר לשליחה");
-                      setIsSending(false);
+                {/* כפתור בחירת אנשי קשר */}
+                <button
+                  className="custom-btn custom-btn-primary w-100 justify-content-center mt-2 shadow-sm"
+                  onClick={async () => {
+                    console.log("\n=== 📋 בחירת אנשי קשר מבתי ספר מסוננים ===");
+                    if (selectedSchools.length === 0) {
+                      alert("אנא בחר בתי ספר תחילה (השתמש בסינון או בכמות)");
                       return;
                     }
 
-                    // קבלת הסטטוס
-                    let statusToUse = "";
-                    if (newStatus && typeof newStatus === 'object' && 'value' in newStatus) {
-                      statusToUse = (newStatus as any).value;
-                    } else if (typeof newStatus === 'string') {
-                      statusToUse = newStatus;
-                    }
+                    const selectedSchoolsIds = selectedSchools.map((school: { Schoolid: any }) => school.Schoolid);
+                    const allContacts = await selectContacts(selectedSchoolsIds);
+                    setSelectedContacts(allContacts);
 
-                    // הוספת סטטוס חדש אם לא קיים
-                    if (statusToUse) {
-                      if (!ContactStatuses.includes(statusToUse)) {
-                        await addContactStatuses(statusToUse);
-                        setContactStatuses(prev => [...prev, statusToUse]);
-                      }
-                      if (!SchoolStatuses.includes(statusToUse)) {
-                        await addSchoolStatuses(statusToUse);
-                        setSchoolStatuses(prev => [...prev, statusToUse]);
-                      }
-                    }
+                    const filtered = allContacts.filter((contact: any) => {
+                      const contactIsRep = contact.IsRepresentative === true ||
+                        contact.isRepresentative === true ||
+                        contact.IsRepresentive === true ||
+                        contact.IsRep === true;
+                      const repMatch = isRep === null ||
+                        (isRep === true && contactIsRep) ||
+                        (isRep === false && !contactIsRep);
+                      const roleMatch = selectedRoles.length === 0 || selectedRoles.includes(contact.Role);
+                      const statusMatch = selectedContactStatuses.length === 0 ||
+                        selectedContactStatuses.includes(contact.Status);
+                      return repMatch && roleMatch && statusMatch;
+                    });
 
-                    // === 🛠️ ביטול מנגנון סינון כפילויות לצורך בדיקות ===
-                    // לוקחים את כל אנשי הקשר שיש להם טלפון, גם אם המספר חוזר על עצמו
-                    const contactsToSend = filteredContacts.filter(contact => 
-                        contact.Cellphone && contact.Cellphone.trim() !== ""
-                    );
-                    
-                    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+                    setFilteredContacts(filtered);
+                    setMsgStatuses([]);
+                    setRowData(selectedSchools);
 
-                    console.log(`📤 Sending to ${contactsToSend.length} contacts (including duplicates for testing)...`);
-                    
-                    // הדפסת לוג ברור עם פירוט IsRepresentative
-                    console.table(contactsToSend.map(c => ({ 
-                        Name: `${c.FirstName} ${c.LastName}`, 
-                        Phone: c.Cellphone,
-                        Role: c.Role,
-                        SchoolID: c.SchoolId || c.Schoolid,
-                        IsRep: c.IsRepresentative || c.IsRepresentive || c.isRepresentative // בדיקה למה נבחר
-                    })));
+                    const resultMsg = `נמצאו ${filtered.length} אנשי קשר מתוך ${allContacts.length}\nבתי ספר: ${selectedSchools.length}\nנציג: ${isRep === null ? "הכל" : (isRep ? "רק נציגים" : "לא נציגים")}\nתפקידים: ${selectedRoles.length === 0 ? "הכל" : selectedRoles.length}\nסטטוסים: ${selectedContactStatuses.length === 0 ? "הכל" : selectedContactStatuses.length}`.trim();
+                    alert(resultMsg);
+                  }}
+                >
+                  👥 {pageText.chooseContacts}
+                </button>
 
-                    // שליחת הודעות - הלולאה הראשית
-                    for (const [index, contact] of contactsToSend.entries()) {
+                <hr className="my-2" />
 
-                      // 🛑 בדיקת עצירה בתחילת כל איטרציה
-                      if (shouldStopRef.current) {
-                        console.log("🛑 Sending Process Stopped by User");
-                        alert(`התהליך נעצר על ידי המשתמש.\nנשלחו ${index} הודעות מתוך ${contactsToSend.length}.`);
-                        break;
-                      }
+                <Form.Group className="mb-3">
+                  <Form.Label>עדכון סטטוס לאחר שליחה</Form.Label>
+                  <CreatableSelect value={newStatus} onChange={handleStatusChange} options={statusesOptions} isClearable placeholder="..בחר סטטוס או הקלד חדש" />
+                </Form.Group>
 
-                      const phone = contact.Cellphone;
-
-                      if (!phone || phone.trim() === "") {
-                        setSendingStats(prev => ({ ...prev, missing: prev.missing + 1 }));
-                        localMissingCount++; // עדכון מונה מקומי
-                        await updateContactsStatus("להשיב", [contact.Contactid]);
-                        continue;
-                      }
-
+                <div className="d-flex flex-column gap-2 mt-auto">
+                  {/* כפתור שליחה ראשי ומשודרג */}
+                  <button
+                    className={`custom-btn custom-btn-success custom-btn-lg w-100 justify-content-center shadow-lg ${isSending ? 'opacity-75' : ''}`}
+                    disabled={isSending}
+                    onClick={async () => {
+                      console.log("\n=== 🚀 תחילת תהליך שליחה ===");
+                      
                       try {
-                        const personalizedMsg1 = replaceMessageVariables(msg1, contact);
-                        const personalizedMsg2 = replaceMessageVariables(msg2, contact);
+                        console.log("🔍 בודק חיבור ל-WhatsApp...");
+                        const statusRes = await fetch('http://localhost:3994/status');
+                        const statusData = await statusRes.json();
+                        
+                        if (!statusData.connected) {
+                          console.log("❌ לא מחובר ל-WhatsApp");
+                          alert("נדרש חיבור ל-WhatsApp כדי לשלוח הודעות.\nאנא וודא שהאינדיקטור בסרגל העליון ירוק.");
+                          setIsSending(false);
+                          return;
+                        }
+                        console.log("✅ WhatsApp מחובר - ממשיך בשליחה");
+                      } catch (err) {
+                        console.error("❌ שגיאה בתקשורת עם השרת:", err);
+                        alert("שגיאה בתקשורת עם שרת ה-WhatsApp. וודא שהוא פועל.");
+                        setIsSending(false);
+                        return;
+                      }
 
-                        console.log(`📨 [${index + 1}/${contactsToSend.length}] Sending to ${contact.FirstName} (${phone})...`);
+                      setNewStatusError(false);
+                      setSendingStats({ success: 0, missing: 0, error: 0 });
+                      
+                      let localSuccessCount = 0;
+                      let localErrorCount = 0;
+                      let localMissingCount = 0;
 
-                        const result = await sendMessageViaWhatsApp(
-                          personalizedMsg1, 
-                          personalizedMsg2, 
-                          addedFile, 
-                          phone, 
-                          "972", 
-                          selectedPattern?.PatternId
-                        );
+                      shouldStopRef.current = false; 
+                      setIsSending(true); 
 
-                        if (result.success) {
-                          console.log(`✅ Sent successfully to ${contact.FirstName}`);
-                          
-                          // עדכון גם ב-State (עבור התצוגה למעלה) וגם במשתנה מקומי (עבור האלרט)
-                          setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
-                          localSuccessCount++; 
+                      console.log("\n=== 🚀 Starting Batch Send ===");
 
-                          if (statusToUse) {
-                            // 1. עדכון בשרת (Contacts)
-                            await updateContactsStatus(statusToUse, [contact.Contactid]);
+                      let currentStorageData: any = null;
+                      let localContactsList: any[] = [];
+                      try {
+                        currentStorageData = await getFromStorage();
+                        if (currentStorageData && currentStorageData.schoolsContacts) {
+                          localContactsList = currentStorageData.schoolsContacts;
+                        }
+                      } catch (e) {
+                        console.error("Failed to load initial storage", e);
+                      }
 
-                             // 👇 קוד חדש 2: עדכון Storage מיידי (מדמה את השרת)
-                             try {
-                                // מציאת איש הקשר ברשימה המקומית ועדכון הסטטוס שלו
-                                const contactIndex = localContactsList.findIndex((c: any) => c.Contactid === contact.Contactid);
-                                if (contactIndex !== -1) {
-                                    // עדכון הסטטוס בזיכרון
-                                    localContactsList[contactIndex].Status = statusToUse;
-                                    localContactsList[contactIndex].status = statusToUse; // גיבוי למקרה של רגישות לאותיות
+                      if (filteredContacts.length === 0) {
+                        alert("לא נבחרו אנשי קשר לשליחה");
+                        setIsSending(false);
+                        return;
+                      }
 
-                                    // שמירה חזרה ל-Storage - זה מה שגורם לטבלה להתעדכן מייד!
-                                    if (currentStorageData) {
-                                        await updateStorage({ 
-                                            ...currentStorageData, 
-                                            schoolsContacts: localContactsList 
-                                        });
+                      let statusToUse = "";
+                      if (newStatus && typeof newStatus === 'object' && 'value' in newStatus) {
+                        statusToUse = (newStatus as any).value;
+                      } else if (typeof newStatus === 'string') {
+                        statusToUse = newStatus;
+                      }
+
+                      if (statusToUse) {
+                        if (!ContactStatuses.includes(statusToUse)) {
+                          await addContactStatuses(statusToUse);
+                          setContactStatuses(prev => [...prev, statusToUse]);
+                        }
+                        if (!SchoolStatuses.includes(statusToUse)) {
+                          await addSchoolStatuses(statusToUse);
+                          setSchoolStatuses(prev => [...prev, statusToUse]);
+                        }
+                      }
+
+                      const contactsToSend = filteredContacts.filter(contact => 
+                          contact.Cellphone && contact.Cellphone.trim() !== ""
+                      );
+                      
+                      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+                      console.log(`📤 Sending to ${contactsToSend.length} contacts...`);
+                      
+                      for (const [index, contact] of contactsToSend.entries()) {
+                        if (shouldStopRef.current) {
+                          console.log("🛑 Sending Process Stopped by User");
+                          alert(`התהליך נעצר על ידי המשתמש.\nנשלחו ${index} הודעות מתוך ${contactsToSend.length}.`);
+                          break;
+                        }
+
+                        const phone = contact.Cellphone;
+
+                        if (!phone || phone.trim() === "") {
+                          setSendingStats(prev => ({ ...prev, missing: prev.missing + 1 }));
+                          localMissingCount++;
+                          await updateContactsStatus("להשיב", [contact.Contactid]);
+                          continue;
+                        }
+
+                        try {
+                          const personalizedMsg1 = replaceMessageVariables(msg1, contact);
+                          const personalizedMsg2 = replaceMessageVariables(msg2, contact);
+
+                          console.log(`📨 [${index + 1}/${contactsToSend.length}] Sending to ${contact.FirstName}...`);
+
+                          const result = await sendMessageViaWhatsApp(
+                            personalizedMsg1, 
+                            personalizedMsg2, 
+                            addedFile, 
+                            phone, 
+                            "972", 
+                            selectedPattern?.PatternId
+                          );
+
+                          if (result.success) {
+                            console.log(`✅ Sent successfully to ${contact.FirstName}`);
+                            setSendingStats(prev => ({ ...prev, success: prev.success + 1 }));
+                            localSuccessCount++; 
+
+                            if (statusToUse) {
+                              await updateContactsStatus(statusToUse, [contact.Contactid]);
+
+                              try {
+                                  const contactIndex = localContactsList.findIndex((c: any) => c.Contactid === contact.Contactid);
+                                  if (contactIndex !== -1) {
+                                      localContactsList[contactIndex].Status = statusToUse;
+                                      localContactsList[contactIndex].status = statusToUse;
+                                      if (currentStorageData) {
+                                          await updateStorage({ 
+                                              ...currentStorageData, 
+                                              schoolsContacts: localContactsList 
+                                          });
+                                      }
+                                  }
+                              } catch (err) {
+                                  console.error("Error updating local storage:", err);
+                              }
+
+                              const isRep = contact.IsRepresentative === true ||
+                                contact.IsRepresentive === true ||
+                                contact.isRepresentative === true ||
+                                contact.IsRep === true;
+
+                              if (isRep) {
+                                const rawSchoolId = contact.Schoolid || contact.SchoolId;
+                                if (rawSchoolId) {
+                                  const schoolIdNum = Number(rawSchoolId);
+                                  await updateSchoolStatus(statusToUse, [schoolIdNum]);
+
+                                  if (gridRef.current && gridRef.current.api) {
+                                    const rowNode = gridRef.current.api.getRowNode(String(schoolIdNum));
+                                    if (rowNode) {
+                                      rowNode.setDataValue('Status', statusToUse);
+                                      try {
+                                          const currentData = await getFromStorage();
+                                          if (currentData && currentData.Schools) {
+                                              const updatedSchools = currentData.Schools.map((s: any) => 
+                                                  Number(s.Schoolid) === schoolIdNum ? { ...s, Status: statusToUse } : s
+                                              );
+                                              await updateStorage({ ...currentData, Schools: updatedSchools });
+                                          }
+                                      } catch (err) { console.error("Error updating storage:", err); }
+                                      
+                                      setRowData((currentRows: any[]) => 
+                                        currentRows.map(row => 
+                                          String(row.Schoolid) === String(schoolIdNum) ? { ...row, Status: statusToUse } : row
+                                        )
+                                      );
+                                      gridRef.current.api.flashCells({ rowNodes: [rowNode] });
+                                      gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
                                     }
+                                  }
+
+                                  try {
+                                    const currentData = await getFromStorage();
+                                    if (currentData && currentData.Schools) {
+                                      const updatedSchools = currentData.Schools.map((s: any) => 
+                                        String(s.Schoolid) === String(contact.Schoolid || contact.SchoolId) 
+                                          ? { ...s, Status: statusToUse } : s
+                                      );
+                                      await updateStorage({ ...currentData, Schools: updatedSchools });
+                                    }
+                                  } catch (e) { console.error("Storage update failed", e); }
                                 }
-                            } catch (err) {
-                                console.error("Error updating local storage immediately:", err);
+                              }
                             }
-                            // 👆 סוף קוד חדש 2
-
-                            const isRep = contact.IsRepresentative === true ||
-                              contact.IsRepresentive === true ||
-                              contact.isRepresentative === true ||
-                              contact.IsRep === true;
-
-                            if (isRep) {
-                              const rawSchoolId = contact.Schoolid || contact.SchoolId;
-
-                              if (rawSchoolId) {
-                                const schoolIdNum = Number(rawSchoolId);
-                                // 2. עדכון בשרת (School)
-                                await updateSchoolStatus(statusToUse, [schoolIdNum]);
-
-                                // 3.  עדכון ויזואלי מיידי בטבלה (AgGrid) 
-                               if (gridRef.current && gridRef.current.api) {
-  const rowNode = gridRef.current.api.getRowNode(String(schoolIdNum));
-  if (rowNode) {
-    // א. עדכון ויזואלי מיידי ב-Grid
-    rowNode.setDataValue('Status', statusToUse);
-    try {
-            // 1. שליפת הנתונים הנוכחיים מה-Storage
-            const currentData = await getFromStorage();
-            
-            if (currentData && currentData.Schools) {
-                // 2. יצירת רשימת בתי ספר מעודכנת שבה רק הסטטוס של ביה"ס הנוכחי משתנה
-                const updatedSchools = currentData.Schools.map((s: any) => 
-                    Number(s.Schoolid) === schoolIdNum ? { ...s, Status: statusToUse } : s
-                );
-
-                // 3. שמירה חזרה ל-Storage (זה מה שיגרום ל-SchoolTable להתעדכן מיידית)
-                await updateStorage({ 
-                    ...currentData, 
-                    Schools: updatedSchools 
-                });
-            }
-        } catch (err) {
-            console.error("שגיאה בעדכון הסטורג':", err);
-        }
-    // ב. עדכון ה-State של React (הכרחי כדי שהשינוי לא ייעלם)
-    setRowData((currentRows: any[]) => 
-      currentRows.map(row => 
-        String(row.Schoolid) === String(schoolIdNum) ? { ...row, Status: statusToUse } : row
-      )
-    );
-
-    // ג. רענון ויזואלי
-    gridRef.current.api.flashCells({ rowNodes: [rowNode] });
-gridRef.current.api.refreshCells({ rowNodes: [rowNode], columns: ['Status', 'status', 'סטטוס'], force: true });
-                  }
-                }
-
-                // --- עדכון ה-STORAGE המרכזי כדי לסנכרן את עמוד בתי ספר ---
-                try {
-                  const currentData = await getFromStorage();
-                  if (currentData && currentData.Schools) {
-                    const updatedSchools = currentData.Schools.map((s: any) => 
-                      String(s.Schoolid) === String(contact.Schoolid || contact.SchoolId) 
-                        ? { ...s, Status: statusToUse } 
-                        : s
-                    );
-                    await updateStorage({ ...currentData, Schools: updatedSchools });
-                  }
-                } catch (e) {
-                  console.error("Storage update failed", e);
-                }
-                // -------------------------------------------------------
-
-              }
-            }
-          }
-        } else {
-                          console.log(`❌ Failed to send to ${contact.FirstName}`);
+                          } else {
+                            console.log(`❌ Failed to send to ${contact.FirstName}`);
+                            setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
+                            localErrorCount++;
+                            await updateContactsStatus("שגוי", [contact.Contactid]);
+                          }
+                        } catch (error) {
+                          console.error(`❌ Error sending to ${contact.FirstName}:`, error);
                           setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
                           localErrorCount++;
-                          await updateContactsStatus("שגוי", [contact.Contactid]);
                         }
-                      } catch (error) {
-                        console.error(`❌ Error sending to ${contact.FirstName}:`, error);
-                        setSendingStats(prev => ({ ...prev, error: prev.error + 1 }));
-                        localErrorCount++;
-                      }
 
-                      // ========================================
-                      // 🎲 DELAY חכם לפני ההודעה הבאה
-                      // ========================================
-                      // ========================================
-// ========================================
-// 🎲 ניטור ומדידת זמן המתנה אמיתי
-// ========================================
-if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
-    const startTime = Date.now(); // תחילת מדידת זמן אמת
-    
-    // שליפת הנתונים מתוך delayUtils
-    const delayMs = getSmartMessageDelay(contactsToSend.length, index);
-    const timeRemaining = estimateRemainingTime(contactsToSend.length, index);
-    setEstimatedFinish(timeRemaining);
+                        if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
+                          const startTime = Date.now();
+                          const delayMs = getSmartMessageDelay(contactsToSend.length, index);
+                          const timeRemaining = estimateRemainingTime(contactsToSend.length, index);
+                          setEstimatedFinish(timeRemaining);
+                          await sleep(delayMs);
+                          const actualDelaySec = Math.round((Date.now() - startTime) / 1000);
+                          let type = "normal";
+                          if (actualDelaySec > 25) type = "coffee";
+                          else if ((index + 1) % 10 === 0) type = "milestone";
+                          setDelayHistory(prev => [...prev, { delay: actualDelaySec, type }]);
+                        }
+                      } 
 
-    // המתנה בפועל
-    await sleep(delayMs);
+                      setIsSending(false);
 
-    // חישוב הזמן שעבר באמת בשניות
-    const actualDelaySec = Math.round((Date.now() - startTime) / 1000);
-
-    // קביעת סוג לפי הזמן האמיתי שנמדד בפועל
-    let type = "normal";
-    if (actualDelaySec > 25) {
-        type = "coffee"; // הפסקת קפה
-    } else if ((index + 1) % 10 === 0) {
-        type = "milestone"; // פאוזה של כל 10 הודעות
-    }
-
-    // עדכון ההיסטוריה לגרף - רק עבור המתנה שבין הודעה להודעה
-    setDelayHistory(prev => [...prev, { delay: actualDelaySec, type }]);
-}
-                    } // סוף לולאה
-
-                    // סיום התהליך
-                    setIsSending(false);
-
-                    // 👇 קוד חדש 3: הסרת סנכרון כפול בסוף והשארת הודעת סיום בלבד
-                    if (!shouldStopRef.current) {
-                      alert(`תהליך השליחה הסתיים.\nהצלחות: ${localSuccessCount}`);
-                    }
-                    // 👆 סוף קוד חדש 3
-                  }}>
-                  {isSending ? "שולח..." : pageText.sendMessages}
-                </Button>
-
-                {/* === כפתור עצירה חדש === */}
-                {isSending && (
-                  <Button
-                    variant="danger"
-                    onClick={() => {
-                      if (window.confirm("האם אתה בטוח שברצונך לעצור את השליחה?")) {
-                        shouldStopRef.current = true;
+                      if (!shouldStopRef.current) {
+                        alert(`תהליך השליחה הסתיים.\nהצלחות: ${localSuccessCount}`);
                       }
                     }}
                   >
-                    עצור שליחה ⏹️
-                  </Button>
-                )}
-              </Col>
-            </Row>
+                    {isSending ? "🚀 שולח הודעות..." : `📤 ${pageText.sendMessages}`}
+                  </button>
+
+                  {/* כפתור עצירה - מופיע רק בזמן שליחה */}
+                  {isSending && (
+                    <button
+                      className="custom-btn custom-btn-danger w-100 justify-content-center"
+                      onClick={() => {
+                        if (window.confirm("האם אתה בטוח שברצונך לעצור את השליחה?")) {
+                          shouldStopRef.current = true;
+                        }
+                      }}
+                    >
+                      🛑 עצור שליחה
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </Col>
         </Row>
         <Row className="mt-4 mb-2">
@@ -1096,7 +1052,11 @@ if (index < contactsToSend.length - 1 && !shouldStopRef.current) {
           </Col>
         </Row>
         <Suspense>
-          <div id="grid-1" className="ag-theme-quartz-dark " style={{ width: "100%", height: "1000px" }}>
+          <div 
+  id="grid-1" 
+  className={theme === "dark-theme" ? "ag-theme-quartz-dark" : "ag-theme-quartz"} 
+  style={{ width: "100%", height: "1000px" }}
+>
             <AgGridReact ref={gridRef} rowData={rowData} columnDefs={colDefs} enableRtl={true} onGridReady={onGridReady} getRowId={(params) => String(params.data.Schoolid)} />
           </div>
         </Suspense>

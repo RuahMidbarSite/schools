@@ -723,8 +723,22 @@ export const PaymentsTable = () => {
 
   const getRowId = useCallback((params: GetRowIdParams<School>) => String(params.data.Schoolid), []);
 
-  return (
-    <Container fluid={true} className={theme === "dark-theme" ? "bg-[#1f2936]" : "bg-[white]"}>
+ return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%)',
+      padding: '0',
+    }}>
+    <style>{`
+      .ag-theme-quartz,
+      .ag-theme-quartz-dark {
+        --ag-background-color: transparent !important;
+      }
+      .ag-root-wrapper {
+        background: transparent !important;
+      }
+    `}</style>
+    <Container fluid={true} className="bg-transparent">
       <Dialog open={dialogOpen} onClose={handleDialogClose}>
         {dialogType === "error" && (<><DialogContent> <DialogContentText>{dialogMessage}</DialogContentText> </DialogContent><DialogActions> <Button onClick={handleDialogClose}>Close</Button> </DialogActions></>)}
       </Dialog>
@@ -953,7 +967,7 @@ export const PaymentsTable = () => {
         </Col>
       </Row>
     </Container>
+    </div>
   )
 }
-
 export default PaymentsTable;

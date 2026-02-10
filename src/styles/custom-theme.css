@@ -1,0 +1,47 @@
+/* Custom AG Grid Theme - Darker Headers */
+
+/* Light Theme Headers */
+.ag-theme-quartz .ag-header {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%) !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.3) !important;
+}
+
+.ag-theme-quartz .ag-header-cell {
+  background: transparent !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+  border-right: 1px solid rgba(203, 213, 225, 0.2) !important;
+}
+
+.ag-theme-quartz .ag-header-row {
+  background: transparent !important;
+}
+
+/* Dark Theme Headers - lighter to match middle bar */
+.ag-theme-quartz-dark .ag-header {
+  background: linear-gradient(135deg, #94a3b8 0%, #cbd5e1 100%) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3) !important;
+}
+
+.ag-theme-quartz-dark .ag-header-cell {
+  background: transparent !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+  border-right: 1px solid rgba(148, 163, 184, 0.2) !important;
+}
+
+.ag-theme-quartz-dark .ag-header-row {
+  background: transparent !important;
+}
+
+/* Hover Effects for Headers */
+.ag-theme-quartz .ag-header-cell:hover,
+.ag-theme-quartz-dark .ag-header-cell:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Column Resize Handle */
+.ag-theme-quartz .ag-header-cell-resize::after,
+.ag-theme-quartz-dark .ag-header-cell-resize::after {
+  background-color: rgba(148, 163, 184, 0.3) !important;
+}

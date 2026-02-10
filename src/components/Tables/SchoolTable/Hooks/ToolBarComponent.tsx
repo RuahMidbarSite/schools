@@ -22,8 +22,13 @@ const ToolBar = (
   const { theme } = useContext(ThemeContext)
 
   return (
-    <div className="d-flex align-items-center justify-content-between w-100 gap-2">
-      
+<div 
+  className="d-flex align-items-center justify-content-between gap-2 px-4 py-3"
+  style={{
+    width: '100vw',
+    background: 'transparent'
+  }}
+>      
       {/* 👈 צד שמאל - סטטוס Google Contacts */}
       <div className="d-flex align-items-center">
         <div className="bg-blue-100 px-4 py-2 rounded-lg border border-blue-300 shadow-sm">

@@ -1103,8 +1103,13 @@ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
     <>
      <Navbar
   id="SchoolNavBar"
-  className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%]  flex-row-reverse"
+  className="fill-[#ffffff] flex-row-reverse"
   suppressHydrationWarning
+  style={{
+    background: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)',
+    minHeight: '64px',
+    borderBottom: '1px solid rgba(203, 213, 225, 0.3)'
+  }}
 >
   <LoadingOverlay />
   

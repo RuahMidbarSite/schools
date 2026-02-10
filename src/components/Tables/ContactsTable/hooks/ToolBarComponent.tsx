@@ -18,15 +18,18 @@ const ToolBar = (
   
   return (
     <Navbar
-      id="ContactNavBar"
-      className="bg-[#12242E] fill-[#ffffff] opacity-[1.40e+7%]"
-      style={{ 
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}
-    >
+  id="ContactNavBar"
+  className="fill-[#ffffff]"
+  style={{ 
+    background: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)',
+    minHeight: '64px',
+    borderBottom: '1px solid rgba(203, 213, 225, 0.3)',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  }}
+>
       {/* Google Auth Component - בצד שמאל */}
       <div style={{ paddingLeft: '16px' }}>
         {googleAuthComponent}

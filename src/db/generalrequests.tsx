@@ -1,4 +1,5 @@
 "use server";
+import { unstable_noStore as noStore } from "next/cache";
 import dynamic from 'next/dynamic';
 import prisma from "@/db/prisma";
 import { Cities, ReligionSector, Role, StatusSchools, StatusContacts, StatusPrograms, EducationStage, Assigned_Guide, Guide, Profession, MessagePattern, School, PrismaClient, Prisma, Areas, Years, SchoolTypes, StatusGuides } from "@prisma/client";
@@ -413,11 +414,10 @@ export const updateContactsStatus = async (status: string, contactsIds: number[]
   }
 };
 
-
-
-
 export const getAllAssignedInstructors = async () => {
-  const guides = prisma.assigned_Guide.findMany({
+  noStore(); // <--- חובה! מכריח את השרת להביא נתונים טריים מה-DB
+  
+  const guides = await prisma.assigned_Guide.findMany({
     orderBy: {
       Programid: 'asc',
     },

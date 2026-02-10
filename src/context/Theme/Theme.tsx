@@ -5,17 +5,17 @@ type themeOption = "dark-theme" | "light-theme"
 
 
 
-const getTheme = () => {
+//const getTheme = () => {
 
-  const theme: themeOption = localStorage.getItem("theme") as themeOption;
-  if (!theme) {
+  //const theme: themeOption = localStorage.getItem("theme") as themeOption;
+  //if (!theme) {
     // Default theme is taken as dark-theme
-    localStorage.setItem("theme", "light-theme");
-    return "light-theme";
-  } else {
-    return theme;
-  }
-};
+ //   localStorage.setItem("theme", "light-theme");
+   // return "light-theme";
+  //} else {
+//    return theme;
+//  }
+//};
 
 
 interface CustomTheme {

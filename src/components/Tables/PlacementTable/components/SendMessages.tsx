@@ -379,9 +379,18 @@ const SendMessagesBox = ({ Inner_SelectedRows, LeftGridApi, currentProgramData }
         </InputGroup>
       </div>
 
-      <Button variant="success" onClick={onClickSend} disabled={isSending} className="fw-bold py-2">
-        {isSending ? "שולח הודעות..." : `שלח ל-${Inner_SelectedRows?.length || 0} מדריכים`}
-      </Button>
+     <Button 
+  onClick={onClickSend} 
+  disabled={isSending} 
+  className="fw-bold py-2"
+  style={{ 
+    backgroundColor: '#0097a7', 
+    borderColor: '#0097a7', 
+    color: 'white' 
+  }}
+>
+  {isSending ? "שולח הודעות..." : `שלח ל-${Inner_SelectedRows?.length || 0} מדריכים`}
+</Button>
     </div>
   );
 };

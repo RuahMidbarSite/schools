@@ -47,7 +47,49 @@ import useGridEvents from "./hooks/GridEvents";
 import ToolBar from "@/components/Tables/ContactsTable/hooks/ToolBarComponent";
 import useColumnComponent from "./hooks/ColumnComponent";
 import { useStorageSync, getCacheVersion, getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
-
+// WhatsApp renderer for FirstName column
+// WhatsApp renderer for FirstName column
+const FirstNameWhatsAppRenderer = (params: ICellRendererParams) => {
+  const [clicked, setClicked] = useState(false);
+  
+  if (!params.value) return null;
+  
+  const phoneNumber = params.data?.Cellphone;
+  if (!phoneNumber) {
+    return <span>{params.value}</span>;
+  }
+  
+  // Clean phone number - remove all non-digit characters
+  const cleanPhone = phoneNumber.replace(/\D/g, '');
+  
+  // Add country code if not present (assuming Israel +972)
+  const formattedPhone = cleanPhone.startsWith('972') ? cleanPhone : 
+                        cleanPhone.startsWith('0') ? '972' + cleanPhone.substring(1) : 
+                        '972' + cleanPhone;
+  
+  // Use whatsapp:// protocol to open desktop app directly
+  const whatsappUrl = `whatsapp://send?phone=${formattedPhone}`;
+  
+  const handleClick = (e) => {
+    e.preventDefault();
+    setClicked(true);
+    window.location.href = whatsappUrl;
+  };
+  
+  return (
+    <a 
+      href={whatsappUrl}
+      onClick={handleClick}
+      style={{ 
+        color: clicked ? '#800080' : '#0066CC', // Purple after click, blue before
+        textDecoration: 'underline', 
+        cursor: 'pointer' 
+      }}
+    >
+      {params.value}
+    </a>
+  );
+};
 export default function ContactsTable() {
   const gridRef: any = useRef<AgGridReact>(null);
 
@@ -169,7 +211,11 @@ export default function ContactsTable() {
          colDef.wrapHeaderText = true;
          colDef.autoHeaderHeight = true;
       }
-      else if (value === "FirstName" || value === "LastName") {
+    else if (value === "FirstName") {
+         colDef.cellEditor = "agTextCellEditor";
+         colDef.cellRenderer = "FirstNameWhatsAppRenderer";
+      }
+      else if (value === "LastName") {
          colDef.cellEditor = "agTextCellEditor";
       }
       else if (value === "Role") {
@@ -193,8 +239,19 @@ export default function ContactsTable() {
          colDef.cellRenderer = CustomWhatsAppRenderer;
          colDef.valueGetter = ValueFormatWhatsApp;
       }
-      else if (value === "Cellphone" || value === "Phone") {
-         colDef.valueGetter = valueFormatCellPhone;
+     else if (value === "Cellphone") {
+         colDef.valueGetter = (params) => {
+           const phone = params.data?.Cellphone;
+           if (!phone || phone === '' || phone === '0') return '';
+           return phone; // Show the phone as-is
+         };
+      }
+      else if (value === "Phone") {
+         colDef.valueGetter = (params) => {
+           const phone = params.data?.Phone;
+           if (!phone || phone === '' || phone === '0') return '';
+           return phone; // Show the phone as-is
+         };
       }
       
       return colDef;
@@ -377,6 +434,7 @@ export default function ContactsTable() {
       CustomLinkContact: CustomLinkContact,
       CustomMultiSelectCellRenderer: CustomMultiSelectCell,
       CustomFilter: CustomFilter,
+      FirstNameWhatsAppRenderer: FirstNameWhatsAppRenderer,
     }),
     []
   );

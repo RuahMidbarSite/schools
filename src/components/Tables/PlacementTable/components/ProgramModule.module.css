@@ -2,7 +2,7 @@
 
 /* עמודה שמאלית - כרטיסיית תוכניות */
 .leftColumn {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
   border-radius: 15px;
   padding: 15px;
   display: flex;
@@ -28,6 +28,18 @@
 .programDetailsContainer {
   width: 100%;
   direction: rtl;
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* רווח בין הקופסאות */
+}
+
+/* קופסת מידע - כל אחת מ-3 הקופסאות */
+.programInfoBox {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  direction: rtl;
 }
 
 /* ללא כותרת "פרטי התוכנית" */
@@ -41,8 +53,8 @@
   font-weight: 700;
   color: #2d3748;
   margin-bottom: 18px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0;
+  border-bottom: none;
   text-align: right;
   direction: rtl;
 }
@@ -135,9 +147,10 @@
 
 /* סקציית מדריכים */
 .guidesSection {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid #e2e8f0;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top: none;
   direction: rtl;
 }
 
@@ -197,9 +210,9 @@
 
 /* סקציית פרטים */
 .detailsSection {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid #e2e8f0;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
   direction: rtl;
 }
 
@@ -259,7 +272,7 @@
 
 .assignButton {
   flex: 1;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
   color: white;
   border: none;
   padding: 12px 20px;
@@ -268,12 +281,12 @@
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+  box-shadow: 0 4px 15px rgba(20, 184, 166, 0.4);
 }
 
 .assignButton:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(245, 87, 108, 0.6);
+  box-shadow: 0 6px 20px rgba(20, 184, 166, 0.6);
 }
 
 /* הכפתור הישן - מוסתר (מסומן X למעלה) */
@@ -285,8 +298,8 @@
 .aiButtonNew {
   flex: 1;
   background: white;
-  color: #3b82f6;
-  border: 2px solid #3b82f6;
+  color: #0891b2;
+  border: 2px solid #0891b2;
   padding: 12px 20px;
   border-radius: 8px;
   font-size: 16px;
@@ -300,9 +313,9 @@
 }
 
 .aiButtonNew:hover {
-  background: #eff6ff;
+  background: #ecfeff;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2);
 }
 
 .aiButtonIcon {
@@ -311,7 +324,7 @@
 
 /* עמודה ימנית - שליחת הודעות */
 .rightColumn {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
   border-radius: 15px;
   padding: 15px;
   display: flex;

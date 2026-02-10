@@ -2,7 +2,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-
+import '../styles/custom-theme.css'  // 
 import { ClerkProvider } from '@clerk/nextjs'
 import NavBarClient from '@/components/navbar'
 import { YearProvider } from '@/context/YearContext'
