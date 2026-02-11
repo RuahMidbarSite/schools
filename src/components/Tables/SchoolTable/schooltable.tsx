@@ -18,6 +18,7 @@ import { CustomMasterGrid } from "./Components/MasterGrid/CustomMasterGrid";
 import { CustomFilter } from "../GeneralFiles/Filters/CustomFilter";
 import { CustomSelect } from "../GeneralFiles/Select/CustomSelect";
 import { CustomDateCellEditor } from "../GeneralFiles/Date/CustomDateCellEditor/CustomDateCellEditor";
+import { StatusBadgeRenderer } from "../GeneralFiles/Renderers/StatusBadgeRenderer";
 import useColumnHook from "./Hooks/ColumnHooks";
 import { useExternalEffect } from "../GeneralFiles/Hooks/ExternalUseEffect";
 import useColumnEffects from "./Hooks/ColumnEffects";
@@ -157,6 +158,7 @@ export default function SchoolsTable() {
       CustomSelect: CustomSelect,
       CustomFilter: CustomFilter,
       RepresentiveComponent: RepresentiveComponent,
+      StatusBadgeRenderer: StatusBadgeRenderer,
     }), []);
 
   const getRowId = useCallback((params: GetRowIdParams<School>) => String(params.data.Schoolid), []);
