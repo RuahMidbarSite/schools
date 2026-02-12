@@ -25,7 +25,7 @@ import {
 
 import { getModelFields, getAllStatuses, getRoles } from "@/db/generalrequests";
 import CustomSelectCellEditor from "@/components/CustomSelect/CustomSelectCellEditor";
-
+import { StatusBadgeRenderer } from "../GeneralFiles/Renderers/StatusBadgeRenderer";
 import CustomWhatsAppRenderer from "../../CellComponents/General/CustomWhatsAppRenderer";
 import CustomLink from "../../CellComponents/General/CustomLink";
 import { useContactComponent } from "@/util/Google/GoogleContacts/ContactComponent";
@@ -207,7 +207,14 @@ export default function ContactsTable() {
         colDef.autoHeaderHeight = true;
       }
       // הגדרות כותרת לעמודות הצרות
-      else if (value === "IsRepresentative" || value === "SchoolId") {
+    else if (value === "IsRepresentative") {
+         colDef.wrapHeaderText = true;
+         colDef.autoHeaderHeight = true;
+         colDef.cellRenderer = "StatusBadgeRenderer";
+         // מוסיף את התרגום כדי שהתווית תדע מה להציג
+         colDef.valueGetter = (params) => params.data.IsRepresentative ? "נציג" : "לא נציג";
+      }
+      else if (value === "SchoolId") {
          colDef.wrapHeaderText = true;
          colDef.autoHeaderHeight = true;
       }
@@ -222,9 +229,15 @@ export default function ContactsTable() {
          colDef.cellEditor = CustomSelectCellEditor;
          colDef.cellEditorParams = { values: roles };
       }
-      else if (value === "Status") {
+    else if (value === "Status") {
          colDef.cellEditor = CustomSelectCellEditor;
          colDef.cellEditorParams = { values: statuses };
+         colDef.cellRenderer = "StatusBadgeRenderer"; // הוספת התווית לסטטוס
+      }
+      else if (value === "IsRepresentative") {
+         colDef.wrapHeaderText = true;
+         colDef.autoHeaderHeight = true;
+         colDef.cellRenderer = "StatusBadgeRenderer"; // הוספת התווית לעמודת נציג
       }
       else if (value === "GoogleContactLink") {
          colDef.cellRenderer = "CustomLinkContact";
@@ -427,7 +440,7 @@ export default function ContactsTable() {
     }
   }, []);
 
-  const components = useMemo(
+ const components = useMemo(
     () => ({
       CustomLink: CustomLink,
       CustomWhatsAppRenderer: CustomWhatsAppRenderer,
@@ -435,6 +448,7 @@ export default function ContactsTable() {
       CustomMultiSelectCellRenderer: CustomMultiSelectCell,
       CustomFilter: CustomFilter,
       FirstNameWhatsAppRenderer: FirstNameWhatsAppRenderer,
+      StatusBadgeRenderer: StatusBadgeRenderer, // הוספת הרכיב כאן
     }),
     []
   );

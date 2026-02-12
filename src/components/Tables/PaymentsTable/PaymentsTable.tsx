@@ -160,13 +160,13 @@ export const PaymentsTable = () => {
     const sumPaid = (issuerName: string | null) => PaymentsData
       .filter(p => isYearMatch(p.Year))
       .filter(p => issuerName ? p.Issuer === issuerName : true)
-      .reduce((sum, p) => sum + (p.Amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.Amount) || 0), 0); // הוספת Number()
 
     // Helper to sum Pending Payments
     const sumPending = (issuerName: string | null) => pendingPaymentsData
       .filter(p => isYearMatch(p.Year))
       .filter(p => issuerName ? p.Issuer === issuerName : true)
-      .reduce((sum, p) => sum + (p.Amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.Amount) || 0), 0); // הוספת Number()
 
     const annualPaid = sumPaid(null);
     
@@ -297,14 +297,17 @@ export const PaymentsTable = () => {
           return rowYear === selectedYear;
       };
 
+     const selectedProgramIds = selectedPrograms.map(p => p.Programid); // יצירת מערך מזהים
+
       const filteredPayments = PaymentsData.filter(payment => 
-          programs.includes(payment.ProgramName) && 
+          selectedProgramIds.includes(payment.Programid) && // בדיקה לפי ID
           payment.SchoolName === selectedSchool?.SchoolName &&
           isYearMatch(payment.Year) 
       )
 
       const filteredPendingPayments = pendingPaymentsData.filter(payment => {
-          const relatedProgram = selectedPrograms.find(p => p.ProgramName === payment.ProgramName);
+          // שינוי: בדיקה לפי Programid במקום רק לפי שם
+          const relatedProgram = selectedPrograms.find(p => p.Programid === payment.Programid);
           return relatedProgram && 
                  relatedProgram.Schoolid === selectedSchool?.Schoolid &&
                  isYearMatch(payment.Year); 
@@ -567,9 +570,15 @@ export const PaymentsTable = () => {
       calculateTotalAmount()
       if (event.oldValue === event.newValue) return;
       const colName = event.column.getColId()
-      const newCellValue = event.newValue
+      let newCellValue = event.newValue
       const id = event.data.Id
       const rowData = event.data;
+
+      // המרה למספר אם העמודה היא Amount
+      if (colName === "Amount") {
+          newCellValue = parseInt(newCellValue, 10) || 0;
+      }
+
       if (colName === "ProgramName") {
         const program = selectedPrograms.filter((program) => program.ProgramName === newCellValue)
         if (program.length > 0) {
@@ -585,13 +594,18 @@ export const PaymentsTable = () => {
         return newData;
       });
     }, [calculateTotalAmount, selectedPrograms]);
-
   const onPendingPaymentCellValueChanged = useCallback((event: CellValueChangedEvent<any>) => {
       if (event.oldValue === event.newValue) return;
       const colName = event.column.getColId()
-      const newCellValue = event.newValue
+      let newCellValue = event.newValue // שינוי ל-let כדי לאפשר המרה
       const id = event.data.Id
       const rowData = event.data;
+
+      // המרה למספר אם העמודה היא Amount
+      if (colName === "Amount") {
+          newCellValue = parseInt(newCellValue, 10) || 0;
+      }
+
       if (colName === "ProgramName") {
         const program = selectedPrograms.filter((program) => program.ProgramName === newCellValue)
         if (program.length > 0) {

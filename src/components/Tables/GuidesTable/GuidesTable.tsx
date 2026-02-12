@@ -40,6 +40,7 @@ import Select from "react-select";
 
 import { FcAddColumn, FcAddRow, FcCancel } from "react-icons/fc";
 import { CustomMasterGrid } from "../SchoolTable/Components/MasterGrid/CustomMasterGrid";
+import { StatusBadgeRenderer } from "../GeneralFiles/Renderers/StatusBadgeRenderer";
 import {
   addInstructorsRows,
   deleteGuidesCascading,
@@ -300,12 +301,42 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
     return params?.data?.isAssigned ? "נציג" : "לא נציג"
   }, []);
 
-  const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) =>
+  const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) => {
+    const professionsText = props.data.Professions || '';
+    if (!professionsText.trim()) return <div></div>;
 
-    <div className="max-w-[150px] max-h-[50px] overflow-y-hidden whitespace-nowrap text-ellipsis hover:text-clip truncate  hover:overflow-x-auto hover:whitespace-nowra">
-      {props.data.Professions}
+    const professions = professionsText.split(',').map(p => p.trim()).filter(p => p.length > 0);
 
-    </div>, [])
+    // פונקציה לייצור צבע לפי טקסט
+    const getHashColor = (str: string) => {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const colors = [
+        { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd' }, // כחול
+        { bg: '#fce7f3', text: '#831843', border: '#f9a8d4' }, // ורוד
+        { bg: '#d1fae5', text: '#065f46', border: '#6ee7b7' }, // ירוק
+        { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' }, // צהוב
+        { bg: '#f3e8ff', text: '#581c87', border: '#d8b4fe' }, // סגול
+      ];
+      return colors[Math.abs(hash) % colors.length];
+    };
+
+    return (
+      <div className="flex flex-wrap gap-1 py-1" style={{ maxWidth: '200px' }}>
+        {professions.map((profession, index) => {
+          const variant = getHashColor(profession);
+          return (
+            <span key={index} className="inline-block px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{ backgroundColor: variant.bg, color: variant.text, border: `1px solid ${variant.border}` }}>
+              {profession}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }, []);
 
   const valueFormatCellPhone = useCallback((params) => {
     const { CellPhone }: { CellPhone: string } = params.data
@@ -443,7 +474,7 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
           }
         };
       }
-      if (value === "Status") {
+     if (value === "Status") {
         return {
           ...baseColDef,
           cellEditor: CustomSelectCellEditor,
@@ -451,6 +482,8 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
             values: status,
             valueListMaxWidth: 120,
           },
+          // הוספת ה-Renderer להצגת תווית
+          cellRenderer: "StatusBadgeRenderer",
         };
       }
       if (value === "City") {
@@ -511,15 +544,15 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
           editable: false, 
         };
       }
-      if (value === "Professions") {
+    if (value === "Professions") {
         return {
           ...baseColDef,
           headerName: "מקצועות",
           cellEditor: ChooseProfessions,
-          cellEditorParams: {                    //  הוסף שורה זו
-            professionsList: ProfessionTypes     //  הוסף שורה זו
-          },                                      //  הוסף שורה זו
-          cellRenderer: ProfCellRenderer,
+          cellEditorParams: {
+            professionsList: ProfessionTypes
+          },
+          cellRenderer: "ProfCellRenderer", // שינוי לשימוש ב-Renderer המעוצב
         }
       }
       
@@ -986,14 +1019,14 @@ const validateCellphone = (cellphone: any, numbers: string[]) => {
 
 const components = useMemo(
     () => ({
-      // החזרנו את זה למצב המקורי והתקין:
       CustomLinkDrive: (props) => <CustomLinkDrive {...props} AuthenticateActivate={AuthenticateActivate} type={"Guide"} />,
       CustomMultiSelectCellRenderer: CustomMultiSelectCell,
       CustomMultiSelect: CustomMultiSelectCellEdit,
       CustomFilter: CustomFilter,
       CustomChooseProfessions: ChooseProfessions,
       whatsAppRenderer: CustomWhatsAppRenderer,
-      ProfCellRenderer: ProfCellRenderer
+      ProfCellRenderer: ProfCellRenderer,
+      StatusBadgeRenderer: StatusBadgeRenderer // הוספת הרכיב כאן
     }),
     [AuthenticateActivate, ProfCellRenderer]
   );
