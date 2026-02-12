@@ -1,5 +1,6 @@
 // הוסר "use server" - הפונקציות ירוצו בצד הלקוח כדי לאפשר העברת קבצים (File)
-const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || "http://localhost:3994";
+//const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER_URL || "http://localhost:3994";
+const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER || "http://127.0.0.1:3994";
 
 // פונקציית עזר להמרת שם קובץ ל-Base64 (תומכת בעברית בדפדפן)
 const toBase64 = (str: string) => btoa(unescape(encodeURIComponent(str)));
