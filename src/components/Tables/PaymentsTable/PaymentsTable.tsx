@@ -860,125 +860,128 @@ export const PaymentsTable = () => {
         </Col>
 
         <Col lg={{ span: 4, offset: 0, order: 2 }}>
-          <Row>
-            <Col><Row>
-                <div className="text-right"> <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>אנשי קשר</h5> </div>
-                <Suspense>
-                  <div id="grid-4" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
-                    <AgGridReact
-                      noRowsOverlayComponent={CustomNoRowsOverlay} ref={contactsGridRef} rowHeight={25} rowData={selectedContacts} columnDefs={contactsColDefs} defaultColDef={defaultColDef} enableRtl={true}
-                      onGridReady={onContactsGridReady}
-                      onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
-                      onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_contacts')}
-                      domLayout='autoHeight'
-                    />
-                  </div>
-                </Suspense>
-              </Row></Col>
-          </Row>
-          <Row>
-            <Col>
-              <div className="flex items-center justify-between mb-2">
-                  <button className="hover:bg-[#253d37] rounded opacity-0"> <FcAddRow className="w-[37px] h-[37px] opacity-0" /> </button>
-                  <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}> תוכניות </h5>
-              </div>
-              <Suspense>
-                <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
-                  <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={programsGridRef} rowHeight={25} rowData={selectedPrograms} columnDefs={programsColDefs} defaultColDef={defaultColDef} enableRtl={true}
-                    onGridReady={onProgramsGridReady}
-                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
-                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_programs')}
-                    domLayout='autoHeight'
-                  />
-                </div>
-              </Suspense>
-            </Col>
-          </Row>
-          <Row>
-            <Col>
-              <div className="flex flex-row-reverse items-center justify-start gap-2">
-                <OverlayTrigger placement={"top"} overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}>
-                  <button className="hover:bg-[#253d37] rounded relative" onClick={onPendingPaymentsAddRowToolBarClick}> <FcAddRow className="w-[37px] h-[37px]" /> </button>
-                </OverlayTrigger>
-                <h5 className={`${theme === "dark-theme" ? "text-white" : "text-black"} mb-0`}>תשלומים בדרך</h5>
-                 <Button size="sm" className="move-row-btn px-2 py-0 text-sm whitespace-nowrap h-[28px] flex items-center ms-2" onClick={handleMoveRow}> סמן כשולם </Button>
-              </div>
-              <Suspense>
-                <div id="grid-3" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size overflow-visible " : "ag-theme-quartz custom-text-size overflow-visible "}>
-                  <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={pendingPaymentsGridRef} rowHeight={25} rowData={selectedPendingPayments} columnDefs={pendingPaymentsColDef} defaultColDef={defaultColDef} enableRtl={true}
-                    onGridReady={onPendingPaymentsGridReady}
-                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
-                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_pending')}
-                    singleClickEdit={true} onCellValueChanged={onPendingPaymentCellValueChanged} domLayout='autoHeight'
-                  />
-                </div>
-              </Suspense>
-            </Col>
-          </Row>
-        </Col>
+  {/* כרטיס אנשי קשר */}
+  <div className="table-card">
+    <div className="section-header">
+      <h5 className={theme === "dark-theme" ? "text-white mb-0" : "text-black mb-0"}>👤 אנשי קשר</h5>
+    </div>
+    <Suspense>
+      <div id="grid-4" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
+        <AgGridReact
+          noRowsOverlayComponent={CustomNoRowsOverlay} ref={contactsGridRef} rowHeight={25} rowData={selectedContacts} columnDefs={contactsColDefs} defaultColDef={defaultColDef} enableRtl={true}
+          onGridReady={onContactsGridReady}
+          onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+          onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_contacts')}
+          domLayout='autoHeight'
+        />
+      </div>
+    </Suspense>
+  </div>
+
+  {/* כרטיס תוכניות */}
+  <div className="table-card">
+    <div className="section-header">
+      <h5 className={theme === "dark-theme" ? "text-white mb-0" : "text-black mb-0"}>📚 תוכניות</h5>
+    </div>
+    <Suspense>
+      <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
+        <AgGridReact
+          noRowsOverlayComponent={CustomNoRowsOverlay} ref={programsGridRef} rowHeight={25} rowData={selectedPrograms} columnDefs={programsColDefs} defaultColDef={defaultColDef} enableRtl={true}
+          onGridReady={onProgramsGridReady}
+          onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+          onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_programs')}
+          domLayout='autoHeight'
+        />
+      </div>
+    </Suspense>
+  </div>
+
+  {/* כרטיס תשלומים בדרך */}
+  <div className="table-card">
+    <div className="section-header flex-row-reverse">
+      <h5 className={theme === "dark-theme" ? "text-white mb-0" : "text-black mb-0"}>⏳ תשלומים בדרך</h5>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline-primary" className="py-0 h-[30px]" onClick={handleMoveRow}>סמן כשולם</Button>
+        <OverlayTrigger placement="top" overlay={<Tooltip>הוסף שורה</Tooltip>}>
+          <button onClick={onPendingPaymentsAddRowToolBarClick}><FcAddRow className="w-[30px] h-[30px]" /></button>
+        </OverlayTrigger>
+      </div>
+    </div>
+    <Suspense>
+      <div id="grid-3" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size overflow-visible " : "ag-theme-quartz custom-text-size overflow-visible "}>
+        <AgGridReact
+          noRowsOverlayComponent={CustomNoRowsOverlay} ref={pendingPaymentsGridRef} rowHeight={25} rowData={selectedPendingPayments} columnDefs={pendingPaymentsColDef} defaultColDef={defaultColDef} enableRtl={true}
+          onGridReady={onPendingPaymentsGridReady}
+          onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+          onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_pending')}
+          singleClickEdit={true} onCellValueChanged={onPendingPaymentCellValueChanged} domLayout='autoHeight'
+        />
+      </div>
+    </Suspense>
+  </div>
+</Col>
 
         <Col lg={{ span: 5, offset: 0, order: 1 }} className="overflow-visible">
-          <Row>
-            <Col>
-              <div className="text-right"> <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>תמחור</h5> </div>
-              <Suspense>
-                <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
-                  <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={pricingGridRef} rowHeight={25} rowData={selectedPrograms} columnDefs={pricingColDefs} defaultColDef={defaultColDef} enableRtl={true}
-                    onGridReady={onPricingGridReady}
-                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
-                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_pricing')}
-                    domLayout='autoHeight'
-                  />
-                </div>
-              </Suspense>
-            </Col>
-          </Row>
-          <Row>
-            <Col>
-              <div className="flex flex-row-reverse">
-                <OverlayTrigger placement={"top"} overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}>
-                  <button className="hover:bg-[#253d37] rounded" onClick={onPaymentsAddRowToolBarClick}> <FcAddRow className="w-[37px] h-[37px]" /> </button>
-                </OverlayTrigger>
-                <h5 className={theme === "dark-theme" ? "text-white" : "text-black"}>תשלומים</h5>
-              </div>
-              <Suspense>
-                <div id="grid-2" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
-                  <AgGridReact
-                    noRowsOverlayComponent={CustomNoRowsOverlay} ref={paymentsGridRef} rowHeight={25} rowData={selectedPayments} columnDefs={paymentsColDef} defaultColDef={defaultColDef} enableRtl={true}
-                    onGridReady={onPaymentsGridReady}
-                    onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
-                    onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_payments')}
-                    onCellValueChanged={onPaymentCellValueChanged} domLayout='autoHeight'
-                  />
-                </div>
-              </Suspense>
-            </Col>
-          </Row>
-          
-          <div className="flex flex-col mt-2">
-                <div className="flex flex-row-reverse justify-between items-center mb-1">
-                    <h5 className={theme === "dark-theme" ? "text-white " : "text-black"}>{`${totalPrice - totalPayments}:נותר לתשלום`}</h5>
-                </div>
-                
-                <div className={`w-100 ${theme === "dark-theme" ? "bg-[#1f2936]" : "bg-white"}`}>
-                  <h5 className="text-right">הערות</h5>
-                  <Form.Control
-                    as="textarea" 
-                    className={theme === "dark-theme" ? "bg-[#1f2936]" : "bg-white"} 
-                    rows={2} 
-                    value={textValue}
-                    placeholder={!selectedSchool ? "בחר בית ספר כדי להוסיף הערה" : ""}
-                    disabled={!selectedSchool}
-                    onChange={(e) => setTextValue(e.target.value)} 
-                    onBlur={updateSchoolRow} 
-                    style={{ direction: "rtl", textAlign: "right", width: "100%" }}
-                  />
-                </div>
-          </div>
-        </Col>
+  {/* כרטיס תמחור */}
+  <div className="table-card">
+    <div className="section-header">
+      <h5 className={theme === "dark-theme" ? "text-white mb-0" : "text-black mb-0"}>💰 ריכוז תמחור</h5>
+    </div>
+    <Suspense>
+      <div id="grid-1" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
+        <AgGridReact
+          noRowsOverlayComponent={CustomNoRowsOverlay} ref={pricingGridRef} rowHeight={25} rowData={selectedPrograms} columnDefs={pricingColDefs} defaultColDef={defaultColDef} enableRtl={true}
+          onGridReady={onPricingGridReady}
+          onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+          onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_pricing')}
+          domLayout='autoHeight'
+        />
+      </div>
+    </Suspense>
+  </div>
+
+  {/* כרטיס תשלומים בפועל */}
+  <div className="table-card">
+    <div className="section-header flex-row-reverse">
+      <h5 className={theme === "dark-theme" ? "text-white mb-0" : "text-black mb-0"}>💳 פירוט תשלומים</h5>
+      <OverlayTrigger placement="top" overlay={<Tooltip>הוסף שורה</Tooltip>}>
+        <button onClick={onPaymentsAddRowToolBarClick}><FcAddRow className="w-[30px] h-[30px]" /></button>
+      </OverlayTrigger>
+    </div>
+    <Suspense>
+      <div id="grid-2" className={theme === "dark-theme" ? "ag-theme-quartz-dark custom-text-size" : "ag-theme-quartz custom-text-size"}>
+        <AgGridReact
+          noRowsOverlayComponent={CustomNoRowsOverlay} ref={paymentsGridRef} rowHeight={25} rowData={selectedPayments} columnDefs={paymentsColDef} defaultColDef={defaultColDef} enableRtl={true}
+          onGridReady={onPaymentsGridReady}
+          onColumnResized={onColumnEvent} onColumnMoved={onColumnEvent} onDragStopped={onColumnEvent}
+          onFirstDataRendered={(p) => onFirstDataRendered(p, 'state_payments')}
+          onCellValueChanged={onPaymentCellValueChanged} domLayout='autoHeight'
+        />
+      </div>
+    </Suspense>
+  </div>
+
+  {/* כרטיס יתרה והערות */}
+  <div className="table-card mt-3">
+    <div className="flex flex-row-reverse justify-between items-center mb-3">
+      <h5 className={theme === "dark-theme" ? "text-white mb-0" : "text-black mb-0"}>📝 הערות מוסד</h5>
+      <div className={`summary-card-mini ${totalPrice - totalPayments > 0 ? 'bg-danger text-white' : 'bg-success text-white'}`}>
+        <span>{(totalPrice - totalPayments).toLocaleString()} ₪</span> :נותר לגבייה
+      </div>
+    </div>
+    <Form.Control
+      as="textarea"
+      className={theme === "dark-theme" ? "bg-[#2b3945] text-white border-gray-600" : "bg-light"}
+      rows={2}
+      value={textValue}
+      placeholder={!selectedSchool ? "בחר בית ספר כדי להוסיף הערה" : ""}
+      disabled={!selectedSchool}
+      onChange={(e) => setTextValue(e.target.value)}
+      onBlur={updateSchoolRow}
+      style={{ direction: "rtl", textAlign: "right", borderRadius: "8px" }}
+    />
+  </div>
+</Col>
       </Row>
     </Container>
     </div>

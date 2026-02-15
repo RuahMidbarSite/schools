@@ -34,6 +34,8 @@ import {
 
 import Spinner from "react-bootstrap/Spinner";
 import { Button, Navbar, OverlayTrigger } from "react-bootstrap";
+import { SmartTextImport } from "./SmartTextImport";
+import { FcKindle } from "react-icons/fc";
 import Tooltip from "react-bootstrap/Tooltip";
 
 import Select from "react-select"; 
@@ -124,7 +126,7 @@ export default function GuidesTable({
   const [colDefinition, setColDefs] = useState<ColDef[]>(null);
   const [colState, setColState]: any = useState([])
   const [columnWindowOpen, setColumnWindowOpen] = useState(false);
-
+  const [smartImportOpen, setSmartImportOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [dialogType, setDialogType] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
@@ -287,12 +289,73 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
     }, 200);
 
   }, [onClearFilterButtonClick, InTheMiddleOfAddingRows]);
+const handleSmartConfirm = async (newGuides: any[]) => {
+  const errors: string[] = [];
 
+  for (const guide of newGuides) {
+    try {
+      if (!guide.CellPhone) {
+        errors.push(`${guide.FirstName || ""} ${guide.LastName || ""} – חסר מספר טלפון`);
+        continue;
+      }
+
+      const cleanPhone = guide.CellPhone.toString().replace(/\D/g, '').replace(/^0/, '');
+
+      if (!cleanPhone) {
+        errors.push(`${guide.FirstName || ""} ${guide.LastName || ""} – מספר טלפון לא תקין`);
+        continue;
+      }
+
+      const response = await fetch('/api/direct-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          FirstName: (guide.FirstName || "").trim(),
+          LastName: (guide.LastName || "").trim(),
+          CellPhone: cleanPhone,
+          City: guide.City || "",
+          Professions: guide.Profession || guide.Professions || "",
+          Remarks: guide.Notes || guide.Remarks || "",
+          Status: "פעיל",
+          ReligiousSector: "יהודי",
+          isAssigned: false
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "שגיאה לא ידועה" }));
+        throw new Error(errorData.error || "השמירה בבסיס הנתונים נכשלה");
+      }
+
+      const savedGuide = await response.json();
+
+      gridRef.current?.api.applyTransaction({
+        add: [savedGuide],
+        addIndex: 0
+      });
+
+    } catch (error: any) {
+      console.error("Error saving guide:", error);
+      errors.push(`${guide.FirstName || ""} ${guide.LastName || ""}: ${error.message}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    alert(`שגיאות בשמירה:\n${errors.join('\n')}`);
+  }
+
+  setSmartImportOpen(false);
+  setTimeout(() => {
+    gridRef.current?.api.ensureIndexVisible(0);
+  }, 100);
+};
+
+// 3. וזה הקוד הקיים שבא מיד אחרי (אל תיגע בו):
   const ValueFormatWhatsApp = useCallback((params) => {
     const { FirstName } = params.data;
     return `${FirstName}`;
   }, []);
-
+ 
   const ValueFormatAssigned = useCallback((params) => {
     return params?.data?.isAssigned
   }, []);
@@ -1184,7 +1247,19 @@ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
       <FcAddRow className="w-[37px] h-[37px]" />
     </button>
   </OverlayTrigger>
-
+{/* --- התחלת קוד חדש: כפתור הזנה חכמה --- */}
+  <OverlayTrigger
+    placement={"top"}
+    overlay={<Tooltip className="absolute">הזנה חכמה מ-AI (WhatsApp)</Tooltip>}
+  >
+    <button
+      className="hover:bg-[#253d37] rounded mr-1 ml-1"
+      onClick={() => setSmartImportOpen(true)}
+    >
+      <FcKindle className="w-[37px] h-[37px]" />
+    </button>
+  </OverlayTrigger>
+  {/* --- סוף קוד חדש --- */}
   <button
     id="cancelchangesbutton"
     onClick={onCancelChangeButtonClick}
@@ -1300,6 +1375,12 @@ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
         gridApi={gridRef.current?.api}
         colState={colState}
         setColState={setColState} />
+        <SmartTextImport 
+        show={smartImportOpen}
+        onClose={() => setSmartImportOpen(false)}
+        existingGuides={rowData || []}
+        onConfirm={handleSmartConfirm}
+      />
     </>
   );
 }
