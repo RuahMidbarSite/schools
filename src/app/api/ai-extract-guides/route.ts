@@ -29,30 +29,45 @@ export async function POST(req: Request) {
 
     const prompt = `
     Analyze the text and extract instructor details.
+
+    0. **CRITICAL FILTERING RULE - Read before anything else**:
+       - You are looking ONLY for people who are OFFERING their services as instructors (job seekers, freelancers presenting themselves).
+       - IGNORE and DO NOT extract any message from an employer, organization, or school that is LOOKING TO HIRE an instructor.
+       - How to tell the difference:
+         * INCLUDE: "אני מדריך...", "מחפש עבודה", "מציע שירותי", "זמין להדרכה", "ניסיון ב...", "דרוש? לא - אני מציע"
+         * EXCLUDE: "דרוש מדריך", "מחפשים מדריך", "נא לפנות אלינו", "משרה פנויה", "אנחנו מגייסים"
+       - If a message is from an employer → return it with an empty guides array: { "guides": [] }
     
   1. **Profession Mapping (CRITICAL - STRICT RULES)**:
-       - You MUST ONLY choose from this exact list: [${dynamicList.join(", ")}].
-       - FORBIDDEN: Do NOT invent new professions. Do NOT use ANY word that is not in the list above.
-       - Use your broad general knowledge to find the CLOSEST semantic match from the list.
-         For example: even if the text says "היפ הופ" and the list contains "מחול" — you must recognize that hip-hop is a dance style and return "מחול".
-         Think like a domain expert: what category from the list best describes this activity?
+       - The COMPLETE allowed list is: [${dynamicList.join(", ")}].
+       - The output for "Profession" field MUST be one or more of these EXACT strings, copied character by character.
+       - FORBIDDEN: ANY word or phrase not copied verbatim from the list above is absolutely prohibited.
+       - FORBIDDEN: Do NOT split, combine, shorten, translate, or rephrase items from the list.
+       - VALIDATION STEP (mandatory): Before returning, check each word in your answer against the list. If even one word does not appear in the list exactly — remove it.
+       - Use your broad general knowledge to find the CLOSEST semantic match from the list. For example: "היפ הופ" → "מחול", "כדורגל" → "ספורט".
        - If multiple matches found, return all separated by comma (e.g., "שחמט, חשיבה").
-       - If absolutely NO reasonable match exists in the list, return an empty string "".
+       - If NO match exists in the list, return an empty string "".
     
-    2. **Name Splitting**: Split full names into "FirstName" (1st word) and "LastName" (rest of the words).
-
+2. **Name Splitting**: 
+       - Split full names into "FirstName" (1st word) and "LastName" (rest of the words).
+       - If no full name is found in the message body, look for the sender's name in the WhatsApp header format: "~ name ~" or "~name~" and use it as FirstName.
+       - Clean the name from special characters like "~", "*", spaces.
+       
    "3. **CellPhone**: Extract digits only. 
    - STRICT RULE: Remove the leading '0' from Israeli numbers (e.g., return '585333944' instead of '0585333944').
    - Remove any '+', '972', spaces, or parentheses. 
    - Return ONLY the clean digits."
 
-    4. **Notes (BALANCED SUMMARY)**:
+ 4. **Notes (SPECIFIC FOCUS & SUMMARY)**:
+       - PRIORITY: Extract specific sub-specialties or styles (e.g., if Profession is 'Dance', include 'Hip-Hop' or 'Ballet'; if 'Music', include 'Guitar' or 'Drums').
        - Provide a concise summary of experience and availability (up to 15 words).
-       - STRICTLY REMOVE: The City name and the exact Profession Names (to avoid redundancy).
-       - INCLUDE: Vital details like 'בעל ניסיון בבתי ספר', 'עבודה עם חינוך מיוחד', or 'זמין לבקרים'.
+       - STRICTLY REMOVE: The City name and the exact main Profession Names (to avoid redundancy).
+       - INCLUDE: Vital details like 'היפ הופ', 'פילאטיס מכשירים', 'בעל ניסיון בבתי ספר', or 'זמין לבקרים'.
 
-    5. **City**: Extract the city/location if mentioned.
-
+5. **City**: 
+       - First priority: extract the city where the instructor LIVES if mentioned.
+       - Second priority: if no city of residence is mentioned, use the area or city where they TEACH or WORK (e.g., "אזור רחובות", "בתל אביב").
+       - If multiple areas mentioned, take the first one.
     Return ONLY a valid JSON object:
     { "guides": [{ "FirstName": "...", "LastName": "...", "Profession": "...", "Notes": "...", "CellPhone": "...", "City": "..." }] }
     `;

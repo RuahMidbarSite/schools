@@ -29,22 +29,30 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
       const data = await res.json();
       
       const newItems = data.guides.map((g: any) => {
-        // ניקוי טלפון מה-AI לצורך השוואה
-        const cleanAIPhone = g.CellPhone?.replace(/\D/g, '').replace(/^0/, '');
-        
-        // בדיקת כפילות מול כל המדריכים הקיימים (אלו שבטבלה וב-DB)
-        const isDuplicate = existingGuides.some(ex => {
-          const cleanExistingPhone = ex.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
-          return cleanExistingPhone === cleanAIPhone;
-        });
+  // ניקוי טלפון מה-AI לצורך השוואה (מסיר תווים שאינם ספרות ואפס מוביל)
+  const cleanAIPhone = g.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
+  
+  // 1. בדיקת כפילות מול הטבלה הגדולה (המערכת בודקת את הנתונים שכבר טעונים ב-Grid)
+  const isDuplicateInMainTable = existingGuides.some(ex => {
+    const cleanExistingPhone = ex.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
+    return cleanExistingPhone === cleanAIPhone;
+  });
 
-        return { 
-          ...g, 
-          isDuplicate, // אם קיים, השורה תיצבע באדום
-          selected: !isDuplicate, // ברירת מחדל: לא מסומן אם זו כפילות
-          tempId: Math.random() 
-        };
-      });
+  // 2. בדיקה מול מדריכים אחרים שכבר הדבקת כרגע בחלון ה-AI (למקרה שהדבקת את אותו טקסט פעמיים)
+  const isDuplicateInCurrentDraft = draftGuides.some(draft => {
+    const cleanDraftPhone = draft.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
+    return cleanDraftPhone === cleanAIPhone;
+  });
+
+  const isDuplicate = isDuplicateInMainTable || isDuplicateInCurrentDraft;
+
+  return { 
+    ...g, 
+    isDuplicate,        // אם True, השורה תצבע באדום (לפי ה-CSS הקיים אצלך)
+    selected: !isDuplicate, // אם המדריך כפול - הצ'קבוקס יורד אוטומטית!
+    tempId: Math.random() 
+  };
+});
 
       setDraftGuides(prev => [...prev, ...newItems]);
     } catch (err) {

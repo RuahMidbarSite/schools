@@ -329,10 +329,25 @@ const handleSmartConfirm = async (newGuides: any[]) => {
 
       const savedGuide = await response.json();
 
-      gridRef.current?.api.applyTransaction({
-        add: [savedGuide],
-        addIndex: 0
-      });
+      // --- בדיקה אם המדריך כבר קיים בטבלה לפי ה-ID שלו ---
+      const existingNode = gridRef.current?.api.getRowNode(String(savedGuide.Guideid));
+
+      if (existingNode) {
+        // אם המדריך קיים - עדכון הנתונים בשורה הקיימת (מונע כפילות ויזואלית)
+        existingNode.setData(savedGuide);
+        
+        // עדכון ה-state הפנימי של ה-rowData כדי שהבדיקות הבאות יכירו את המידע החדש
+        setRowData(prev => prev?.map(g => g.Guideid === savedGuide.Guideid ? savedGuide : g) || []);
+      } else {
+        // אם המדריך חדש - הוספת שורה חדשה לטבלה
+        gridRef.current?.api.applyTransaction({
+          add: [savedGuide],
+          addIndex: 0
+        });
+        
+        // הוספה ל-state עבור בדיקת כפילויות עתידית בחלונית ה-AI
+        setRowData(prev => [savedGuide, ...(prev || [])]);
+      }
 
     } catch (error: any) {
       console.error("Error saving guide:", error);

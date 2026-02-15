@@ -66,20 +66,54 @@ export const CustomFilterProf = ({ FilterAreas, FilterProf, CurrentProgram, setF
   }, [])
 
 
-  useEffect(() => {
+ useEffect(() => {
     const getProfessions = async () => {
-       let entry = AllFilters.find((filter)=>filter.ProgramID===CurrentProgram.value)
-       if(entry && entry.FilterProf && entry.FilterProf.length > 0) {
-           setFilter(entry.FilterProf)
-           setInnerFilter(entry.FilterProf)
-     } else {
-         setInnerFilter(Choices?.map((val, index) => ({ eng_value: val.value, value: val.label, active: false })))
-         setFilter([])
-    } 
-    }
-    getProfessions()
-  }, [AllFilters, Choices, CurrentProgram, setFilter])
+      // 1. מקור האמת: תמיד בונים את הרשימה המלאה מה-DB (כאן נמצאת "זומבה")
+      const rawProfessions = (data.Professions && data.Professions.length > 0)
+        ? data.Professions.map(p => {
+            const name = typeof p === 'string' ? p : (p.ProfessionName || p.label || p.name || "ללא שם");
+            return { label: name, value: name };
+          })
+        : Choices; // גיבוי למקרה שה-DB ריק
 
+      // סינון כפילויות
+      const uniqueSource = rawProfessions.filter((v, i, a) => 
+        a.findIndex(t => t.label === v.label) === i && v.label !== "ללא שם"
+      );
+
+      // 2. בדיקת הזיכרון: מה המשתמש סימן בפעם האחרונה?
+      let savedEntry = AllFilters.find((filter) => filter.ProgramID === CurrentProgram.value);
+      let savedFilterState = savedEntry ? savedEntry.FilterProf : [];
+
+      // 3. המיזוג: לוקחים את כל המקצועות מה-DB + הסטטוס מהזיכרון
+      const mergedFilter = uniqueSource.map((prof) => {
+        // האם המקצוע הזה היה שמור בזיכרון?
+        const savedProf = savedFilterState.find(s => s.value === prof.label);
+        
+        return { 
+          eng_value: prof.value, 
+          value: prof.label, 
+          // אם כן - תשמור על הבחירה (active). אם זה מקצוע חדש (זומבה) - תתחיל כ-false.
+          active: savedProf ? savedProf.active : false 
+        };
+      });
+
+      // 4. עדכון התצוגה
+      if (mergedFilter.length > 0) {
+          setInnerFilter(mergedFilter);
+          
+          // עדכון הפילטר בפועל רק אם יש שמירה פעילה, כדי לא לדרוס סתם
+          if (savedEntry && savedEntry.FilterProf && savedEntry.FilterProf.length > 0) {
+             setFilter(mergedFilter);
+          } else {
+             setFilter([]); 
+          }
+      }
+    };
+
+    getProfessions();
+  // התלות ב-data.Professions מבטיחה שברגע שהמידע מגיע מהשרת - הרשימה תתעדכן
+  }, [CurrentProgram.value, data.Professions, Choices, AllFilters, setFilter]);
 
   const onClick = useCallback((val: { eng_value: string, value: string, active: boolean }) => {
     let new_filter = Filter

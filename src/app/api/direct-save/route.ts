@@ -30,10 +30,11 @@ export async function POST(req: Request) {
         }
       });
     } else {
-      const maxGuide = await prisma.guide.findFirst({
-        orderBy: { Guideid: 'desc' }
-      });
-      const nextId = (maxGuide?.Guideid ?? 0) + 1;
+      // שימוש ב-Aggregate כדי לקבל את ה-ID הגבוה ביותר בצורה אמינה
+const maxResult = await prisma.guide.aggregate({
+  _max: { Guideid: true }
+});
+const nextId = (maxResult._max.Guideid ?? 0) + 1;
 
       guide = await prisma.guide.create({
         data: {

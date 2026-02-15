@@ -26,6 +26,7 @@ import {
   getAllDistricts,
   getAllGuides,
   getAllProfessions,
+  getAllProfessionTypes,
   getAllStatuses,
   getAllYears,
   getModelFields,
@@ -169,6 +170,7 @@ export default function PlacementTable() {
   const [AllFilters, setAllFilters] = useState<PlacementFilter[]>([])
 
   const [Professions, setProfessions] = useState<Profession[]>([])
+  const [ProfessionTypesList, setProfessionTypesList] = useState<any[]>([])
   const [Areas, setAreas] = useState<Areas[]>([])
 
   const [SelectedRows, setSelectedRows] = useState<Guide[]>()
@@ -367,55 +369,64 @@ export default function PlacementTable() {
           setRightRowData(uniqueGuides != null ? uniqueGuides : [])
         }
 
-        // 2. 🔥 תמיד למשוך נתונים עדכניים מהשרת (Background Refresh) 🔥
-        Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts()])
-          .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities, areas]) => {
-            
+       // 2. 🔥 תמיד למשוך נתונים עדכניים מהשרת (Background Refresh) 🔥
+       Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts(), getAllProfessionTypes()])
+  .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities, areas, professionTypes]) => {
             const sortedYears = (years || []).sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1));
             setAllYears(sortedYears);
             
-            const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates)
-            const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates)
-            setLeftColDef(coldefleft)
+            const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates);
+            const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates);
+            setLeftColDef(coldefleft);
             
-            const uniqueGuides = guides.filter((guide, index, self) => 
+            const uniqueGuides = (guides || []).filter((guide, index, self) => 
                index === self.findIndex((t) => t.Guideid === guide.Guideid)
             );
-            setAllGuides(uniqueGuides != null ? uniqueGuides : [])
-      
-            setRightColDef(coldef)
-            setProfessions(professions)
-            setAllPrograms(programs) 
-            setAllSchools(schools)
-            setAllDistances(distances)
-            setAllStatuses(statuses)
-            setAllCities(cities)
-            setAllContacts(contacts)
-            setColors(colors)
-            setAllColorCandidates(color_candidates)
-            setAllCandidates(candidates)
-            setAllAssignedGuides(assigned_guides) // <--- התיקון הקריטי: מעדכן משובצים מהשרת
-            setAreas(areas)
 
-            const candidates_ids = candidates.map((res) => res.Guideid)
-            const assigned_ids = assigned_guides.map((res) => res.Guideid)
-            const assigned_details = guides.filter((res) => assigned_ids.includes(res.Guideid))
-            const candidates_details = guides.filter((res) => candidates_ids.includes(res.Guideid))
-            setAllCandidates_Details(candidates_details)
-            setAllAssignedGuides_Details(assigned_details)
+            // --- כאן נמצא השינוי המבוקש לעדכון המקצועות ---
+if (professions && Array.isArray(professions)) {
+  // סינון כפילויות לפי שם המקצוע כדי למנוע כפתורים כפולים בפילטר
+  const uniqueProfessions = professions.filter((v, i, a) => 
+    a.findIndex(t => t.ProfessionName === v.ProfessionName) === i
+  );
+  setProfessions(uniqueProfessions);
+} else {
+  setProfessions([]);
+}            // ----------------------------------------------
 
-            setRightRowData(uniqueGuides != null ? uniqueGuides : [])
+            setAllGuides(uniqueGuides);
+            setRightColDef(coldef);
+            setAllPrograms(programs); 
+            setAllSchools(schools);
+            setAllDistances(distances);
+            setAllStatuses(statuses);
+            setAllCities(cities);
+            setAllContacts(contacts);
+            setColors(colors);
+            setAllColorCandidates(color_candidates);
+            setAllCandidates(candidates);
+            setAllAssignedGuides(assigned_guides); 
+            setAreas(areas);
+
+            const candidates_ids = (candidates || []).map((res) => res.Guideid);
+            const assigned_ids = (assigned_guides || []).map((res) => res.Guideid);
             
-            // עדכון ה-Storage בנתונים החדשים
+            setAllCandidates_Details((guides || []).filter((res) => candidates_ids.includes(res.Guideid)));
+            setAllAssignedGuides_Details((guides || []).filter((res) => assigned_ids.includes(res.Guideid)));
+
+            setRightRowData(uniqueGuides);
+            
             updateStorage({
               Professions: professions, Schools: schools,
               Programs: programs, Candidates: candidates, AssignedGuides: assigned_guides,
               Tablemodel: model, Colors: colors, schoolsContacts: contacts, ColorCandidates: color_candidates, Years: sortedYears,
               ProgramsStatuses: statuses, Distances: distances, Cities: cities, Guides: guides, Filters: [], Areas: areas
-            })
+            });
             
-            console.log("✅ Data synced with DB successfully");
-          })
+console.log("✅ Data & Professions synced with DB");
+if (professionTypes && professionTypes.length > 0) {
+  setProfessionTypesList(professionTypes);
+}          })
       })
     }
   }, [GetDefaultDefinitionsLeft, GetDefaultDefinitionsRight]);
@@ -1022,8 +1033,7 @@ const updateLeftTable = () => {
       <Container fluid={true} className="p-2"> 
         <div className="max-w-[33%] float-right flex flex-col p-2" > 
           <Row>
-              <CustomFilterProf RightApi={rightApi} Professions={Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
-          </Row>
+<CustomFilterProf RightApi={rightApi} Professions={ProfessionTypesList.length > 0 ? ProfessionTypesList : Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />          </Row>
 <div className="mt-4">
               <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
           </div>
@@ -1067,8 +1077,7 @@ const updateLeftTable = () => {
         </div>
       </Container>
     )
-  }, [rightApi, Professions, CurrentProgram, FilterProf, AllFilters, Areas, FilterAreas, leftApi, SelectedRows, AllPrograms, AllCandidates, AllCandidates_Details, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, AllYears, AllStatuses, FilterYear, FilterStatus, AllColorCandidates]);
-
+}, [rightApi, Professions, ProfessionTypesList, CurrentProgram, FilterProf, AllFilters, Areas, FilterAreas, leftApi, SelectedRows, AllPrograms, AllCandidates, AllCandidates_Details, AllSchools, AllContacts, All_Assigned_Guides, All_Assigned_Guides_Details, AllYears, AllStatuses, FilterYear, FilterStatus, AllColorCandidates]);
   const isExternalFilterPresent = useCallback((params: IsExternalFilterPresentParams<any, any>): boolean => {
     return true
   }, [])
