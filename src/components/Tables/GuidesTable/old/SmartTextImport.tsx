@@ -6,51 +6,17 @@ import Draggable from 'react-draggable';
 interface Props {
   show: boolean;
   onClose: () => void;
-  existingGuides: Guide[];
+  existingGuides: Guide[]; // מכיל את כל המדריכים מה-DB שהטבלה טענה
   onConfirm: (finalGuides: any[]) => void;
 }
 
 export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Props) => {
   const [loading, setLoading] = useState(false);
   const [draftGuides, setDraftGuides] = useState<any[]>([]);
-  const nodeRef = useRef(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const nodeRef = useRef(null); 
 
-  // פונקציה לטיפול בהדבקת תמונות
-  const handleImagePaste = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-
-    setLoading(true);
-    try {
-      // המרת התמונה ל-base64
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      
-      reader.onload = async () => {
-        const base64Image = reader.result as string;
-        
-        const res = await fetch('/api/ai-extract-guides', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            image: base64Image,
-            isImage: true 
-          }),
-        });
-        
-        const data = await res.json();
-        processExtractedGuides(data.guides);
-      };
-    } catch (err) {
-      console.error("Image extraction error:", err);
-      alert("שגיאה בעיבוד התמונה");
-    } finally {
-      setLoading(false);
-    }
-  }, [existingGuides]);
-
-  // פונקציה לטיפול בהדבקת טקסט (הפונקציה המקורית)
-  const handleTextPaste = useCallback(async (text: string) => {
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+    const text = e.clipboardData?.getData('text');
     if (!text || loading) return;
 
     setLoading(true);
@@ -61,78 +27,40 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         body: JSON.stringify({ rawText: text }),
       });
       const data = await res.json();
-      processExtractedGuides(data.guides);
+      
+      const newItems = data.guides.map((g: any) => {
+  // ניקוי טלפון מה-AI לצורך השוואה (מסיר תווים שאינם ספרות ואפס מוביל)
+  const cleanAIPhone = g.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
+  
+  // 1. בדיקת כפילות מול הטבלה הגדולה (המערכת בודקת את הנתונים שכבר טעונים ב-Grid)
+  const isDuplicateInMainTable = existingGuides.some(ex => {
+    const cleanExistingPhone = ex.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
+    return cleanExistingPhone === cleanAIPhone;
+  });
+
+  // 2. בדיקה מול מדריכים אחרים שכבר הדבקת כרגע בחלון ה-AI (למקרה שהדבקת את אותו טקסט פעמיים)
+  const isDuplicateInCurrentDraft = draftGuides.some(draft => {
+    const cleanDraftPhone = draft.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
+    return cleanDraftPhone === cleanAIPhone;
+  });
+
+  const isDuplicate = isDuplicateInMainTable || isDuplicateInCurrentDraft;
+
+  return { 
+    ...g, 
+    isDuplicate,        // אם True, השורה תצבע באדום (לפי ה-CSS הקיים אצלך)
+    selected: !isDuplicate, // אם המדריך כפול - הצ'קבוקס יורד אוטומטית!
+    tempId: Math.random() 
+  };
+});
+
+      setDraftGuides(prev => [...prev, ...newItems]);
     } catch (err) {
       console.error("Extraction error:", err);
     } finally {
       setLoading(false);
     }
   }, [existingGuides, loading]);
-
-  // פונקציה משותפת לעיבוד המדריכים שחולצו
-  const processExtractedGuides = (guides: any[]) => {
-    const newItems = guides.map((g: any) => {
-      const cleanAIPhone = g.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
-      
-      const isDuplicateInMainTable = existingGuides.some(ex => {
-        const cleanExistingPhone = ex.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
-        return cleanExistingPhone === cleanAIPhone;
-      });
-
-      const isDuplicateInCurrentDraft = draftGuides.some(draft => {
-        const cleanDraftPhone = draft.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
-        return cleanDraftPhone === cleanAIPhone;
-      });
-
-      const isDuplicate = isDuplicateInMainTable || isDuplicateInCurrentDraft;
-
-      return { 
-        ...g, 
-        isDuplicate,
-        selected: !isDuplicate,
-        tempId: Math.random() 
-      };
-    });
-
-    setDraftGuides(prev => [...prev, ...newItems]);
-  };
-
-  // מאזין להדבקה (תמיכה גם בטקסט וגם בתמונות)
-  const handlePaste = useCallback(async (e: ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-
-    // בדיקה אם יש תמונה בלוח
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const file = items[i].getAsFile();
-        if (file) {
-          e.preventDefault();
-          await handleImagePaste(file);
-          return;
-        }
-      }
-    }
-
-    // אם אין תמונה, נטפל בטקסט
-    const text = e.clipboardData?.getData('text');
-    if (text) {
-      await handleTextPaste(text);
-    }
-  }, [handleImagePaste, handleTextPaste]);
-
-  // טיפול בבחירת קובץ דרך כפתור העלאה
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    await handleImagePaste(file);
-    
-    // איפוס ה-input כדי לאפשר העלאה של אותו קובץ שוב
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   useEffect(() => {
     if (show) {
@@ -162,44 +90,16 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         }}
       >
         <div className="drag-handle p-2 bg-primary text-white d-flex justify-content-between align-items-center rounded-top" style={{ cursor: 'move' }}>
-          <h6 className="m-0">🪄 הזנה חכמה מצטברת (Ctrl+V להדבקה | תמיכה בטקסט ותמונות)</h6>
+          <h6 className="m-0">🪄 הזנה חכמה מצטברת (Ctrl+V להדבקה)</h6>
           <Button variant="link" className="text-white p-0" onClick={onClose} style={{ textDecoration: 'none', fontSize: '20px' }}>&times;</Button>
         </div>
 
         <div className="p-3" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-          {loading && <div className="text-center mb-3"><Spinner animation="border" size="sm" /> מנתח נתונים...</div>}
+          {loading && <div className="text-center mb-3"><Spinner animation="border" size="sm" /> מנתח הודעות...</div>}
           
           {draftGuides.length === 0 ? (
             <div className="text-center p-5 border-dashed rounded" style={{ border: '2px dashed #dee2e6' }}>
-              <p className="text-muted mb-2">החלון מוכן. בחר אחת מהאפשרויות:</p>
-              <div className="d-flex flex-column gap-2 align-items-center">
-                <div>
-                  <strong>📋 טקסט:</strong> העתק טקסט מווטסאפ ועשה <strong>Ctrl+V</strong> כאן
-                </div>
-                <div className="my-2">או</div>
-                <div>
-                  <strong>📸 תמונה:</strong> 
-                  <ul className="text-start d-inline-block mb-0">
-                    <li>צלם מסך (Print Screen) והדבק כאן (Ctrl+V)</li>
-                    <li>או לחץ על הכפתור למטה להעלאת קובץ תמונה</li>
-                  </ul>
-                </div>
-              </div>
-              <div className="mt-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                  id="image-upload"
-                />
-                <label htmlFor="image-upload">
-                  <Button as="span" variant="outline-primary" size="sm">
-                    📤 העלה תמונה מהמחשב
-                  </Button>
-                </label>
-              </div>
+              <p className="text-muted mb-0">החלון מוכן. העתק טקסט מוואטסאפ ועשה <strong>Ctrl+V</strong> כאן.</p>
             </div>
           ) : (
             <Table striped bordered hover size="sm" style={{ fontSize: '13px' }}>
