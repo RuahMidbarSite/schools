@@ -278,19 +278,19 @@ export default function PlacementTable() {
 
       const baseDef: ColDef = { field: fieldKey, headerName: headerName, editable: false, filter: CustomFilter, suppressSizeToFit: true };
 
-      if (fieldKey === "WhatsApp") return { ...baseDef, headerName: "פרטי", width: 90, cellRenderer: "CustomWhatsAppRenderer", valueGetter: (params) => params.data.FirstName || "" };
-      if (fieldKey === "LastName") return { ...baseDef, headerName: "משפחה", width: 110 };
-      if (fieldKey === "CV") return { ...baseDef, headerName: "קו''ח", width: 70, cellRenderer: (p) => p.value ? <a href={p.value} target="_blank" rel="noreferrer" style={{color: 'blue'}}>קוח</a> : "" };
+      if (fieldKey === "WhatsApp") return { ...baseDef, headerName: "פרטי", width: 70, cellRenderer: "CustomWhatsAppRenderer", valueGetter: (params) => params.data.FirstName || "" };
+      if (fieldKey === "LastName") return { ...baseDef, headerName: "משפחה", width: 75 };
+      if (fieldKey === "CV") return { ...baseDef, headerName: "קו''ח", width: 42, cellRenderer: (p) => p.value ? <a href={p.value} target="_blank" rel="noreferrer" style={{color: 'blue'}}>קוח</a> : "" };
       if (fieldKey === "City") return { ...baseDef, headerName: "יישוב", width: 90 };
-      if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 90 };
-      if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 80 };
-      if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer" };
-      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160 };
+      if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 85 };
+      if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 55 };
+      if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer", autoHeight: true, wrapText: true };
+      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160, editable: true, singleClickEdit: true};
       return baseDef;
     });
 
     const color_col = { field: 'color', headerName: "צבע", width: 60, suppressSizeToFit: true, cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates, onColorChange: handleManualColorChange, canClear: false }, checkboxSelection: true, headerCheckboxSelection: true, rowDrag: (p) => rowDragCheck(p, "Left"), filter: CustomFilter };
-    const distance_col = { field: 'distance', headerName: "מרחק", width: 80, suppressSizeToFit: true, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter };
+    const distance_col = { field: 'distance', headerName: "מרחק", width: 50, suppressSizeToFit: true, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter };
     
     return [color_col, distance_col, ...coldef];
   }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, handleManualColorChange]);
@@ -302,19 +302,19 @@ export default function PlacementTable() {
 
       const baseDef: ColDef = { field: fieldKey, headerName: headerName, editable: false, filter: CustomFilter, suppressSizeToFit: true };
 
-      if (fieldKey === "WhatsApp") return { ...baseDef, headerName: "פרטי", width: 90, cellRenderer: "CustomWhatsAppRenderer", valueGetter: (params) => params.data.FirstName || "" };
-      if (fieldKey === "LastName") return { ...baseDef, headerName: "משפחה", width: 110 };
-      if (fieldKey === "CV") return { ...baseDef, headerName: "קו''ח", width: 70, cellRenderer: (p) => p.value ? <a href={p.value} target="_blank" rel="noreferrer" style={{color: 'blue'}}>קוח</a> : "" };
+      if (fieldKey === "WhatsApp") return { ...baseDef, headerName: "פרטי", width: 70, cellRenderer: "CustomWhatsAppRenderer", valueGetter: (params) => params.data.FirstName || "" };
+      if (fieldKey === "LastName") return { ...baseDef, headerName: "משפחה", width: 75 };
+      if (fieldKey === "CV") return { ...baseDef, headerName: "קו''ח", width: 42, cellRenderer: (p) => p.value ? <a href={p.value} target="_blank" rel="noreferrer" style={{color: 'blue'}}>קוח</a> : "" };
       if (fieldKey === "City") return { ...baseDef, headerName: "יישוב", width: 90 };
-      if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 90 };
-      if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 80 };
-      if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer" };
-      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160 };
+      if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 85 };
+      if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 55 };
+      if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer", autoHeight: true, wrapText: true };
+      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160, editable: true, singleClickEdit: true };
       return baseDef;
     });
 
     const color_col = { field: 'color', headerName: "צבע", width: 60, suppressSizeToFit: true, cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates, onColorChange: handleManualColorChange, canClear: true }, rowDrag: rowDragCheck, filter: CustomFilter };
-    const distance_col = { field: 'distance', headerName: "מרחק", width: 80, suppressSizeToFit: true, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter };
+    const distance_col = { field: 'distance', headerName: "מרחק", width: 50, suppressSizeToFit: true, cellRenderer: "DistanceComponent", cellRendererParams: { currentProgram: CurrentProgram, Distances: AllDistances, Cities: AllCities, Programs: AllPrograms }, filter: CustomFilter };
     
     return [color_col, distance_col, ...coldef];
   }, [CurrentProgram, rowDragCheck, AllDistances, AllCities, AllPrograms, handleManualColorChange]);
@@ -1033,13 +1033,7 @@ const updateLeftTable = () => {
       <Container fluid={true} className="p-2"> 
         <div className="max-w-[33%] float-right flex flex-col p-2" > 
           <Row>
-<CustomFilterProf RightApi={rightApi} Professions={ProfessionTypesList.length > 0 ? ProfessionTypesList : Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />          </Row>
-<div className="mt-4">
-              <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
-          </div>
-
-          {/* שינוי ה-Layout של התפריטים להסרת ה-Margin השלילי ויישור נכון */}
-<div className="d-flex gap-2 flex-wrap" style={{ marginTop: '10px', direction: 'rtl', justifyContent: 'flex-start' }}>
+            <div className="d-flex gap-2 flex-wrap" style={{ marginTop: '10px', direction: 'rtl', justifyContent: 'flex-start' }}>
   <div style={{ width: '120px', position: 'relative', zIndex: 10 }}>
      <YearSelect placeholder={"בחר שנה"} AllYears={AllYears} setFilterYear={setFilterYear} />
   </div>
@@ -1059,6 +1053,13 @@ const updateLeftTable = () => {
      />
   </div>
 </div>
+<CustomFilterProf RightApi={rightApi} Professions={ProfessionTypesList.length > 0 ? ProfessionTypesList : Professions} setProfession={setProfessions} setFilter={setFilterProf} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />          </Row>
+<div className="mt-4">
+              <CustomFilterAreas RightApi={rightApi} Areas={Areas} setAreas={setAreas} setFilter={setFilterAreas} CurrentProgram={CurrentProgram} AllFilters={AllFilters} setAllFilters={setAllFilters} FilterProf={FilterProf} FilterAreas={FilterAreas} />
+          </div>
+
+          {/* שינוי ה-Layout של התפריטים להסרת ה-Margin השלילי ויישור נכון */}
+
 
         </div>
 

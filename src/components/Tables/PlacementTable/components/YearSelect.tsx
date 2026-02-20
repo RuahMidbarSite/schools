@@ -51,7 +51,7 @@ const YearSelect = ({ placeholder, AllYears, setFilterYear }: yearData) => {
 
     <div className="w-[200px] ">
       <Select isRtl={true} placeholder={placeholder} options={Values} onChange={onChange}
-        defaultValue={defaultValue} value={Year} menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+        defaultValue={defaultValue} value={Year} maxMenuHeight={500} menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
         styles={{
           menu: (provided) => ({
             ...provided,

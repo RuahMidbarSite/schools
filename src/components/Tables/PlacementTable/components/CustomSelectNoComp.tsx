@@ -62,7 +62,7 @@ const Message=useCallback(()=>{
 
 return (
    <div className="w-[200px]">
-  <Select  isRtl={true} placeholder={placeholder} options={Values} onChange={onChange} noOptionsMessage={Message}   menuPortalTarget={typeof document!=='undefined'? document.body:null}
+  <Select  isRtl={true} placeholder={placeholder} options={Values} onChange={onChange} noOptionsMessage={Message} maxMenuHeight={500}  menuPortalTarget={typeof document!=='undefined'? document.body:null}
         styles={{
           menu: (provided) => ({
             ...provided,

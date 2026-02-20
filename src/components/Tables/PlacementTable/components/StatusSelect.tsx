@@ -44,7 +44,7 @@ const onChange = useCallback((newValue:{label:string, value:any})=> {
 
 return (
    <div className="w-[200px] z-50">
-  <Select defaultValue={defaultValue} value={Status}  isRtl={true} placeholder={placeholder} options={Values} onChange={onChange}   menuPortalTarget={typeof document!=='undefined'? document.body:null}
+  <Select defaultValue={defaultValue} value={Status}  isRtl={true} placeholder={placeholder} options={Values} onChange={onChange} maxMenuHeight={500}  menuPortalTarget={typeof document!=='undefined'? document.body:null}
         styles={{
           menu: (provided) => ({
             ...provided,
