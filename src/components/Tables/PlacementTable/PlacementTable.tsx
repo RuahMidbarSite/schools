@@ -285,8 +285,7 @@ export default function PlacementTable() {
       if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 85 };
       if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 55 };
       if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer", autoHeight: true, wrapText: true };
-      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160, editable: true, singleClickEdit: true};
-      return baseDef;
+      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160, editable: true, singleClickEdit: true, wrapText: false, autoHeight: false, tooltipValueGetter: (params) => params.value };      return baseDef;
     });
 
     const color_col = { field: 'color', headerName: "צבע", width: 60, suppressSizeToFit: true, cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates, onColorChange: handleManualColorChange, canClear: false }, checkboxSelection: true, headerCheckboxSelection: true, rowDrag: (p) => rowDragCheck(p, "Left"), filter: CustomFilter };
@@ -309,8 +308,7 @@ export default function PlacementTable() {
       if (fieldKey === "Area") return { ...baseDef, headerName: "אזור", width: 85 };
       if (fieldKey === "ReligiousSector") return { ...baseDef, headerName: "מגזר", width: 55 };
       if (fieldKey === "Professions") return { ...baseDef, headerName: "מקצועות", width: 140, cellEditor: "CustomChooseProfessions", cellRenderer: "ProfCellRenderer", autoHeight: true, wrapText: true };
-      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160, editable: true, singleClickEdit: true };
-      return baseDef;
+      if (fieldKey === "Notes") return { ...baseDef, headerName: "הערות", width: 160, editable: true, singleClickEdit: true, wrapText: false, autoHeight: false, tooltipValueGetter: (params) => params.value };      return baseDef;
     });
 
     const color_col = { field: 'color', headerName: "צבע", width: 60, suppressSizeToFit: true, cellRenderer: "ColorPicker", cellRendererParams: { currentProgram: CurrentProgram, Colors: colors, AllColorCandidates: colorcandidates, onColorChange: handleManualColorChange, canClear: true }, rowDrag: rowDragCheck, filter: CustomFilter };
@@ -1255,6 +1253,8 @@ const updateLeftTable = () => {
           onColumnResized={side === "Left" ? onColumnResized : onColumnResized}
           pagination={true}
           paginationPageSize={25}
+          tooltipShowDelay={0}
+          tooltipHideDelay={5000}
         />
       </div>
     </div>

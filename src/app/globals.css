@@ -7,6 +7,13 @@
   overflow: visible !important;
 }
 
+.ag-theme-quartz .ag-cell[col-id="Notes"],
+.ag-theme-quartz-dark .ag-cell[col-id="Notes"] {
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
 /* === ביטול ריפוד בתאים לאפשרות כיווץ מקסימלי === */
 .ag-theme-quartz .ag-cell, 
 .ag-theme-quartz-dark .ag-cell {

@@ -415,8 +415,27 @@ const handleSmartConfirm = async (newGuides: any[]) => {
       </div>
     );
   }, []);
+// קוד חדש - הוסף את הפונקציה הזו לפניו:
+const RemarksCellRenderer = useCallback((props: ICellRendererParams<Guide>) => {
+  const text = props.value || '';
+  if (!text) return <div></div>;
+  return (
+    <div
+      title={text}
+      style={{
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        width: '100%',
+        cursor: 'default',
+      }}
+    >
+      {text}
+    </div>
+  );
+}, []);
 
-  const valueFormatCellPhone = useCallback((params) => {
+ const valueFormatCellPhone = useCallback((params) => {
     const { CellPhone }: { CellPhone: string } = params.data
     const formattedPhone = CellPhone?.replace('+972', '')
       .replace(/[-\s]/g, '')
@@ -432,7 +451,7 @@ const handleSmartConfirm = async (newGuides: any[]) => {
     // 1. עמודות שמתרחבות (Flex)
     // הערות מקבלת משקל עצום כדי לקחת את כל השאריות
     const columnFlex: { [key: string]: number } = {
-        Remarks: 12,        // 🔥 המלך החדש של הטבלה
+        Remarks: 20,        // 🔥 המלך החדש של הטבלה
         Professions: 3,     
         default: 1
     };
@@ -447,8 +466,8 @@ const handleSmartConfirm = async (newGuides: any[]) => {
         FirstName: 75,      // שם פרטי
         LastName: 75,       // משפחה
         CellPhone: 90,      // טלפון (צפוף)
-        City: 150,           // יישוב
-        Area: 150,           // אזור
+        City: 100,           // יישוב
+        Area: 100,           // אזור
         
         // עמודות קטנות
         Status: 55,         // סטטוס
@@ -470,8 +489,8 @@ const handleSmartConfirm = async (newGuides: any[]) => {
     };
 
     const minWidths: { [key: string]: number } = {
-        Remarks: 150, 
-        Professions: 100,
+        Remarks: 100, 
+        Professions: 80,
         default: 40
     };
 
@@ -661,12 +680,20 @@ const handleSmartConfirm = async (newGuides: any[]) => {
         };
       }
 
+if (value === "Notes") {
+  return {
+    ...baseColDef,
+    wrapText: false,
+    autoHeight: false,
+    tooltipValueGetter: (params) => params.value,
+  };
+}
+
       return baseColDef;
     });
 
     return coldef
-  }, [AuthenticateActivate, ProfCellRenderer, ValueFormatAssigned, ValueFormatWhatsApp, valueFormatCellPhone])
-  
+  }, [AuthenticateActivate, ProfCellRenderer, RemarksCellRenderer, ValueFormatAssigned, ValueFormatWhatsApp, valueFormatCellPhone])
   
   const onGridReady = async (params) => {
     getFromStorage().then(async ({ Guides, Cities, Areas, Religion, Professions, ProfessionsTablemodel, Tablemodel, GuidesStatuses, ColorCandidates, Candidates, AssignedGuides }: Required<DataType>) => {
@@ -1103,10 +1130,12 @@ const components = useMemo(
       CustomFilter: CustomFilter,
       CustomChooseProfessions: ChooseProfessions,
       whatsAppRenderer: CustomWhatsAppRenderer,
+// קוד חדש:
       ProfCellRenderer: ProfCellRenderer,
-      StatusBadgeRenderer: StatusBadgeRenderer // הוספת הרכיב כאן
+      RemarksCellRenderer: RemarksCellRenderer,
+      StatusBadgeRenderer: StatusBadgeRenderer
     }),
-    [AuthenticateActivate, ProfCellRenderer]
+    [AuthenticateActivate, ProfCellRenderer, RemarksCellRenderer]
   );
 
 
@@ -1356,6 +1385,8 @@ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
             onCellEditingStopped={onCellEditingStopped}
             pagination={true}
             paginationPageSize={25}
+            tooltipShowDelay={0}
+            tooltipHideDelay={5000}
           />
         </div>
       </Suspense>
