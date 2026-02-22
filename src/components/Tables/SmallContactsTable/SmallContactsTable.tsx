@@ -23,7 +23,7 @@ import useToolBarFunctions from "./hooks/ToolBarFunctions";
 import ToolBar from "./hooks/ToolBarComponent";
 import useGridEvents from "./hooks/GridEvents";
 // ✅ ייבוא המנגנון לסנכרון נתונים
-import { useStorageSync, getFromStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
+import { getFromStorage } from "@/components/Tables/SmallContactsTable/Storage/SmallContactsDataStorage";
 
 interface SmallContactsTableProps {
   SchoolID: number;
@@ -64,21 +64,22 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
   useExternalEffect(updateColState, [colState])
 
   // === 🟢 תוספת: האזנה לשינויים בסטורג' ורענון הטבלה הקטנה ===
-  const refreshLocalData = useCallback(async () => {
+ const refreshLocalData = useCallback(async () => {
+    // ✅ אם בדיוק ביצענו מחיקה מקומית, מדלגים על הרענון הזה
+    if (skipNextStorageRefresh.current) {
+      skipNextStorageRefresh.current = false;
+      console.log("⏭️ SmallContactsTable: skipping storage refresh after local delete");
+      return;
+    }
     try {
       const data = await getFromStorage();
       if (data && data.schoolsContacts) {
-        // סינון אנשי הקשר ששייכים רק לבית הספר הנוכחי
         const currentSchoolContacts = data.schoolsContacts.filter(
           (c: SchoolsContact) => c.SchoolId === SchoolID || c.Schoolid === SchoolID
         );
-        
         setRowData(currentSchoolContacts);
-        
-        // עדכון ישיר של הגריד אם הוא קיים
         if (gridRef.current?.api) {
           gridRef.current.api.setGridOption('rowData', currentSchoolContacts);
-          // רענון תאים כדי שהסטטוס החדש יופיע ויזואלית (כולל צבעים אם יש)
           gridRef.current.api.refreshCells({ force: true });
         }
       }
@@ -106,6 +107,7 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
   // ==============================================================
 
   const maxIndex = useRef<number>(0)
+  const skipNextStorageRefresh = useRef(false) // ✅ מניעת דריסת מחיקה מקומית
   const { ValueFormatSchool, ValueFormatWhatsApp, valueFormatCellPhone } = useExternalUpdate(AuthenticateActivate)
   const { onGridReady } = useGridFunctions(valueFormatCellPhone, AuthenticateActivate, ValueFormatSchool, valueFormatCellPhone, setRowData, setColumnDefs, dataRowCount, rowCount, SchoolID, setAllContacts, allContactsCount, maxIndex)
   const { onColumnResized, onColumnMoved } = useColumnHook(gridRef, setColState, "SmallContacts")
@@ -117,7 +119,7 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
     return String(params.data.Contactid);
   }, []);
 
-  const handleDeleteRows = useCallback(async () => {
+const handleDeleteRows = useCallback(async () => {
     if (!gridRef.current || !gridRef.current.api) return;
 
     const selectedNodes = gridRef.current.api.getSelectedNodes();
@@ -128,12 +130,27 @@ const SmallContactsTable = ({ SchoolID, SchoolApi, setAllSchoolContacts, deleteC
 
     if (deleteContact) {
       if (!window.confirm(`האם למחוק ${selectedIds.length} אנשי קשר?`)) return;
+      console.log("🗑️ Deleting IDs:", selectedIds);
+      // ✅ מסמנים שאנחנו מטפלים במחיקה מקומית - refreshLocalData ידלג פעם אחת
+      skipNextStorageRefresh.current = true;
       const success = await deleteContact(selectedIds);
-      if (success) {
-        gridRef.current.api.applyTransaction({ remove: selectedData });
-        gridRef.current.api.deselectAll();
+      console.log("🗑️ Delete success:", success);
+if (success) {
+        console.log("✅ Applying transaction remove...");
+        if (gridRef.current?.api && !gridRef.current.api.isDestroyed()) {
+          gridRef.current.api.applyTransaction({ remove: selectedData });
+          gridRef.current.api.deselectAll();
+        }
         setAmount(0);
-        setRowData(prev => prev ? prev.filter(row => !selectedIds.includes(row.Contactid)) : []);
+        setRowData(prev => {
+          const updated = prev ? prev.filter(row => !selectedIds.includes(row.Contactid)) : [];
+          console.log("✅ New rowData length:", updated.length);
+          return updated;
+        });
+      } else {
+        // ✅ אם המחיקה נכשלה, מבטלים את הדגל
+        skipNextStorageRefresh.current = false;
+        console.log("❌ Delete failed!");
       }
     } else {
       onSaveDeletions();

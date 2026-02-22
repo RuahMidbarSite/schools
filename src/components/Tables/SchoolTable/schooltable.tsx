@@ -35,6 +35,7 @@ import { Program, School, SchoolsContact, } from "@prisma/client";
 import RepresentiveComponent from "../GeneralFiles/GoogleContacts/ContactsRepComponent";
 import { useContactComponent } from "@/util/Google/GoogleContacts/ContactComponent";
 import { getCacheVersion, getFromStorage, updateStorage } from "@/components/Tables/SchoolTable/Storage/SchoolDataStorage";
+import { updateStorage as updateSmallContactsStorage } from "@/components/Tables/SmallContactsTable/Storage/SmallContactsDataStorage";
 import { deleteContactsRows } from "@/db/contactsRequests";
 
 export default function SchoolsTable() {
@@ -72,25 +73,25 @@ export default function SchoolsTable() {
   const { onGridReady } = useGridFunctions(CustomDateCellEditor, valueFormatterDate, setColDefs, setRowData, rowCount, dataRowCount, setAllContacts, setAllPrograms, maxIndex)
   const { onCellValueChanged, onCellEditingStarted, onRowSelected, onSelectionChange, isRowSelectable } = useGridEvents(gridRef, InTheMiddleOfAddingRows, checkedAmount, setAmount)
 
-  const refreshDataFromStorage = useCallback(async () => {
+  const refreshDataFromStorage = useCallback(async (changedKeys: string[] = []) => {
     try {
       const storageData = await getFromStorage()
-      if (storageData.Schools) {
+      
+      // ✅ עדכון Schools רק אם Schools השתנה - מונע הרס הגריד הקטן
+      const shouldUpdateSchools = changedKeys.length === 0 || changedKeys.includes("Schools")
+      if (shouldUpdateSchools && storageData.Schools) {
         setRowData(storageData.Schools)
         if (gridRef.current?.api) {
           gridRef.current.api.setGridOption('rowData', storageData.Schools)
           gridRef.current.api.refreshCells({ force: true })
         }
       }
+      
+      // ✅ עדכון contacts תמיד כשרלוונטי, אבל WITHOUT נגיעה ב-rowData של הגריד הראשי
       if (storageData.schoolsContacts) {
         setAllContacts(storageData.schoolsContacts)
-        if (gridRef.current?.api) {
-          const currentColDefs = gridRef.current.api.getColumnDefs()
-          if (currentColDefs) {
-             // לוגיקת עדכון עמודות קיימת...
-          }
-        }
       }
+      
       const newVersion = await getCacheVersion()
       setCacheVersion(newVersion)
     } catch (error) {
@@ -102,9 +103,11 @@ export default function SchoolsTable() {
     const handleStorageUpdate = (event: any) => {
       console.log("📩 SchoolTable: Received storage update event", event.detail);
       
-      if (event.detail?.keys?.includes("Schools") || event.detail?.keys?.includes("schoolsContacts")) {
-        console.log("✅ Refreshing data from storage...");
-        refreshDataFromStorage();
+      const keys: string[] = event.detail?.keys || []
+      if (keys.includes("Schools") || keys.includes("schoolsContacts")) {
+        console.log("✅ Refreshing data from storage... changed keys:", keys);
+        // ✅ מעביר את ה-keys כדי שנדע מה בדיוק להעדכן
+        refreshDataFromStorage(keys);
       }
     };
     
@@ -180,7 +183,7 @@ export default function SchoolsTable() {
     // קוד קיים
   }, [AllContacts])
 
-  const handleDeleteContactFromSubTable = useCallback(async (selectedIds: number[]) => {
+ const handleDeleteContactFromSubTable = useCallback(async (selectedIds: number[]) => {
     try {
       console.log("🚀 Server & Storage Delete:", selectedIds);
       
@@ -191,7 +194,10 @@ export default function SchoolsTable() {
           const updatedContacts = currentStorage.schoolsContacts.filter(
              (contact) => !selectedIds.includes(contact.Contactid)
           );
-          await updateStorage({ ...currentStorage, schoolsContacts: updatedContacts });
+          // ✅ עדכון SchoolDataStorage - ישלח את ה-event
+          await updateStorage({ schoolsContacts: updatedContacts });
+          // ✅ עדכון SmallContactsDataStorage - כדי ש-refreshLocalData יטען נתונים נכונים
+          await updateSmallContactsStorage({ schoolsContacts: updatedContacts });
           setAllContacts(updatedContacts);
       }
       return true;

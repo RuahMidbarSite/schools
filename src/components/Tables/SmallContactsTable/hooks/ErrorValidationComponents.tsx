@@ -17,20 +17,23 @@ const useErrorValidationComponents = (setOpen,setDialogType,setDialogMessage,ope
   },[setDialogMessage, setDialogType, setOpen])
 
   const validateCellphone = (cellphone: string) => {
-      const formatted_cellPhone = cellphone.replace('+972', '').replace(/[-\s]/g, '');
-    // Check if the cellphone contains only digits
-    let isNumeric = /^\d+$/.test(formatted_cellPhone);
-    if (!isNumeric) {
-      return false; // Not all characters are digits
-    }
+   const formatted_cellPhone = cellphone
+  .replace(/[\u200B-\u200D\uFEFF\u00AD\u200E\u200F\u2066\u2067\u2068\u2069]/g, '')
+  .replace('+972', '')
+  .replace(/[-\s]/g, '');
+  // Check if the cellphone contains only digits
+  let isNumeric = /^\d+$/.test(formatted_cellPhone);
+  if (!isNumeric) {
+    return false; // Not all characters are digits
+  }
 
-    // Check the length based on whether it starts with '0' or not
-    if (formatted_cellPhone.startsWith("0")) {
-      return formatted_cellPhone.length === 10;
-    } else {
-      return formatted_cellPhone.length === 9;
-    }
-  };
+  // Check the length based on whether it starts with '0' or not
+  if (formatted_cellPhone.startsWith("0")) {
+    return formatted_cellPhone.length === 10;
+  } else {
+    return formatted_cellPhone.length === 9;
+  }
+};
 
   const validateFields = useCallback((rowData: object, rowIndex) => {
     if (!rowData.hasOwnProperty("FirstName")) {
