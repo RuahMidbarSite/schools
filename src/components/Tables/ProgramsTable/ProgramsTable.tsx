@@ -407,8 +407,7 @@ if (paymentsData) {
                 }
             },          
           
-            { field: "Notes", header: "הערות", width: 180 },
-            { field: "Details", header: "פרטים נוספים", width: 140, hide: true },
+            { field: "Details", header: "פרטים נוספים", width: 180 },
             { field: "EstablishmentNumber", header: "סמל מוסד", width: 60 },
             { field: "Schoolid", header: "מזהה ביס", hide: true }, 
             { field: "EducationStage", header: "שלב חינוך", hide: true }

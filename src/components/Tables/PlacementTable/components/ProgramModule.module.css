@@ -49,12 +49,15 @@
 
 /* כותרת פנימית - "כרטיסיית תוכניות" */
 .cardInnerTitle {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: #2d3748;
+  color: #0f766e;
   margin-bottom: 18px;
-  padding-bottom: 0;
-  border-bottom: none;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
+  border-right: 4px solid #0f766e;
+  border-radius: 6px;
+    display: inline-block;
   text-align: right;
   direction: rtl;
 }
@@ -155,10 +158,15 @@
 }
 
 .guidesSectionTitle {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  color: #4a5568;
+  color: #0f766e;
   margin-bottom: 10px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
+  border-right: 4px solid #0f766e;
+  border-radius: 6px;
+    display: inline-block;  
   text-align: right;
 }
 
@@ -217,16 +225,22 @@
 }
 
 .detailsSectionTitle {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  color: #4a5568;
+  color: #0f766e;
   margin-bottom: 10px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #f0fdfa, #ccfbf1);
+  border-right: 4px solid #0f766e;
+  border-radius: 6px;
+  display: inline-block;
   text-align: right;
 }
 
 .detailsContent {
-  font-size: 13px;
-  color: #718096;
+  font-size: 15px;
+  color: #1a202c;
+  font-weight: 500;
   text-align: right;
   min-height: 40px;
 }

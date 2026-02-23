@@ -1,7 +1,7 @@
 "use server";
 import prisma from "@/db/prisma";
 import { Program } from "@prisma/client";
-import { unstable_noStore as noStore } from "next/cache";
+import { unstable_noStore as noStore, revalidatePath } from "next/cache";
 
 // --- יצירת תוכנית חדשה (בודדת) ---
 export const createProgram = async (data: any) => {
@@ -129,6 +129,7 @@ export const updateProgramsColumn = async (ColumnName: string, newValue: any, ke
         where: { Programid: key },
         data: data,
       });
+      revalidatePath('/placementsPage');
       return { success: true };
   } catch (error) {
       console.error(`❌ Update Failed for field '${dbColumnName}':`, error);
