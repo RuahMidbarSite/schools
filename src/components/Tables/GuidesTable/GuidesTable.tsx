@@ -1,5 +1,5 @@
 "use client";
-import { School, Guide, Assigned_Guide, Profession, Areas, ReligionSector, StatusGuides, Guides_ToAssign, ColorCandidate } from "@prisma/client";
+import { School, Guide, Assigned_Guide, Profession, Areas, ReligionSector, StatusGuides, Guides_ToAssign, ColorCandidate, Years, Program } from "@prisma/client";
 import {
   useState,
   useRef,
@@ -53,7 +53,10 @@ import {
   getInfo,
   getInstructors,
   updateInstructorsColumn,
+  setAssignCandidate,
+  setColorCandidate,
 } from "@/db/instructorsrequest";
+import { getPrograms } from "@/db/programsRequests";
 import { CustomLinkDrive } from "../GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
 import {
@@ -66,6 +69,7 @@ import {
   getAllReligionSectors,
   getAllCities,
   getAllAssignedInstructors,
+  getAllYears,
 } from "@/db/generalrequests";
 import { CustomMultiSelectCell } from "../GeneralFiles/Select/CustomMultiSelectCellRenderer";
 import { CustomMultiSelectCellEdit } from "../GeneralFiles/Select/CustomMultiSelect";
@@ -143,6 +147,15 @@ export default function GuidesTable({
   const [AllAssigned, setAllAssigned] = useState<Assigned_Guide[]>([])
   const [AllColorCandidates, setAllColorCandidates] = useState<ColorCandidate[]>([])
 const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
+// --- Quick Assign State ---
+const [quickAssignSelectedGuide, setQuickAssignSelectedGuide] = useState<Guide | null>(null);
+const [quickAssignYear, setQuickAssignYear] = useState<{ label: string, value: any } | null>(null);
+const [quickAssignStatus, setQuickAssignStatus] = useState<{ label: string, value: any } | null>(null);
+const [quickAssignProgram, setQuickAssignProgram] = useState<{ label: string, value: number } | null>(null);
+const [quickAssignAllPrograms, setQuickAssignAllPrograms] = useState<Program[]>([]);
+const [quickAssignAllYears, setQuickAssignAllYears] = useState<Years[]>([]);
+const [quickAssignAllStatuses, setQuickAssignAllStatuses] = useState<StatusGuides[]>([]);
+const [quickAssignFeedback, setQuickAssignFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   const maxIndex = useRef<number>(0)
   const originalMaxIndex = useRef<number>(0) // לשמור את המקסימום המקורי לפני הוספת שורות חדשות
  
@@ -206,6 +219,30 @@ const [ProfessionTypes, setProfessionTypes] = useState<any[]>([])
       gridRef.current.api.setGridOption('columnDefs', updatedColDefs);
     }
   }, [ProfessionTypes]);
+  // --- Quick Assign Data Loading ---
+useEffect(() => {
+  Promise.all([getPrograms(), getAllYears(), getAllStatuses("Programs")])
+    .then(([programs, years, statuses]) => {
+      setQuickAssignAllPrograms(programs || []);
+      setQuickAssignAllYears((years || []).sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1)));
+      setQuickAssignAllStatuses(statuses || []);
+    });
+}, []);
+const quickAssignFilteredPrograms = useMemo(() => {
+  return quickAssignAllPrograms
+    .filter(p => {
+      const yearMatch = !quickAssignYear?.value || (p as any).Year === quickAssignYear.value;
+      const statusMatch = !quickAssignStatus?.value || (p as any).Status === quickAssignStatus.value;
+      return yearMatch && statusMatch;
+    })
+    .map(p => {
+      const name = (p as any).ProgramName
+        ? `${(p as any).ProgramName} - ${(p as any).SchoolName}`
+        : `אין שם - ${(p as any).SchoolName}`;
+      return { label: name, value: p.Programid };
+    });
+}, [quickAssignAllPrograms, quickAssignYear, quickAssignStatus]);
+
   const onColumnResized = useCallback((event) => {
     if (event.finished) {
       if (gridRef.current && gridRef.current.api) {
@@ -1106,20 +1143,54 @@ const validateCellphone = (cellphone: any, numbers: string[]) => {
     return
   }, []);
 
-  const onSelectionChange = useCallback(
+ const onSelectionChange = useCallback(
     (event: SelectionChangedEvent) => {
-      const selectedRowsAmount: number = event.api.getSelectedRows().length
-      setAmount(selectedRowsAmount)
+      const selectedRows = event.api.getSelectedRows();
+      const selectedRowsAmount: number = selectedRows.length;
+      setAmount(selectedRowsAmount);
+      // Quick assign: עקוב אחר מדריך יחיד נבחר
+      if (selectedRowsAmount === 1) {
+        setQuickAssignSelectedGuide(selectedRows[0]);
+        setQuickAssignFeedback(null);
+      } else {
+        setQuickAssignSelectedGuide(null);
+      }
       const element: any = document.getElementById("savedeletions");
       if (element !== null) {
-        event.api.getSelectedRows().length > 0 && !InTheMiddleOfAddingRows
+        selectedRowsAmount > 0 && !InTheMiddleOfAddingRows
           ? (element.style.display = "block")
           : (element.style.display = "none");
       }
     },
     [InTheMiddleOfAddingRows]
   );
+// ניקוי הודעת פידבק אחרי 4 שניות
+  useEffect(() => {
+    if (quickAssignFeedback) {
+      const timer = setTimeout(() => setQuickAssignFeedback(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [quickAssignFeedback]);
 
+  const handleQuickAssign = useCallback(async () => {
+    if (!quickAssignSelectedGuide || !quickAssignProgram) {
+      setQuickAssignFeedback({ type: 'error', message: 'יש לבחור מדריך ותוכנית' });
+      return;
+    }
+  setQuickAssignFeedback({ type: 'success', message: '⏳ בתהליך...' });
+    try {
+      const GRAY_HEX = "#D3D3D3";
+      await setAssignCandidate(quickAssignSelectedGuide.Guideid, quickAssignProgram.value);
+      await setColorCandidate(quickAssignSelectedGuide.Guideid, quickAssignProgram.value, GRAY_HEX);
+      setQuickAssignFeedback({
+        type: 'success',
+        message: `✓ ${quickAssignSelectedGuide.FirstName} ${quickAssignSelectedGuide.LastName} הפך מועמד בתוכנית ${quickAssignProgram.label}`
+      });
+      setQuickAssignProgram(null);
+    } catch (e) {
+      setQuickAssignFeedback({ type: 'error', message: 'שגיאה בשיבוץ. אנא נסה שוב.' });
+    }
+  }, [quickAssignSelectedGuide, quickAssignProgram]);
   const isRowSelectable = (rowNode: any) => !InTheMiddleOfAddingRows;
 
 const components = useMemo(
@@ -1345,6 +1416,77 @@ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
     />
   </div>
 </Navbar>
+{quickAssignSelectedGuide && (
+        <div dir="rtl" style={{
+          background: 'linear-gradient(135deg, #e0f2fe 0%, #bfdbfe 100%)',
+          borderBottom: '1px solid #93c5fd',
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
+          minHeight: '52px',
+        }}>
+          <span style={{ fontWeight: 'bold', color: '#1e40af', whiteSpace: 'nowrap' }}>
+            ⚡ שיבוץ מהיר: {quickAssignSelectedGuide.FirstName} {quickAssignSelectedGuide.LastName}
+          </span>
+          <div style={{ width: '120px' }}>
+            <Select
+              isRtl={true}
+              placeholder="שנה"
+              options={quickAssignAllYears.map(y => ({ label: y.YearName, value: y.YearName }))}
+              value={quickAssignYear}
+              onChange={(val) => { setQuickAssignYear(val); setQuickAssignProgram(null); }}
+              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+              styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
+            />
+          </div>
+          <div style={{ width: '140px' }}>
+            <Select
+              isRtl={true}
+              placeholder="סטטוס"
+              options={[...quickAssignAllStatuses.map(s => ({ label: s.StatusName, value: s.StatusName })), { label: 'הכל', value: undefined }]}
+              value={quickAssignStatus}
+              onChange={(val) => { setQuickAssignStatus(val); setQuickAssignProgram(null); }}
+              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+              styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
+            />
+          </div>
+          <div style={{ width: '220px' }}>
+            <Select
+              isRtl={true}
+              placeholder="בחר תוכנית"
+              options={quickAssignFilteredPrograms}
+              value={quickAssignProgram}
+              onChange={(val: any) => setQuickAssignProgram(val)}
+              menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+              styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
+              noOptionsMessage={() => 'בחר שנה/סטטוס לסינון'}
+            />
+          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleQuickAssign}
+            disabled={!quickAssignProgram}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            שבץ כמועמד ✓
+          </Button>
+          {quickAssignFeedback && (
+            <span style={{
+              color: quickAssignFeedback.type === 'success' ? '#065f46' : '#991b1b',
+              background: quickAssignFeedback.type === 'success' ? '#d1fae5' : '#fee2e2',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              fontSize: '0.85rem',
+              whiteSpace: 'nowrap',
+            }}>
+              {quickAssignFeedback.message}
+            </span>
+          )}
+        </div>
+      )}
       <Suspense>
         <div
           id="grid-1"
