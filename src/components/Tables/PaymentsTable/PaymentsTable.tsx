@@ -98,13 +98,13 @@ export const PaymentsTable = () => {
   const { theme } = useContext(ThemeContext)
 
   // --- 1. DEFAULT COL DEF ---
-  const defaultColDef = useMemo(() => ({
-    minWidth: 100, 
-    sortable: true,
-    filter: true,
-    resizable: true, 
-    flex: 1, 
-  }), []);
+const defaultColDef = useMemo(() => ({
+  minWidth: 80, // הקטנה מ-100 ל-80
+  sortable: true,
+  filter: true,
+  resizable: true, 
+  flex: 1, 
+}), []);
 
 
   // --- 2. MANAGED STATE FUNCTIONS ---
@@ -378,6 +378,7 @@ export const PaymentsTable = () => {
     SchoolName: selectedSchool.SchoolName, 
     ProgramName: selectedRow.ProgramName, 
     Amount: selectedRow.Amount, 
+    Weeks: selectedRow.Weeks || 0, // העברת נתון השבועות
     Year: selectedRow.Year 
   }
   
@@ -529,14 +530,43 @@ export const PaymentsTable = () => {
       ?.filter((value: any) => value === "Issuer" || value === "SchoolName" || value === "ProgramName" || value === "Amount")
       .map((value: any, index: any) => {
         const idx = paymentsModel[0].indexOf(value);
-        if (value === "ProgramName") {
-          return { field: "ProgramName", headerName: "תוכנית", editable: true, cellEditor: "agSelectCellEditor", cellEditorParams: { values: selectedPrograms.map((val) => val.ProgramName) } };
+
+        // הגדרות לעמודת בית ספר - הגדלנו ל-400
+        if (value === "SchoolName") {
+          return { 
+            field: value, 
+            headerName: "בית ספר", 
+            width: 280, 
+            minWidth: 280, 
+            flex: 0, 
+            editable: false, 
+            filter: true 
+          };
         }
-        if (value === "Issuer") return { field: value, headerName: paymentsModel[1][idx], editable: true, cellEditor: "agTextCellEditor", filter: true };
+
+        // הגדרות לעמודת סכום + הוספת עמודת שבועות משמאלה
+        if (value === "Amount") {
+          return [
+            { field: "Weeks", headerName: "שבועות", editable: true, width: 70, flex: 0, cellEditor: "agTextCellEditor" },
+            { field: value, headerName: "סכום", editable: true, width: 90, flex: 0, cellEditor: "agTextCellEditor", filter: true }
+          ];
+        }
+
+        // הגדרות לעמודת תוכנית
+        if (value === "ProgramName") {
+          return { field: "ProgramName", headerName: "תוכנית", width: 150, flex: 1, editable: true, cellEditor: "agSelectCellEditor", cellEditorParams: { values: selectedPrograms.map((val) => val.ProgramName) } };
+        }
+
+        // הגדרות לעמודת מנפיק (Issuer)
+        if (value === "Issuer") {
+          return { field: value, headerName: "מנפיק", width: 90, flex: 0, editable: true, cellEditor: "agTextCellEditor", filter: true };
+        }
+
         return { field: value, headerName: paymentsModel[1][idx], editable: true, cellEditor: "agTextCellEditor", filter: true };
-      });
+      }).flat(); // חובה להוסיף flat() כי החזרנו מערך עבור Amount
+
     paymentsColDef.push({
-      headerName: "", field: "actions", suppressMovable: true,
+      headerName: "", field: "actions", width: 50, flex: 0, suppressMovable: true,
       cellRenderer: (params) => { return ( <button onClick={() => onDeleteRow(params, "Payments")}> 🗑️ </button> ); },
     });
     setPaymentsColDef(paymentsColDef)
@@ -545,20 +575,44 @@ export const PaymentsTable = () => {
   const onPendingPaymentsGridReady = useCallback(async () => {
     const pendingPaymentsModel = await getModelFields("PendingPayments")
     var pendingPaymentsColDef: any = pendingPaymentsModel[0]
-      ?.filter((value: any) => value === "Issuer" || value === "Date" || value === "ProgramName" || value === "CheckDate" || value === "Amount")
+     ?.filter((value: any) => value === "Issuer" || value === "Date" || value === "ProgramName" || value === "Amount")
       .map((value: any, index: any) => {
+        
+        // עמודת סכום + שבועות - רוחב קבוע למניעת חיתוך
+        if (value === "Amount") {
+          return [
+            { field: "Weeks", headerName: "שבועות", editable: true, width: 65, flex: 0, cellEditor: "agTextCellEditor" },
+            { field: "Amount", headerName: "סכום", width: 75, flex: 0, editable: true, cellEditor: "agTextCellEditor", filter: true }
+          ];
+        }
+
+        // עמודת תוכנית - הגמישה היחידה שתתפוס את שאר המקום
         if (value === "ProgramName") {
-          return { field: value, headerName: "תוכנית", editable: true, width: 50, cellEditor: "agSelectCellEditor", cellEditorParams: { values: ProgramsData.map((val) => val.ProgramName) } };
+          return { 
+            field: "ProgramName", 
+            headerName: "תוכנית", 
+            editable: true, 
+            minWidth: 120, 
+            flex: 1, 
+            cellEditor: "agSelectCellEditor", 
+            cellEditorParams: { values: ProgramsData.map((val) => val.ProgramName) } 
+          };
         }
-        if (value === "Date") return { field: "Date", headerName: "תאריך", editable: true, width: 50, cellDataType: 'date', cellEditor: CustomDateCellEditor, valueFormatter: valueFormatterDate }
-        if (value === "CheckDate") return { field: "CheckDate", headerName: "תאריך תשלום", width: 50, editable: true, cellDataType: 'date', cellEditor: CustomDateCellEditor, valueFormatter: valueFormatterDate }
+
+        // תאריכים ברוחב קבוע
+        if (value === "Date") return { field: "Date", headerName: "תאריך", editable: true, width: 95, flex: 0, cellDataType: 'date', cellEditor: CustomDateCellEditor, valueFormatter: valueFormatterDate }
+       
+        
+        // מנפיק ברוחב קבוע
         if (value === "Issuer") {
-          return { field: value, headerName: "מנפיק", editable: true, width: 50, cellEditor: "agTextCellEditor", filter: true, checkboxSelection: true, cellRenderer: (props: ICellRendererParams<PendingPayments>) => { return ( <div> {props.getValue()} </div> ) } };
+          return { field: "Issuer", headerName: "מנפיק", editable: true, width: 85, flex: 0, cellEditor: "agTextCellEditor", filter: true, checkboxSelection: true };
         }
-        return { field: value, headerName: "סכום", width: 50, editable: true, cellEditor: "agTextCellEditor", filter: true };
-      });
+
+        return { field: value, headerName: "סכום", width: 75, flex: 0, editable: true };
+      }).flat();
+
     pendingPaymentsColDef.push({
-      headerName: "", field: "actions", suppressMovable: true,
+      headerName: "", field: "actions", width: 45, flex: 0, suppressMovable: true,
       cellRenderer: (params) => { return ( <button onClick={() => onDeleteRow(params, "PendingPayments")}> 🗑️ </button> ); },
     });
     setPendingPaymentsColDef(pendingPaymentsColDef)
@@ -575,9 +629,9 @@ export const PaymentsTable = () => {
       const rowData = event.data;
 
       // המרה למספר אם העמודה היא Amount
-      if (colName === "Amount") {
-          newCellValue = parseInt(newCellValue, 10) || 0;
-      }
+     if (colName === "Amount" || colName === "Weeks") {
+    newCellValue = parseInt(newCellValue, 10) || 0;
+}
 
       if (colName === "ProgramName") {
         const program = selectedPrograms.filter((program) => program.ProgramName === newCellValue)
@@ -642,6 +696,7 @@ export const PaymentsTable = () => {
   const paymentsRow: any = { 
     SchoolName: selectedSchool.SchoolName, 
     Amount: 0, 
+    Weeks: 0, // הוספת עמודת שבועות
     ProgramName: firstProgram.ProgramName,
     Programid: firstProgram.Programid,
     Issuer: "",
@@ -686,6 +741,7 @@ export const PaymentsTable = () => {
   const pendingPaymentsRow: any = { 
     Programid: firstProgram.Programid, 
     Amount: 0, 
+    Weeks: 0, // הוספת עמודת שבועות
     ProgramName: firstProgram.ProgramName, 
     Issuer: "", 
     Date: undefined, 

@@ -91,16 +91,17 @@ export const addPaymentsRow = async (
       // במקרה של ניסיון חוזר, נקדם את ה-ID מלאכותית כדי לדלג על התפוס
       const finalId = baseId + attempts; 
 
-      const cleanPayment = {
-        Id: finalId,
-        Objectid: undefined,
-        Programid: payment.Programid || null,
-        Issuer: payment.Issuer || "",
-        SchoolName: payment.SchoolName || "",
-        ProgramName: payment.ProgramName || "",
-        Amount: payment.Amount || 0,
-        Year: payment.Year || ""
-      };
+    const cleanPayment = {
+  Id: finalId,
+  Objectid: undefined,
+  Programid: payment.Programid || null,
+  Issuer: payment.Issuer || "",
+  SchoolName: payment.SchoolName || "",
+  ProgramName: payment.ProgramName || "",
+  Amount: payment.Amount || 0,
+  Weeks: payment.Weeks || 0, // הוספת שדה שבועות [cite: 79]
+  Year: payment.Year || ""
+};
       
       console.log(`Attempt ${attempts + 1}: Trying to save payment with ID: ${finalId}`);
       
@@ -141,16 +142,17 @@ export const addPendingPaymentsRow = async (
       const finalId = baseId + attempts;
 
       const cleanPayment = {
-        Id: finalId,
-        Objectid: undefined,
-        Programid: payment.Programid || null,
-        Issuer: payment.Issuer || "",
-        Date: payment.Date || null,
-        ProgramName: payment.ProgramName || "",
-        Amount: payment.Amount || 0,
-        CheckDate: payment.CheckDate || null,
-        Year: payment.Year || ""
-      };
+  Id: finalId,
+  Objectid: undefined,
+  Programid: payment.Programid || null,
+  Issuer: payment.Issuer || "",
+  Date: payment.Date || null,
+  ProgramName: payment.ProgramName || "",
+  Amount: payment.Amount || 0,
+  Weeks: payment.Weeks || 0, // הוספת שדה שבועות [cite: 86]
+  CheckDate: payment.CheckDate || null,
+  Year: payment.Year || ""
+};
       
       console.log(`Attempt ${attempts + 1}: Trying to save pending payment with ID: ${finalId}`);
       

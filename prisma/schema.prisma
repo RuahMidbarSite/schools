@@ -223,6 +223,7 @@ model Payments {
   Issuer       String?
   SchoolName   String?
   ProgramName  String?
+  Weeks       Int?    @default(0)
   Amount       Int?
   Year         String?
 }
@@ -325,6 +326,7 @@ model PendingPayments {
   Issuer       String?
   Date         DateTime?    
   ProgramName  String?
+  Weeks       Int?      @default(0)
   Amount       Int?
   CheckDate    DateTime?          
   Year         String?
