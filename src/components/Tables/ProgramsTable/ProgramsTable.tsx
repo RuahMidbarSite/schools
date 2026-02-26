@@ -18,6 +18,7 @@ import { Button, Navbar } from "react-bootstrap";
 import { FcAddColumn, FcAddRow, FcCancel, FcFullTrash } from "react-icons/fc";
 import { MdStopCircle } from "react-icons/md";
 import { FaExternalLinkAlt } from "react-icons/fa"; 
+import { HiOutlineDuplicate } from "react-icons/hi";
 
 import { CustomLinkDrive } from "../GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
@@ -340,6 +341,7 @@ if (paymentsData) {
                 suppressMovable: true
             },
             { field: "Programid", header: "מזהה", width: 50, editable: false, cellStyle: STYLES.CENTER },
+            { field: "ProgramLink", hide: true },
             // MOVED HERE: Order (הצעה)
             { field: "Year", header: "שנה", width: 75, special: "year" },
             { field: "Status", header: "סטטוס", width: 85, special: "status" },
@@ -523,13 +525,56 @@ console.log("SANITY CHECK VALUES:", JSON.stringify({
     }, 100);
 
   }, [selectedYear, defaultStatus]);
+const handleDuplicateRow = useCallback(() => {
+    const selectedNodes = gridRef.current?.api.getSelectedNodes();
+    if (!selectedNodes || selectedNodes.length === 0) {
+        alert("יש לבחור שורה לשכפול");
+        return;
+    }
 
+    // משכפלים רק את השורה הראשונה שנבחרה
+    const sourceData = selectedNodes[0].data;
+    const nextId = (maxIndex.current || 0) + 1;
+    maxIndex.current = nextId; 
+
+    const duplicatedRow = { 
+        ...sourceData, 
+        Programid: nextId, 
+        ProgramName: "", // מאפסים את שם התוכנית כבקשתך
+        ProgramLink: "",
+        Order: "",
+        totalPaid: 0,
+        isNew: true 
+    };
+
+    gridRef.current?.api.applyTransaction({ 
+        add: [duplicatedRow], 
+        addIndex: 0 
+    });
+    
+    setHasNewRows(true);
+
+    setTimeout(() => {
+        gridRef.current?.api.ensureIndexVisible(0);
+        gridRef.current?.api.setFocusedCell(0, 'ProgramName');
+        gridRef.current?.api.startEditingCell({
+            rowIndex: 0,
+            colKey: 'ProgramName'
+        });
+    }, 100);
+  }, [maxIndex.current]);
 const onSaveChangeButtonClick = useCallback(async () => {
       const newRows: any[] = [];
       gridRef.current?.api.forEachNode((node) => {
           if (node.data.isNew) {
               const cleanRow = { ...node.data };
-
+              delete cleanRow.totalPaid;
+              // מחיקת מזהים טכניים ישנים כדי שהדאטה-בייס ייצר חדשים אוטומטית
+              delete cleanRow.id;       
+              delete cleanRow.Objectid; 
+              
+              // מחיקת משתנה החישוב שאינו קיים בבסיס הנתונים
+              delete cleanRow.totalPaid;
               // תיקון קריטי: המרת lessonsPerDay ל-LessonsPerDay ומספר
               if (cleanRow.lessonsPerDay !== undefined) {
                   cleanRow.LessonsPerDay = Number(cleanRow.lessonsPerDay);
@@ -683,6 +728,9 @@ const checkDriveStatus = useCallback(async () => {
     <button onClick={clearAllFilters} title="נקה את כל הסינונים"><FcCancel className="w-[37px] h-[37px]" /></button>
     <button onClick={onDeleteRows}><FcFullTrash className="w-[37px] h-[37px]" /></button>
     <button onClick={() => setColumnWindowOpen(true)}><FcAddColumn className="w-[37px] h-[37px]" /></button>
+    <button onClick={handleDuplicateRow} title="שכפל תוכנית נבחרת">
+    <HiOutlineDuplicate className="w-[34px] h-[34px] text-blue-700 mt-1" />
+    </button>
     <button onClick={handleAddRow} title="הוסף שורה חדשה"><FcAddRow className="w-[37px] h-[37px]" /></button>
     
     <input 
