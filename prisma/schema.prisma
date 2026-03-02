@@ -360,3 +360,24 @@ model Auth {
 
 }
 
+model InstructorReport {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  clerkId         String
+  email           String
+  firstName       String
+  lastName        String
+  schoolName      String
+  cityName        String
+  month           String
+  date            DateTime
+  lessons         Int
+  dailyRate       Float
+  yearHebrew      String   // מגיע מה-Context (למשל תשפ"ו)
+  yearGregorian   Int      // נחלץ מהתאריך (למשל 2026)
+  remarks         String?
+  createdAt       DateTime @default(now())
+
+  @@index([email])
+  @@index([yearHebrew])
+  @@index([yearGregorian])
+}
