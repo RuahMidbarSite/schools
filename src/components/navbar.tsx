@@ -22,13 +22,14 @@ export default function NavBarClient() {
   const { user, isLoaded } = useUser();
   const isAdmin = checkIsAdmin(user);
   
-  // דפי המנהל
+// דפי המנהל
   const adminPages = {
     schoolsPage: "בתי ספר",
     messagesForm: "שליחת הודעות",
     plansPage: "תוכניות",
     placementsPage: "שיבוץ מדריכים",
     GuidesPage: "ניהול מדריכים",
+    guidesPayments: "תשלומי מדריכים", // <--- זו השורה החדשה שהוספנו!
     paymentsPage: "הכנסות",
     contactsPage: "אנשי קשר",
     settingsPage: "הגדרות",
@@ -36,7 +37,7 @@ export default function NavBarClient() {
 
   // הדף שפתוח לכולם
   const publicPages = {
-    instructorReporting: "דיווח מדריכים",
+   //instructorReporting: "דיווח מדריכים",
   };
 
   // הרכבת התפריט הסופי

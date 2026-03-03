@@ -375,9 +375,42 @@ model InstructorReport {
   yearHebrew      String   // מגיע מה-Context (למשל תשפ"ו)
   yearGregorian   Int      // נחלץ מהתאריך (למשל 2026)
   remarks         String?
+  
+  // --- השדות החדשים שהוספנו עבור מערכת התשלומים ---
+  paymentId       String?             @db.ObjectId
+  payment         InstructorPayment?  @relation(fields: [paymentId], references: [id])
+  // ------------------------------------------------
+
   createdAt       DateTime @default(now())
 
   @@index([email])
   @@index([yearHebrew])
   @@index([yearGregorian])
+}
+// --- מודלים חדשים למערכת תשלומי מדריכים ---
+
+enum InstructorPaymentStatus {
+  PAID              // שולם (ממתין לקבלה)
+  RECEIPT_RECEIVED  // התקבלה קבלה
+  ACCOUNTING        // הועבר להנה"ח
+}
+
+model InstructorPayment {
+  id            String                  @id @default(auto()) @map("_id") @db.ObjectId
+  status        InstructorPaymentStatus @default(PAID)
+  totalAmount   Float                   // סך כל הסכום ששולם באותה פעימה
+  proofUrl      String?                 // קובץ אסמכתא לתשלום (URL)
+  receiptDate   DateTime?               // תאריך קבלת הקבלה
+  
+  // פרטי המדריך שקיבל את התשלום (כדי שיהיה קל לסנן ולהציג בלשוניות)
+  clerkId       String                  
+  firstName     String       
+  lastName      String
+  email         String
+
+  // הקשר לדיווחים: תשלום אחד מאגד בתוכו מספר דיווחי מדריכים (חודשים שונים)
+  reports       InstructorReport[]      
+
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
 }

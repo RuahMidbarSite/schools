@@ -93,3 +93,19 @@ export async function updateInstructorReport(id: string, data: any) {
     },
   });
 }
+export async function updatePaymentProofUrl(paymentId: string, proofUrl: string) {
+  const user = await currentUser();
+  if (user?.publicMetadata?.role !== "admin") throw new Error("Unauthorized");
+
+  try {
+    return await prisma.instructorPayment.update({
+      where: { id: paymentId },
+      data: { 
+        proofUrl: proofUrl 
+      },
+    });
+  } catch (error: any) {
+    console.error("❌ Prisma Update Error:", error.message);
+    throw new Error(`DB Error: ${error.message}`);
+  }
+}
