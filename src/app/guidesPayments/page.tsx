@@ -5,6 +5,7 @@ import { YearContext } from "@/context/YearContext";
 import { checkIsAdmin } from "@/lib/authUtils"; // מוודא שיש לך גישה לפונקציה הזו
 import UnpaidReportsTab from "./tabs/UnpaidReportsTab";
 import PaidPaymentsTab from "./tabs/PaidPaymentsTab";
+import ReceiptsTab from "./tabs/ReceiptsTab";
 
 export default function GuidesPaymentsDashboard() {
   const { user } = useUser();
@@ -24,7 +25,7 @@ export default function GuidesPaymentsDashboard() {
 </h1>
 
       {/* תפריט הניווט מוצג רק לאדמין */}
-      {isAdmin && (
+     {isAdmin && (
         <div className="flex space-x-reverse space-x-2 border-b border-gray-200 mb-6">
           <button
             onClick={() => setActiveTab("unpaid")}
@@ -42,16 +43,33 @@ export default function GuidesPaymentsDashboard() {
           >
             שולם למדריכים (ממתין לקבלה)
           </button>
+          {/* הכפתור החדש */}
+          <button
+            onClick={() => setActiveTab("accounting")}
+            className={`py-3 px-6 text-sm font-medium transition-colors ${
+              activeTab === "accounting" ? "border-b-2 border-green-600 text-green-600" : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            קבלות והנהח
+          </button>
         </div>
       )}
 
       {/* הצגת התוכן */}
       <div className="animate-in fade-in duration-300">
-        {/* לשונית הדיווחים זמינה לכולם, אך הלוגיקה בתוכה תשתנה בהתאם ל-isAdmin */}
-        {activeTab === "unpaid" && <UnpaidReportsTab isAdmin={isAdmin} />}
+        {/* הוספת ה-key מבטיחה שהלשונית תתרענן כשנחליף שנה */}
+        {activeTab === "unpaid" && (
+          <UnpaidReportsTab key={selectedYear} isAdmin={isAdmin} />
+        )}
         
-        {/* לשונית התשלומים זמינה רק לאדמין */}
-        {activeTab === "paid" && isAdmin && <PaidPaymentsTab />}
+        {activeTab === "paid" && isAdmin && (
+          <PaidPaymentsTab key={selectedYear} />
+        )}
+
+        {/* הצגת הלשונית השלישית */}
+        {activeTab === "accounting" && isAdmin && (
+          <ReceiptsTab key={selectedYear} />
+        )}
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 import { useState, useEffect, useContext, useRef, useCallback, useMemo } from "react";
 import { useUser } from "@clerk/nextjs";
 import { YearContext } from "@/context/YearContext";
-import { saveInstructorReport, getReports, deleteReport, updateInstructorReport } from "@/db/reportsRequest";
+import { saveInstructorReport, getReports, deleteReport, updateInstructorReport, createInstructorPayment } from "@/db/reportsRequest";
 import { AgGridReact } from "ag-grid-react";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -133,7 +133,44 @@ export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
       loadReports();
     }
   };
+const handleMakePayment = async () => {
+    const selectedNodes = gridRef.current?.api.getSelectedNodes();
+    const selectedData = selectedNodes?.map(node => node.data) || [];
 
+    if (selectedData.length === 0) {
+      alert("אנא בחר לפחות דיווח אחד לביצוע תשלום");
+      return;
+    }
+
+    // בדיקה שכל הדיווחים שייכים לאותו מדריך
+    const emails = new Set(selectedData.map(d => d.email));
+    if (emails.size > 1) {
+      alert("שגיאה: ניתן לבצע תשלום מרוכז רק עבור מדריך אחד בכל פעם");
+      return;
+    }
+
+    const totalAmount = selectedData.reduce((sum, r) => sum + r.dailyRate, 0);
+    const firstReport = selectedData[0];
+
+    if (window.confirm(`בוצע תשלום על סך ₪${totalAmount} עבור ${firstReport.firstName} ${firstReport.lastName}?`)) {
+      try {
+        await createInstructorPayment(
+          selectedData.map(r => r.id),
+          totalAmount,
+          {
+            clerkId: firstReport.clerkId,
+            firstName: firstReport.firstName,
+            lastName: firstReport.lastName,
+            email: firstReport.email
+          }
+        );
+        alert("התשלום בוצע והדיווחים הועברו ללשונית 'שולמו'");
+        loadReports();
+      } catch (error: any) {
+        alert(error.message);
+      }
+    }
+  };
   return (
     <div className="space-y-8">
       {/* טופס הדיווח - זמין תמיד להזנה */}
@@ -204,6 +241,18 @@ export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
         </form>
       </section>
 
+      {/* כפתור ביצוע תשלום - מופיע רק לאדמין */}
+      {isAdmin && reports.length > 0 && (
+        <div className="flex justify-start mb-2">
+          <button 
+            onClick={handleMakePayment}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 transition-all flex items-center gap-2"
+          >
+            בוצע תשלום לדיווחים שנבחרו 💳
+          </button>
+        </div>
+      )}
+
       {/* טבלת הדיווחים */}
       <section className="ag-theme-quartz" style={{ height: 450, width: "100%" }}>
         <AgGridReact
@@ -211,8 +260,17 @@ export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
           rowData={reports}
           enableRtl={true}
           context={{ handleEdit, handleDelete, isAdmin }}
+          rowSelection="multiple"
+          suppressRowClickSelection={true}
           columnDefs={[
-            { field: "firstName", headerName: "שם", hide: !isAdmin },
+            { 
+              field: "firstName", 
+              headerName: "שם", 
+              hide: !isAdmin,
+              checkboxSelection: isAdmin,
+              headerCheckboxSelection: isAdmin,
+              width: 150
+            },
             { field: "date", headerName: "תאריך", valueFormatter: p => p.value ? new Date(p.value).toLocaleDateString('he-IL') : '' },
             { field: "schoolName", headerName: 'ביה"ס', flex: 1 },
             { field: "lessons", headerName: "שיעורים", width: 90 },
@@ -221,7 +279,7 @@ export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
               headerName: "פעולות", 
               cellRenderer: ActionButtonsRenderer, 
               width: 100,
-              hide: !isAdmin // הסתרה מוחלטת של העמודה אם המשתמש אינו אדמין
+              hide: !isAdmin 
             }
           ]}
         />

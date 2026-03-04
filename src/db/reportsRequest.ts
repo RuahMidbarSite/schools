@@ -36,18 +36,17 @@ export async function saveInstructorReport(data: any) {
 }
 
 export async function getReports() {
-  const user = await currentUser();
-  if (!user) throw new Error("Unauthorized");
-
-  const email = user.primaryEmailAddress?.emailAddress;
-  const isAdmin = user.publicMetadata?.role === "admin";
-
-  const query = isAdmin ? {} : { email: email };
-
-  return await prisma.instructorReport.findMany({
-    where: query,
-    orderBy: { date: "desc" },
-  });
+  try {
+    return await prisma.instructorReport.findMany({
+      include: {
+        payment: true, // זה השורה שחסרה כדי שהסטטוס לא יהיה undefined
+      },
+      orderBy: { date: "desc" },
+    });
+  } catch (error) {
+    console.error("Error fetching reports:", error);
+    return [];
+  }
 }
 export async function deleteReport(id: string) {
   const user = await currentUser();
@@ -107,5 +106,81 @@ export async function updatePaymentProofUrl(paymentId: string, proofUrl: string)
   } catch (error: any) {
     console.error("❌ Prisma Update Error:", error.message);
     throw new Error(`DB Error: ${error.message}`);
+  }
+}
+export async function deleteInstructorPayment(paymentId: string) {
+  const user = await currentUser();
+  if (user?.publicMetadata?.role !== "admin") throw new Error("Unauthorized");
+
+  try {
+    // 1. ניתוק כל הדיווחים מהתשלום (איפוס שדה ה-paymentId בדיווחים)
+    await prisma.instructorReport.updateMany({
+      where: { paymentId: paymentId },
+      data: { paymentId: null }
+    });
+
+    // 2. מחיקת רשומת התשלום עצמה
+    const result = await prisma.instructorPayment.delete({
+      where: { id: paymentId }
+    });
+
+    return result;
+  } catch (error: any) {
+    console.error("❌ Delete Payment Error:", error.message);
+    throw new Error(`שגיאה בביטול התשלום: ${error.message}`);
+  }
+}
+export async function createInstructorPayment(reportIds: string[], totalAmount: number, instructorInfo: any) {
+  const user = await currentUser();
+  if (user?.publicMetadata?.role !== "admin") throw new Error("Unauthorized");
+
+  try {
+    // 1. יצירת רשומת התשלום המרכזית
+    const payment = await prisma.instructorPayment.create({
+      data: {
+        totalAmount: totalAmount,
+        clerkId: instructorInfo.clerkId,
+        firstName: instructorInfo.firstName,
+        lastName: instructorInfo.lastName,
+        email: instructorInfo.email,
+        status: "PAID"
+      }
+    });
+
+    // 2. עדכון כל הדיווחים שנבחרו עם ה-paymentId החדש
+    await prisma.instructorReport.updateMany({
+      where: { id: { in: reportIds } },
+      data: { paymentId: payment.id }
+    });
+
+    return payment;
+  } catch (error: any) {
+    console.error("❌ Create Payment Error:", error.message);
+    throw new Error("שגיאה ביצירת התשלום");
+  }
+}
+export async function markReceiptReceived(paymentId: string, customDate?: string) {
+  const user = await currentUser();
+  if (user?.publicMetadata?.role !== "admin") throw new Error("Unauthorized");
+
+  try {
+    console.log(`--- Server: Attempting to mark payment ${paymentId} as received ---`);
+    
+    // אם המשתמש הזין תאריך, נשתמש בו. אם לא, נשתמש בתאריך של הרגע הנוכחי.
+    const finalReceiptDate = customDate ? new Date(customDate) : new Date();
+
+    const updated = await prisma.instructorPayment.update({
+      where: { id: paymentId },
+      data: { 
+        status: "RECEIPT_RECEIVED", 
+        receiptDate: finalReceiptDate 
+      },
+    });
+
+    console.log("--- Server: Update successful! New status:", updated.status, "Date:", updated.receiptDate);
+    return updated;
+  } catch (error: any) {
+    console.error("--- Server: Update FAILED ---", error.message);
+    throw error;
   }
 }

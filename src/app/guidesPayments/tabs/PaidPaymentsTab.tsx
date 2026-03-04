@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useContext, useMemo, useCallback } from "react";
 import { YearContext } from "@/context/YearContext";
-import { getReports, updatePaymentProofUrl } from "@/db/reportsRequest";
+import { getReports, updatePaymentProofUrl, deleteInstructorPayment, markReceiptReceived } from "@/db/reportsRequest";
 import { AgGridReact } from "ag-grid-react";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
 
@@ -126,20 +126,52 @@ export default function PaidPaymentsTab() {
           rowData={isLoading ? undefined : paidGroupedData}
           enableRtl={true}
           components={gridComponents}
-         context={{
-  handleUpdateProofUrl: async (paymentId: string, url: string) => {
-    try {
-      // עדכון ישיר של טבלת התשלומים פעם אחת בלבד
-      await updatePaymentProofUrl(paymentId, url);
-      
+  context={{
+            handleUpdateProofUrl: async (paymentId: string, url: string) => {
+              try {
+                await updatePaymentProofUrl(paymentId, url);
+                await loadReports();
+                alert("האסמכתא נשמרה בהצלחה במערכת");
+              } catch (error: any) {
+                console.error("Database update error:", error);
+                alert(`שגיאה בעדכון מסד הנתונים: ${error.message}`);
+              }
+            },
+            handleDeletePayment: async (paymentId: string) => {
+              if (!window.confirm("האם אתה בטוח שברצונך לבטל את התשלום? הדיווחים יחזרו לסטטוס 'ממתין לתשלום' והאסמכתא תימחק.")) return;
+              try {
+                await deleteInstructorPayment(paymentId);
+                await loadReports();
+                alert("התשלום בוטל והדיווחים הוחזרו בהצלחה");
+              } catch (error: any) {
+                console.error("Delete payment error:", error);
+                alert(`שגיאה בביטול התשלום: ${error.message}`);
+              }
+            },
+            // הפונקציה החדשה להעברה ללשונית השלישית
+           // הפונקציה המעודכנת עם הזנת תאריך קבלה
+            handleMarkAsReceived: async (paymentId: string, selectedDate: string) => {
+  // הודעת אישור פשוטה המציגה את התאריך שנבחר בטבלה
+  if (!window.confirm(`האם לאשר קבלת קבלה עבור תאריך ${new Date(selectedDate).toLocaleDateString('he-IL')}?`)) return;
+
+  try {
+    console.log("Client: Updating status with date from table:", selectedDate);
+    
+    // שליחת הנתונים לשרת (חייב לקבל את ה-Date מהטבלה)
+    const result = await markReceiptReceived(paymentId, selectedDate);
+    
+    if (result && result.status === "RECEIPT_RECEIVED") {
+      alert("הקבלה אושרה בהצלחה והרשומה עברה ללשונית קבלות והנהח");
       await loadReports();
-      alert("האסמכתא נשמרה בהצלחה במערכת");
-    } catch (error: any) {
-      console.error("Database update error:", error);
-      alert(`שגיאה בעדכון מסד הנתונים: ${error.message}`);
+    } else {
+      alert("הפעולה הושלמה אך הסטטוס לא השתנה כצפוי.");
     }
+  } catch (error: any) {
+    console.error("Client: Action failed:", error);
+    alert(`שגיאה בעדכון: ${error.message}`);
   }
-}}
+},
+          }}
           onGridReady={(params) => params.api.sizeColumnsToFit()}
           columnDefs={[
             { field: "firstName", headerName: "שם פרטי", flex: 1 },
@@ -151,13 +183,40 @@ export default function PaidPaymentsTab() {
               cellRenderer: "ProofFileRenderer", 
               minWidth: 150 
             },
-            {
+           {
                 headerName: "פעולה",
-                cellRenderer: (p: any) => (
-                  <button className="bg-orange-100 text-orange-700 px-3 py-1 rounded border border-orange-200 text-xs">
-                    סימון קבלה ✔️
-                  </button>
-                )
+                width: 260,
+                cellRenderer: (p: any) => {
+                  const dateInputId = `date-input-${p.data.id}`;
+                  const today = new Date().toISOString().split('T')[0];
+
+                  return (
+                    <div className="flex gap-2 items-center h-full">
+                      <input 
+                        type="date" 
+                        id={dateInputId}
+                        defaultValue={today}
+                        className="border border-slate-300 rounded px-1 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none w-32"
+                      />
+                      <button 
+                        onClick={() => {
+                          const dateVal = (document.getElementById(dateInputId) as HTMLInputElement).value;
+                          p.context.handleMarkAsReceived(p.data.id, dateVal);
+                        }}
+                        className="bg-green-600 text-white px-2 py-1 rounded shadow-sm hover:bg-green-700 transition-all text-xs font-bold whitespace-nowrap"
+                      >
+                        אשר קבלה
+                      </button>
+                      <button 
+                        onClick={() => p.context.handleDeletePayment(p.data.id)}
+                        className="bg-red-50 text-red-600 px-1 py-1 rounded border border-red-200 text-xs hover:bg-red-100"
+                        title="ביטול"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  );
+                }
             }
           ]}
           defaultColDef={{ sortable: true, filter: true, resizable: true }}
