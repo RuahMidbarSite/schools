@@ -4,7 +4,7 @@ import { YearContext } from "@/context/YearContext";
 import { getReports, updatePaymentProofUrl, deleteInstructorPayment, markReceiptReceived } from "@/db/reportsRequest";
 import { AgGridReact } from "ag-grid-react";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
-
+import { CustomFilter } from "@/components/Tables/GeneralFiles/Filters/CustomFilter";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 
@@ -29,6 +29,7 @@ export default function PaidPaymentsTab() {
   // הגדרת ה-Renderer בתוך ה-components של הטבלה למניעת שגיאות hooks
   // הקוד החדש והמתוקן
   const gridComponents = useMemo(() => ({
+    CustomFilter: CustomFilter, // הוספת הרכיב כאן
     ProofFileRenderer: (params: any) => {
       const { proofUrl, firstName, lastName, id } = params.data;
 
@@ -178,7 +179,7 @@ export default function PaidPaymentsTab() {
           rowData={isLoading ? undefined : paidGroupedData}
           quickFilterText={quickFilterText}
           enableRtl={true}
-          components={gridComponents}
+          components={gridComponents} // השורה הזו מקשרת הכל
   context={{
             handleUpdateProofUrl: async (paymentId: string, url: string) => {
               try {
@@ -273,7 +274,12 @@ export default function PaidPaymentsTab() {
                 }
             }
           ]}
-          defaultColDef={{ sortable: true, filter: true, resizable: true }}
+          defaultColDef={{ 
+            sortable: true, 
+            filter: "CustomFilter", 
+            resizable: true,
+            suppressHeaderMenuButton: false 
+          }}
         />
       </div>
     </div>

@@ -3,12 +3,15 @@ import { useState, useEffect, useContext, useMemo, useCallback } from "react";
 import { YearContext } from "@/context/YearContext";
 import { getReports, undoReceiptReceived } from "@/db/reportsRequest";
 import { AgGridReact } from "ag-grid-react";
-
+import { CustomFilter } from "@/components/Tables/GeneralFiles/Filters/CustomFilter";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 
 export default function ReceiptsTab() {
   const { selectedYear } = useContext(YearContext);
+  const gridComponents = useMemo(() => ({
+    CustomFilter: CustomFilter
+  }), []);
   const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quickFilterText, setQuickFilterText] = useState("");
@@ -132,6 +135,11 @@ console.log("Status inside payment object:", data[0]?.payment?.status);     setR
             { 
               field: "receiptDate", 
               headerName: "תאריך קבלת קבלה", 
+              filter: 'agDateColumnFilter',
+              filterParams: {
+                buttons: ['reset', 'apply'],
+                closeOnApply: true
+              },
               valueFormatter: p => p.value ? new Date(p.value).toLocaleDateString('he-IL') : 'אין תאריך',
               flex: 1
             },
@@ -164,10 +172,12 @@ console.log("Status inside payment object:", data[0]?.payment?.status);     setR
                 )
             }
           ]}
+          components={gridComponents}
           defaultColDef={{ 
             sortable: true, 
-            filter: true, 
-            resizable: true 
+            filter: "CustomFilter", 
+            resizable: true,
+            suppressHeaderMenuButton: false 
           }}
           overlayLoadingTemplate={'<span class="ag-overlay-loading-center">טוען נתונים מהנהלת חשבונות...</span>'}
         />
