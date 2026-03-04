@@ -1,5 +1,6 @@
 "use client";
-import { useState, useContext, useMemo } from "react";
+import { useState, useContext, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { YearContext } from "@/context/YearContext";
 import { checkIsAdmin } from "@/lib/authUtils"; // מוודא שיש לך גישה לפונקציה הזו
@@ -8,9 +9,27 @@ import PaidPaymentsTab from "./tabs/PaidPaymentsTab";
 import ReceiptsTab from "./tabs/ReceiptsTab";
 
 export default function GuidesPaymentsDashboard() {
+  return (
+    <Suspense fallback={<div>טוען...</div>}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
+function DashboardContent() {
   const { user } = useUser();
   const { selectedYear } = useContext(YearContext);
-  const [activeTab, setActiveTab] = useState<"unpaid" | "paid" | "accounting">("unpaid");
+  
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  // קריאת הלשונית מהכתובת בדפדפן (?tab=)
+  const activeTab = (searchParams.get("tab") as "unpaid" | "paid" | "accounting") || "unpaid";
+
+  const handleTabChange = (tabName: "unpaid" | "paid" | "accounting") => {
+    // עדכון הכתובת בדפדפן ללא רענון
+    router.push(`?tab=${tabName}`, { scroll: false });
+  };
 
   // בדיקה האם המשתמש המחובר הוא אדמין
   const isAdmin = useMemo(() => checkIsAdmin(user), [user]);
@@ -28,7 +47,7 @@ export default function GuidesPaymentsDashboard() {
      {isAdmin && (
         <div className="flex space-x-reverse space-x-2 border-b border-gray-200 mb-6">
           <button
-            onClick={() => setActiveTab("unpaid")}
+            onClick={() => handleTabChange("unpaid")}
             className={`py-3 px-6 text-sm font-medium transition-colors ${
               activeTab === "unpaid" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500 hover:text-gray-700"
             }`}
@@ -36,7 +55,7 @@ export default function GuidesPaymentsDashboard() {
             דיווחי מדריכים (טרם שולמו)
           </button>
           <button
-            onClick={() => setActiveTab("paid")}
+            onClick={() => handleTabChange("paid")}
             className={`py-3 px-6 text-sm font-medium transition-colors ${
               activeTab === "paid" ? "border-b-2 border-orange-500 text-orange-600" : "text-gray-500 hover:text-gray-700"
             }`}
@@ -45,7 +64,7 @@ export default function GuidesPaymentsDashboard() {
           </button>
           {/* הכפתור החדש */}
           <button
-            onClick={() => setActiveTab("accounting")}
+            onClick={() => handleTabChange("accounting")}
             className={`py-3 px-6 text-sm font-medium transition-colors ${
               activeTab === "accounting" ? "border-b-2 border-green-600 text-green-600" : "text-gray-500 hover:text-gray-700"
             }`}
