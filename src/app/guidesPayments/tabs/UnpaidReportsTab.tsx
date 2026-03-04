@@ -273,11 +273,26 @@ const handleMakePayment = async () => {
           <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
         </div>
       </div>
-      <section className="ag-theme-quartz" style={{ height: 450, width: "100%" }}>
+<section 
+        className="ag-theme-quartz mx-auto" 
+        style={{ 
+          height: 450, 
+          width: "100%",
+          // במחשב (מעל 768 פיקסלים) נגביל ל-1000 פיקסלים, בנייד 100%
+          maxWidth: typeof window !== 'undefined' && window.innerWidth > 768 ? '1000px' : '100%'
+        }}
+      >
         <AgGridReact
           ref={gridRef}
           rowData={reports}
           quickFilterText={quickFilterText}
+          // התאמת עמודות למסך רק אם הרוחב קטן מ-768 פיקסלים
+          onGridReady={(params) => {
+            if (window.innerWidth < 768) params.api.sizeColumnsToFit();
+          }}
+          onGridSizeChanged={(params) => {
+            if (window.innerWidth < 768) params.api.sizeColumnsToFit();
+          }}
           getRowStyle={(params) => {
             if (params.data?.paymentId) {
               return { backgroundColor: '#fee2e2', color: '#991b1b' };
@@ -298,8 +313,8 @@ const handleMakePayment = async () => {
               headerCheckboxSelection: isAdmin,
               width: 150
             },
-            { field: "date", headerName: "תאריך", valueFormatter: p => p.value ? new Date(p.value).toLocaleDateString('he-IL') : '' },
-            { field: "schoolName", headerName: 'ביה"ס', flex: 1 },
+          { field: "date", headerName: "תאריך", minWidth: 100, valueFormatter: p => p.value ? new Date(p.value).toLocaleDateString('he-IL') : '' },
+            { field: "schoolName", headerName: 'ביה"ס', minWidth: 150, flex: 1 },
             { field: "lessons", headerName: "שיעורים", width: 90 },
             { field: "dailyRate", headerName: "תעריף", valueFormatter: p => `₪${p.value}`, width: 100 },
             { 
