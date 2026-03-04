@@ -259,9 +259,8 @@ const handleMakePayment = async () => {
         </form>
       </section>
 
-      {/* שורת פעולות: הכל מוצמד לימין בתוך מיכל ממורכז */}
-      <div className="flex flex-col md:flex-row items-center justify-start gap-4 mb-4 mx-auto" style={{ maxWidth: '1000px' }}>
-        
+      {/* שורת פעולות: ממורכזת תמיד עבור כולם */}
+      <div className="flex flex-col md:flex-row items-center justify-start gap-4 mb-4 mx-auto w-full" style={{ maxWidth: '1000px' }}>
         {/* כפתור תשלום - ראשון מימין */}
         {isAdmin && reports.length > 0 && (
           <button 
@@ -306,12 +305,10 @@ const handleMakePayment = async () => {
         </div>
       </div>
 <section 
-        className="ag-theme-quartz mx-auto" 
+        className="ag-theme-quartz mx-auto w-full shadow-sm border border-slate-200 rounded-lg overflow-hidden"
         style={{ 
           height: 450, 
-          width: "100%",
-          // במחשב (מעל 768 פיקסלים) נגביל ל-1000 פיקסלים, בנייד 100%
-          maxWidth: typeof window !== 'undefined' && window.innerWidth > 768 ? '1000px' : '100%'
+          maxWidth: '1000px' // יתמרכז אוטומטית בזכות mx-auto ולא יחרוג ברוחב
         }}
       >
         <AgGridReact
@@ -319,12 +316,8 @@ const handleMakePayment = async () => {
         rowData={filteredReports}
           quickFilterText={quickFilterText}
           // התאמת עמודות למסך רק אם הרוחב קטן מ-768 פיקסלים
-          onGridReady={(params) => {
-            if (window.innerWidth < 768) params.api.sizeColumnsToFit();
-          }}
-          onGridSizeChanged={(params) => {
-            if (window.innerWidth < 768) params.api.sizeColumnsToFit();
-          }}
+          onGridReady={(params) => params.api.sizeColumnsToFit()}
+          onGridSizeChanged={(params) => params.api.sizeColumnsToFit()}
           getRowStyle={(params) => {
             if (params.data?.paymentId) {
               return { backgroundColor: '#fee2e2', color: '#991b1b' };
@@ -336,26 +329,46 @@ const handleMakePayment = async () => {
           rowSelection="multiple"
           isRowSelectable={(rowNode) => !rowNode.data.paymentId}
           suppressRowClickSelection={true}
-          columnDefs={[
-            { 
-              field: "firstName", 
-              headerName: "שם", 
-              hide: !isAdmin,
-              checkboxSelection: isAdmin,
-              headerCheckboxSelection: isAdmin,
-              width: 150
-            },
-          { field: "date", headerName: "תאריך", minWidth: 100, valueFormatter: p => p.value ? new Date(p.value).toLocaleDateString('he-IL') : '' },
-            { field: "schoolName", headerName: 'ביה"ס', minWidth: 150, flex: 1 },
-            { field: "lessons", headerName: "שיעורים", width: 90 },
-            { field: "dailyRate", headerName: "תעריף", valueFormatter: p => `₪${p.value}`, width: 100 },
-            { 
-              headerName: "פעולות", 
-              cellRenderer: ActionButtonsRenderer, 
-              width: 100,
-              hide: !isAdmin 
-            }
-          ]}
+          // החלף את הבלוק של columnDefs בזה:
+columnDefs={[
+  { 
+    field: "firstName", 
+    headerName: "שם", 
+    hide: !isAdmin,
+    checkboxSelection: isAdmin,
+    headerCheckboxSelection: isAdmin,
+    width: 120
+  },
+  { 
+    field: "date", 
+    headerName: "תאריך", 
+    width: 110, 
+    valueFormatter: p => p.value ? new Date(p.value).toLocaleDateString('he-IL') : '' 
+  },
+  { 
+    field: "schoolName", 
+    headerName: 'ביה"ס', 
+    minWidth: 150, 
+    flex: 2 // נותן לביה"ס את רוב המקום
+  },
+  { 
+    field: "lessons", 
+    headerName: "שיעורים", 
+    width: 80 
+  },
+  { 
+    field: "dailyRate", 
+    headerName: "תעריף", 
+    valueFormatter: p => `₪${p.value}`, 
+    width: 90 
+  },
+  { 
+    headerName: "פעולות", 
+    cellRenderer: ActionButtonsRenderer, 
+    width: 80,
+    hide: !isAdmin 
+  }
+]}
         />
       </section>
     </div>
