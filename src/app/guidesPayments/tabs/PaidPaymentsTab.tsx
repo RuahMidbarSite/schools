@@ -13,6 +13,7 @@ export default function PaidPaymentsTab() {
   const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quickFilterText, setQuickFilterText] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState<string>(""); // State חדש לחודש
   // ה-Hook של הדרייב מוגדר כאן
   const AuthenticateActivate = useDrivePicker("Guide");
 
@@ -96,10 +97,17 @@ export default function PaidPaymentsTab() {
     }
   }), [AuthenticateActivate, selectedYear]);
 
-  // קיבוץ הדיווחים לפי תשלום (PaymentId)
-const paidGroupedData = useMemo(() => {
-    // סינון: רק דיווחים שיש להם תשלום ושהסטטוס של התשלום הוא עדיין "PAID"
-    const paid = reports.filter(r => r.paymentId && r.payment?.status === "PAID");
+  // קיבוץ הדיווחים לפי תשלום (PaymentId) עם סינון חודש פעיל
+  const paidGroupedData = useMemo(() => {
+    const paid = reports.filter(r => {
+      const isPaid = r.paymentId && r.payment?.status === "PAID";
+      if (!selectedMonth) return isPaid;
+      
+      const reportDate = new Date(r.date);
+      const matchesMonth = (reportDate.getMonth() + 1).toString() === selectedMonth;
+      return isPaid && matchesMonth;
+    });
+
     const map = new Map();
     paid.forEach(r => {
       if (!map.has(r.paymentId)) {
@@ -118,22 +126,54 @@ const paidGroupedData = useMemo(() => {
       }
     });
     return Array.from(map.values());
-  }, [reports]);
+  }, [reports, selectedMonth]); // כאן התיקון הקריטי - הוספת המעקב אחרי החודש
 
   return (
     <div className="animate-in fade-in">
-        <div className="mb-4 flex justify-end">
+  {/* שורת סינון ממורכזת: חיפוש (מימין) וחודש (משמאלו) */}
+      <div className="mb-4 flex flex-col md:flex-row items-center justify-start gap-4 mx-auto" style={{ maxWidth: '1000px' }}>
+        
+        {/* 1. שדה החיפוש החופשי - ראשון מימין */}
         <div className="relative w-full md:w-72">
           <input
             type="text"
             placeholder="חיפוש חופשי..."
+            value={quickFilterText}
             onChange={(e) => setQuickFilterText(e.target.value)}
-            className="w-full p-2 pr-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-right"
+            className="w-full p-2 pl-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-right"
           />
           <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
         </div>
+
+        {/* 2. תפריט בחירת חודש - צמוד משמאל לשדה החיפוש */}
+        <select 
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          className="p-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white font-medium text-slate-700 cursor-pointer"
+        >
+          <option value="">כל החודשים</option>
+          <option value="1">ינואר</option>
+          <option value="2">פברואר</option>
+          <option value="3">מרץ</option>
+          <option value="4">אפריל</option>
+          <option value="5">מאי</option>
+          <option value="6">יוני</option>
+          <option value="7">יולי</option>
+          <option value="8">אוגוסט</option>
+          <option value="9">ספטמבר</option>
+          <option value="10">אוקטובר</option>
+          <option value="11">נובמבר</option>
+          <option value="12">דצמבר</option>
+        </select>
       </div>
-      <div className="ag-theme-quartz" style={{ height: 600, width: "100%" }}>
+      <div 
+        className="ag-theme-quartz mx-auto shadow-sm border border-slate-200 rounded-lg" 
+        style={{ 
+          height: 600, 
+          width: "100%", 
+          maxWidth: '1000px' // הגבלת רוחב כדי למנוע הימרחות במחשב
+        }}
+      >
         <AgGridReact
           rowData={isLoading ? undefined : paidGroupedData}
           quickFilterText={quickFilterText}
@@ -186,6 +226,7 @@ const paidGroupedData = useMemo(() => {
 },
           }}
           onGridReady={(params) => params.api.sizeColumnsToFit()}
+          onGridSizeChanged={(params) => params.api.sizeColumnsToFit()}
           columnDefs={[
             { field: "firstName", headerName: "שם פרטי", flex: 1 },
             { field: "lastName", headerName: "משפחה", flex: 1 },

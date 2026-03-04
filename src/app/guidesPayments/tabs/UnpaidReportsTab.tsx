@@ -50,6 +50,16 @@ export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedSchool, setSelectedSchool] = useState<{name: string, city: string} | null>(null);
   const [quickFilterText, setQuickFilterText] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState<string>(""); // State חדש לחודש
+
+  // לוגיקת הסינון המקצועית
+  const filteredReports = useMemo(() => {
+    if (!selectedMonth) return reports;
+    return reports.filter(r => {
+      const reportDate = new Date(r.date);
+      return (reportDate.getMonth() + 1).toString() === selectedMonth;
+    });
+  }, [reports, selectedMonth]);
   const assignedSchools = useMemo(() => 
     (user?.publicMetadata?.assignedSchools as {name: string, city: string}[]) || [], 
   [user]);
@@ -249,26 +259,48 @@ const handleMakePayment = async () => {
         </form>
       </section>
 
-      {/* כפתור ביצוע תשלום - מופיע רק לאדמין */}
-      {isAdmin && reports.length > 0 && (
-        <div className="flex justify-start mb-2">
+      {/* שורת פעולות: הכל מוצמד לימין בתוך מיכל ממורכז */}
+      <div className="flex flex-col md:flex-row items-center justify-start gap-4 mb-4 mx-auto" style={{ maxWidth: '1000px' }}>
+        
+        {/* כפתור תשלום - ראשון מימין */}
+        {isAdmin && reports.length > 0 && (
           <button 
             onClick={handleMakePayment}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold shadow-md hover:bg-blue-700 transition-all flex items-center gap-2"
           >
             בוצע תשלום לדיווחים שנבחרו 💳
           </button>
-        </div>
-      )}
+        )}
 
-      {/* טבלת הדיווחים */}
-    <div className="mb-4 flex justify-end">
-        <div className="relative w-full md:w-72">
+        {/* בחירת חודש - שני מימין */}
+        <select 
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          className="p-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white font-medium text-slate-700 cursor-pointer"
+        >
+          <option value="">כל החודשים</option>
+          <option value="1">ינואר</option>
+          <option value="2">פברואר</option>
+          <option value="3">מרץ</option>
+          <option value="4">אפריל</option>
+          <option value="5">מאי</option>
+          <option value="6">יוני</option>
+          <option value="7">יולי</option>
+          <option value="8">אוגוסט</option>
+          <option value="9">ספטמבר</option>
+          <option value="10">אוקטובר</option>
+          <option value="11">נובמבר</option>
+          <option value="12">דצמבר</option>
+        </select>
+
+        {/* חיפוש חופשי - שלישי מימין, אייקון בשמאל */}
+        <div className="relative w-full md:w-64">
           <input
             type="text"
-            placeholder="חיפוש חופשי בטבלה..."
+            placeholder="חיפוש חופשי..."
+            value={quickFilterText}
             onChange={(e) => setQuickFilterText(e.target.value)}
-            className="w-full p-2 pr-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+            className="w-full p-2 pl-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-right"
           />
           <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
         </div>
@@ -283,8 +315,8 @@ const handleMakePayment = async () => {
         }}
       >
         <AgGridReact
-          ref={gridRef}
-          rowData={reports}
+        ref={gridRef}
+        rowData={filteredReports}
           quickFilterText={quickFilterText}
           // התאמת עמודות למסך רק אם הרוחב קטן מ-768 פיקסלים
           onGridReady={(params) => {

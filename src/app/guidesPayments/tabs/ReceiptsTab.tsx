@@ -12,6 +12,7 @@ export default function ReceiptsTab() {
   const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [quickFilterText, setQuickFilterText] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState<string>(""); // State חדש לחודש
   const loadReports = useCallback(async () => {
     setIsLoading(true);
     const data = await getReports();
@@ -22,10 +23,16 @@ console.log("Status inside payment object:", data[0]?.payment?.status);     setR
 
   useEffect(() => { loadReports(); }, [loadReports]);
 
-  // סינון וקיבוץ נתונים שהם בסטטוס "התקבלה קבלה" בלבד
+  // סינון וקיבוץ נתונים עם סינון חודש פעיל
   const receiptsData = useMemo(() => {
-    // סינון דיווחים שהסטטוס שלהם (או של התשלום המקושר) הוא "התקבלה קבלה"
-    const withReceipt = reports.filter(r => (r.status || r.payment?.status) === "RECEIPT_RECEIVED");
+    const withReceipt = reports.filter(r => {
+      const hasReceipt = (r.status || r.payment?.status) === "RECEIPT_RECEIVED";
+      if (!selectedMonth) return hasReceipt;
+      
+      const reportDate = new Date(r.date);
+      const matchesMonth = (reportDate.getMonth() + 1).toString() === selectedMonth;
+      return hasReceipt && matchesMonth;
+    });
     
     const map = new Map();
     withReceipt.forEach(r => {
@@ -34,18 +41,18 @@ console.log("Status inside payment object:", data[0]?.payment?.status);     setR
           ...r, 
           id: r.paymentId, 
           totalAmount: r.payment?.totalAmount || 0,
-          // התיקון: שליפת הקישור לקובץ מתוך אובייקט התשלום
           proofUrl: r.payment?.proofUrl || r.proofUrl || "", 
           receiptDate: r.payment?.receiptDate || r.receiptDate
         });
       }
     });
     return Array.from(map.values());
-  }, [reports]);
+  }, [reports, selectedMonth]); // כאן התיקון הקריטי - הוספת המעקב אחרי החודש
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="mb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* הוספת mx-auto ו-maxWidth גם כאן כדי ליישר עם הטבלה */}
+      <div className="mb-4 flex flex-col md:flex-row items-center justify-start gap-4 mx-auto" style={{ maxWidth: '1100px' }}>
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold text-slate-700">תשלומים שאושרו והועברו להנהח</h2>
           <span className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold">
@@ -53,21 +60,52 @@ console.log("Status inside payment object:", data[0]?.payment?.status);     setR
           </span>
         </div>
 
-        {/* תיבת החיפוש החדשה */}
-        <div className="relative w-full md:w-72">
-          <input
-            type="text"
-            placeholder="חיפוש חופשי בטבלה..."
-            onChange={(e) => setQuickFilterText(e.target.value)}
-            className="w-full p-2 pr-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-right"
-          />
-          <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
+        {/* שדה חיפוש (מימין) ותפריט חודשים (משמאלו) */}
+        <div className="flex items-center gap-2">
+          <div className="relative w-full md:w-64">
+            <input
+              type="text"
+              placeholder="חיפוש מהיר..."
+              value={quickFilterText}
+              onChange={(e) => setQuickFilterText(e.target.value)}
+              className="w-full p-2 pl-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-teal-500 outline-none text-sm text-right"
+            />
+            <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
+          </div>
+
+          <select 
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="p-2 border rounded-lg shadow-sm focus:ring-2 focus:ring-teal-500 outline-none text-sm bg-white font-medium text-slate-700 cursor-pointer"
+          >
+            <option value="">כל החודשים</option>
+            <option value="1">ינואר</option>
+            <option value="2">פברואר</option>
+            <option value="3">מרץ</option>
+            <option value="4">אפריל</option>
+            <option value="5">מאי</option>
+            <option value="6">יוני</option>
+            <option value="7">יולי</option>
+            <option value="8">אוגוסט</option>
+            <option value="9">ספטמבר</option>
+            <option value="10">אוקטובר</option>
+            <option value="11">נובמבר</option>
+            <option value="12">דצמבר</option>
+          </select>
         </div>
       </div>
 
-      <div className="ag-theme-quartz" style={{ height: 500, width: "100%" }}>
+     <div 
+        className="ag-theme-quartz mx-auto shadow-sm border border-slate-200 rounded-lg" 
+        style={{ 
+          height: 500, 
+          width: "100%", 
+          maxWidth: '1100px' // הגבלת רוחב כדי שלא יימרח במחשב
+        }}
+      >
         <AgGridReact
           rowData={isLoading ? undefined : receiptsData}
+          quickFilterText={quickFilterText}
           enableRtl={true}
           context={{
             handleUndoReceipt: async (paymentId: string) => {
