@@ -12,7 +12,7 @@ export default function PaidPaymentsTab() {
   const { selectedYear } = useContext(YearContext);
   const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+  const [quickFilterText, setQuickFilterText] = useState("");
   // ה-Hook של הדרייב מוגדר כאן
   const AuthenticateActivate = useDrivePicker("Guide");
 
@@ -97,8 +97,9 @@ export default function PaidPaymentsTab() {
   }), [AuthenticateActivate, selectedYear]);
 
   // קיבוץ הדיווחים לפי תשלום (PaymentId)
-  const paidGroupedData = useMemo(() => {
-    const paid = reports.filter(r => r.paymentId);
+const paidGroupedData = useMemo(() => {
+    // סינון: רק דיווחים שיש להם תשלום ושהסטטוס של התשלום הוא עדיין "PAID"
+    const paid = reports.filter(r => r.paymentId && r.payment?.status === "PAID");
     const map = new Map();
     paid.forEach(r => {
       if (!map.has(r.paymentId)) {
@@ -121,9 +122,21 @@ export default function PaidPaymentsTab() {
 
   return (
     <div className="animate-in fade-in">
+        <div className="mb-4 flex justify-end">
+        <div className="relative w-full md:w-72">
+          <input
+            type="text"
+            placeholder="חיפוש חופשי..."
+            onChange={(e) => setQuickFilterText(e.target.value)}
+            className="w-full p-2 pr-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm text-right"
+          />
+          <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
+        </div>
+      </div>
       <div className="ag-theme-quartz" style={{ height: 600, width: "100%" }}>
         <AgGridReact
           rowData={isLoading ? undefined : paidGroupedData}
+          quickFilterText={quickFilterText}
           enableRtl={true}
           components={gridComponents}
   context={{

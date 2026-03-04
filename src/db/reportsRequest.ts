@@ -184,3 +184,20 @@ export async function markReceiptReceived(paymentId: string, customDate?: string
     throw error;
   }
 }
+export async function undoReceiptReceived(paymentId: string) {
+  const user = await currentUser();
+  if (user?.publicMetadata?.role !== "admin") throw new Error("Unauthorized");
+
+  try {
+    return await prisma.instructorPayment.update({
+      where: { id: paymentId },
+      data: { 
+        status: "PAID", 
+        receiptDate: null // מחיקת תאריך הקבלה
+      },
+    });
+  } catch (error: any) {
+    console.error("Undo Receipt Error:", error.message);
+    throw new Error("שגיאה בהחזרת הרשומה ללשונית קודמת");
+  }
+}

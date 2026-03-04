@@ -49,7 +49,7 @@ export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedSchool, setSelectedSchool] = useState<{name: string, city: string} | null>(null);
-
+  const [quickFilterText, setQuickFilterText] = useState("");
   const assignedSchools = useMemo(() => 
     (user?.publicMetadata?.assignedSchools as {name: string, city: string}[]) || [], 
   [user]);
@@ -57,11 +57,19 @@ export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
   const loadReports = useCallback(async () => {
     setIsLoading(true);
     const data = await getReports();
-    // סינון: אדמין רואה הכל, מדריך רואה רק את הדיווחים ששייכים למייל שלו
+    
+    // אדמין רואה הכל, מדריך רואה רק את שלו. לא מסננים לפי paymentId כדי להשאיר אותם בטבלה
     const filtered = isAdmin 
-      ? data.filter((r: any) => !r.paymentId)
-      : data.filter((r: any) => !r.paymentId && r.email === user?.primaryEmailAddress?.emailAddress);
-    setReports(filtered);
+      ? data 
+      : data.filter((r: any) => r.email === user?.primaryEmailAddress?.emailAddress);
+
+    // מיון: אלו ללא paymentId (טרם שולמו) יהיו ראשונים
+    const sorted = [...filtered].sort((a, b) => {
+      if (!!a.paymentId === !!b.paymentId) return 0;
+      return a.paymentId ? 1 : -1;
+    });
+
+    setReports(sorted);
     setIsLoading(false);
   }, [isAdmin, user, selectedYear]);
 
@@ -254,13 +262,32 @@ const handleMakePayment = async () => {
       )}
 
       {/* טבלת הדיווחים */}
+    <div className="mb-4 flex justify-end">
+        <div className="relative w-full md:w-72">
+          <input
+            type="text"
+            placeholder="חיפוש חופשי בטבלה..."
+            onChange={(e) => setQuickFilterText(e.target.value)}
+            className="w-full p-2 pr-10 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+          />
+          <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
+        </div>
+      </div>
       <section className="ag-theme-quartz" style={{ height: 450, width: "100%" }}>
         <AgGridReact
           ref={gridRef}
           rowData={reports}
+          quickFilterText={quickFilterText}
+          getRowStyle={(params) => {
+            if (params.data?.paymentId) {
+              return { backgroundColor: '#fee2e2', color: '#991b1b' };
+            }
+            return undefined;
+          }}
           enableRtl={true}
           context={{ handleEdit, handleDelete, isAdmin }}
           rowSelection="multiple"
+          isRowSelectable={(rowNode) => !rowNode.data.paymentId}
           suppressRowClickSelection={true}
           columnDefs={[
             { 
