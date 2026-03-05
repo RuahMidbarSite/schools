@@ -82,10 +82,12 @@ export default function NavBarClient() {
         </Nav>
       </Navbar.Collapse>
 
-      {/* WhatsApp Indicator */}
-      <div className="mx-3 d-flex align-items-center">
-        <QrCodeComponent ref={qrCodeRef} />
-      </div>
+      {/* WhatsApp Indicator - מוצג רק למנהלים */}
+      {isAdmin && (
+        <div className="mx-3 d-flex align-items-center">
+          <QrCodeComponent ref={qrCodeRef} />
+        </div>
+      )}
 
       <div className="d-flex align-items-center gap-3">
         <SignedIn>

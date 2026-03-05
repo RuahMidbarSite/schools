@@ -101,10 +101,11 @@ const components = useMemo(() => ({
     setIsLoading(true);
     const data = await getReports();
     
-    // אדמין רואה הכל, מדריך רואה רק את שלו. לא מסננים לפי paymentId כדי להשאיר אותם בטבלה
+   // סינון קשיח: אם המשתמש אינו אדמין, הוא רואה רק דיווחים שתואמים לאימייל שלו ב-Clerk
+    const userEmail = user?.primaryEmailAddress?.emailAddress;
     const filtered = isAdmin 
       ? data 
-      : data.filter((r: any) => r.email === user?.primaryEmailAddress?.emailAddress);
+      : data.filter((r: any) => r.email === userEmail && userEmail !== undefined);
 
     // מיון: אלו ללא paymentId (טרם שולמו) יהיו ראשונים
     const sorted = [...filtered].sort((a, b) => {
@@ -114,7 +115,7 @@ const components = useMemo(() => ({
 
     setReports(sorted);
     setIsLoading(false);
-  }, [isAdmin, user, selectedYear]);
+  }, [isAdmin, user?.primaryEmailAddress?.emailAddress, selectedYear]);
 
   useEffect(() => { loadReports(); }, [loadReports]);
 
