@@ -101,15 +101,15 @@ const components = useMemo(() => ({
     setIsLoading(true);
     const data = await getReports();
     
-   // וידוא מוחלט של כתובת האימייל של המשתמש המחובר
-    const userEmail = user?.primaryEmailAddress?.emailAddress?.toLowerCase();
+ // ניקוי והשוואה בטוחה של אימיילים
+    const userEmail = user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase();
     
     const filtered = isAdmin 
       ? data 
       : data.filter((r: any) => {
-          // אנחנו מוודאים ששני הצדדים באותיות קטנות וששדה האימייל קיים
-          const reportEmail = r.email?.toLowerCase();
-          return reportEmail === userEmail && userEmail !== undefined;
+          const reportEmail = r.email?.trim().toLowerCase();
+          // רק אם יש אימייל בשני הצדדים והם זהים לחלוטין
+          return userEmail && reportEmail && reportEmail === userEmail;
         });
 
     // מיון: אלו ללא paymentId (טרם שולמו) יהיו ראשונים
@@ -129,8 +129,7 @@ const components = useMemo(() => ({
     const formData = new FormData(e.target);
     const data = Object.fromEntries(formData.entries());
 
-   // 1. עדיפות למידע ידני מה-State (מוסד ועיר) עבור מנהל
-    // 1. עדיפות למידע ידני מה-State (מוסד ועיר)
+  // 1. עדיפות למידע ידני מה-State (מוסד ועיר) עבור מנהל
     if (isAdmin && selectedSchool?.name) {
       data.schoolName = selectedSchool.name;
       data.cityName = selectedSchool.city || (data.cityName as string) || "";
