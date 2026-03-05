@@ -101,11 +101,16 @@ const components = useMemo(() => ({
     setIsLoading(true);
     const data = await getReports();
     
-   // סינון קשיח: אם המשתמש אינו אדמין, הוא רואה רק דיווחים שתואמים לאימייל שלו ב-Clerk
-    const userEmail = user?.primaryEmailAddress?.emailAddress;
+   // וידוא מוחלט של כתובת האימייל של המשתמש המחובר
+    const userEmail = user?.primaryEmailAddress?.emailAddress?.toLowerCase();
+    
     const filtered = isAdmin 
       ? data 
-      : data.filter((r: any) => r.email === userEmail && userEmail !== undefined);
+      : data.filter((r: any) => {
+          // אנחנו מוודאים ששני הצדדים באותיות קטנות וששדה האימייל קיים
+          const reportEmail = r.email?.toLowerCase();
+          return reportEmail === userEmail && userEmail !== undefined;
+        });
 
     // מיון: אלו ללא paymentId (טרם שולמו) יהיו ראשונים
     const sorted = [...filtered].sort((a, b) => {
