@@ -359,7 +359,7 @@ const handleMakePayment = async () => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-500">תעריף (₪)</label>
+            <label className="text-xs font-bold text-slate-500">תשלום ליום הדרכה/הוראה (₪)</label>
             <input type="number" name="dailyRate" step="0.01" required className="p-3 border rounded-lg bg-slate-50" />
           </div>
 
