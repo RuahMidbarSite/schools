@@ -250,18 +250,12 @@ const handleMakePayment = async () => {
     }
   };
   return (
-   <div className="space-y-8">
-  
-  {/* שורת דיבאג זמנית לבדיקת הבעיה בורסל */}
-  <div className="bg-red-500 text-white p-4 font-bold text-center rounded-lg mb-4">
-    מצב פיתוח: האם אדמין? {isAdmin ? "כן" : "לא"} | אימייל שזוהה: {user?.primaryEmailAddress?.emailAddress || "לא זוהה"}
-  </div>
-
-  {/* טופס הדיווח - זמין תמיד להזנה */}
-  <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-    <h3 className="text-lg font-bold mb-4 text-slate-700">
-      {editingId ? "עריכת דיווח (Admin)" : "דיווח שעות חדש"}
-    </h3>
+    <div className="space-y-8">
+      {/* טופס הדיווח - זמין תמיד להזנה */}
+      <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+        <h3 className="text-lg font-bold mb-4 text-slate-700">
+          {editingId ? "עריכת דיווח (Admin)" : "דיווח שעות חדש"}
+        </h3>
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {isAdmin && (
             <div className="flex flex-col gap-1 lg:col-span-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 mb-2">

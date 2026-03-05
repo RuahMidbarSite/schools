@@ -16,7 +16,7 @@ export default function Home() {
       const isAdmin = checkIsAdmin(user);
       if (!isAdmin) {
         // אם זה לא מנהל, מעבירים מיד לדף דיווחי מדריכים
-        router.push('/instructorReporting');
+        router.push('/guidesPayments');
       }
     }
   }, [isLoaded, user, router]);
