@@ -316,8 +316,37 @@ const handleMakePayment = async () => {
       } catch (error: any) {
         alert(error.message);
       }
-    }
+   }
   };
+
+  const [pinnedBottomRowData, setPinnedBottomRowData] = useState<any[]>([]);
+
+  const calculateTotals = useCallback(() => {
+    if (!gridRef.current?.api) return;
+    let totalRate = 0;
+    let totalLessons = 0;
+    
+    gridRef.current.api.forEachNodeAfterFilter((node) => {
+      if (node.data && !node.rowPinned) {
+        totalRate += Number(node.data.dailyRate) || 0;
+        totalLessons += Number(node.data.lessons) || 0;
+      }
+    });
+    
+    // חישוב ממוצע תשלום לשיעור (ומוודאים שלא מחלקים באפס)
+    const averagePerLesson = totalLessons > 0 ? (totalRate / totalLessons) : 0;
+    const remarksText = totalLessons > 0 ? `ממוצע לשיעור: ₪${averagePerLesson.toLocaleString('he-IL', { maximumFractionDigits: 2 })}` : '';
+    
+    setPinnedBottomRowData([{
+      firstName: 'סה"כ',
+      schoolName: '',
+      date: '',
+      lessons: totalLessons,
+      dailyRate: totalRate,
+      remarks: remarksText
+    }]);
+  }, []);
+
   return (
     <div className="space-y-8">
       {/* טופס הדיווח - זמין תמיד להזנה */}
@@ -552,13 +581,19 @@ const handleMakePayment = async () => {
   quickFilterText={quickFilterText}
   defaultColDef={defaultColDef}
   components={components}
+  pinnedBottomRowData={pinnedBottomRowData}
+  onModelUpdated={calculateTotals}
   onGridReady={(params) => {
     if (window.innerWidth < 768) params.api.sizeColumnsToFit();
+    calculateTotals();
   }}
   onGridSizeChanged={(params) => {
     if (window.innerWidth < 768) params.api.sizeColumnsToFit();
   }}
   getRowStyle={(params) => {
+    if (params.node.rowPinned) {
+      return { fontWeight: 'bold', backgroundColor: '#e2e8f0' };
+    }
     if (params.data?.paymentId) {
       return { backgroundColor: '#fee2e2', color: '#991b1b' };
     }
@@ -567,36 +602,60 @@ const handleMakePayment = async () => {
   enableRtl={true}
   context={{ handleEdit, handleDelete, isAdmin }}
   rowSelection="multiple"
-  isRowSelectable={(rowNode) => !rowNode.data.paymentId}
+  isRowSelectable={(rowNode) => !rowNode.rowPinned && !rowNode.data?.paymentId}
   suppressRowClickSelection={true}
   columnDefs={[
     { 
       field: "firstName", 
       headerName: "שם", 
       hide: !isAdmin,
-      checkboxSelection: isAdmin,
+      checkboxSelection: (params) => !params.node.rowPinned && isAdmin,
       headerCheckboxSelection: isAdmin,
-      width: 150
+      width: 110 // הוקטן מ-150
     },
     { 
-  field: "date", 
-  headerName: "תאריך", 
-  minWidth: 120, 
-  filter: 'agDateColumnFilter', // שומר על לוח שנה
-  filterParams: {
-    buttons: ['reset', 'apply'],
-    closeOnApply: true
-  },
-  valueFormatter: p => p.value ? new Date(p.value).toLocaleDateString('he-IL') : '' 
-},
-    { field: "schoolName", headerName: 'ביה"ס', minWidth: 150, flex: 1 },
-    { field: "lessons", headerName: "שיעורים", width: 90 },
-    { field: "dailyRate", headerName: "תשלום ליום", valueFormatter: p => `₪${p.value}`, width: 100 },
+      field: "date", 
+      headerName: "תאריך", 
+      width: 105, // שונה מ-minWidth: 120 לרוחב קבוע קטן יותר
+      filter: 'agDateColumnFilter', // שומר על לוח שנה
+      filterParams: {
+        buttons: ['reset', 'apply'],
+        closeOnApply: true
+      },
+      valueFormatter: p => {
+        // מונע שגיאת "Invalid Date" בשורת הסיכום
+        if (p.node?.rowPinned) return '';
+        if (!p.value) return '';
+        const d = new Date(p.value);
+        return isNaN(d.getTime()) ? '' : d.toLocaleDateString('he-IL');
+      }
+    },
+    { field: "schoolName", headerName: 'ביה"ס', minWidth: 200, flex: 2 }, // הוגדל ה-minWidth וה-flex כדי שיתפוס את רוב המקום שמתפנה
+    { 
+      field: "lessons", 
+      headerName: "שיעורים", 
+      width: 80, // הוקטן מ-90
+      valueFormatter: p => {
+        // מונע שגיאת "Invalid Number" מ-AG Grid במקרה של תא ריק
+        if (p.value === undefined || p.value === null || p.value === '') return '';
+        return p.value;
+      }
+    },
+    { 
+      field: "dailyRate", 
+      headerName: "תשלום", 
+      width: 85, // הוקטן מ-100
+      valueFormatter: p => {
+        if (p.value === undefined || p.value === null || p.value === '') return '';
+        // מוסיף פסיקים למספרים גדולים כדי שיראה קריא ומסודר
+        return `₪${Number(p.value).toLocaleString('he-IL')}`;
+      }
+    },
     { 
       field: "remarks", 
       headerName: "הערות", 
       minWidth: 200, 
-      flex: 2,
+      flex: 2, 
       cellRenderer: "RemarksCellRenderer",
       tooltipValueGetter: (p: any) => p.value 
     },
