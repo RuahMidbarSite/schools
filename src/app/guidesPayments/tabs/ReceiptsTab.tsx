@@ -8,9 +8,18 @@ import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 
 export default function ReceiptsTab() {
-  const { selectedYear } = useContext(YearContext);
+ const { selectedYear } = useContext(YearContext);
   const gridComponents = useMemo(() => ({
-    CustomFilter: CustomFilter
+    CustomFilter: CustomFilter,
+    RemarksCellRenderer: (params: any) => {
+      const text = params.value || '';
+      if (!text) return null;
+      return (
+        <div title={text} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', cursor: 'default' }}>
+          {text}
+        </div>
+      );
+    }
   }), []);
   const [reports, setReports] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,18 +48,27 @@ console.log("Status inside payment object:", data[0]?.payment?.status);     setR
     
     const map = new Map();
     withReceipt.forEach(r => {
+      // חילוץ תאריך הדיווח וחיבור שלו להערה
+      const formattedDate = r.date ? new Date(r.date).toLocaleDateString('he-IL') : '';
+      const remarkWithDate = r.remarks ? `${formattedDate}: ${r.remarks}` : null;
+
       if (r.paymentId && !map.has(r.paymentId)) {
         map.set(r.paymentId, { 
           ...r, 
           id: r.paymentId, 
           totalAmount: r.payment?.totalAmount || 0,
           proofUrl: r.payment?.proofUrl || r.proofUrl || "", 
-          receiptDate: r.payment?.receiptDate || r.receiptDate
+          receiptDate: r.payment?.receiptDate || r.receiptDate,
+          allRemarks: remarkWithDate ? [remarkWithDate] : []
         });
+      } else if (r.paymentId) {
+        // איסוף הערות עם תאריך במקרה של תשלום מאוגד למספר דיווחים
+        const item = map.get(r.paymentId);
+        if (remarkWithDate) item.allRemarks.push(remarkWithDate);
       }
     });
     return Array.from(map.values());
-  }, [reports, selectedMonth]); // כאן התיקון הקריטי - הוספת המעקב אחרי החודש
+  }, [reports, selectedMonth]);
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -129,12 +147,25 @@ console.log("Status inside payment object:", data[0]?.payment?.status);     setR
               field: "totalAmount", 
               headerName: "סכום ששולם", 
               valueFormatter: p => `₪${p.value}`, 
-              width: 130,
+              width: 110,
               cellClass: "font-bold text-green-700"
             },
             { 
+              headerName: "הערות", 
+              minWidth: 150,
+              flex: 1,
+              cellRenderer: "RemarksCellRenderer",
+              valueGetter: (p: any) => {
+                if (Array.isArray(p.data.allRemarks) && p.data.allRemarks.length > 0) {
+                  return Array.from(new Set(p.data.allRemarks.filter(Boolean))).join(" | ");
+                }
+                return "";
+              },
+              tooltipValueGetter: (p: any) => p.value 
+            },
+            { 
               field: "receiptDate", 
-              headerName: "תאריך קבלת קבלה", 
+              headerName: "תאריך קבלת קבלה",
               filter: 'agDateColumnFilter',
               filterParams: {
                 buttons: ['reset', 'apply'],

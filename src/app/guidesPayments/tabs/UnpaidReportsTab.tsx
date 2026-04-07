@@ -12,17 +12,22 @@ import { getPrograms } from "@/db/programsRequests";
 
 // Renderer המעודכן שבודק הרשאת אדמין בלבד
 const ActionButtonsRenderer = (params: any) => {
-  if (!params.data || !params.data.id) return null;
+  // נוודא שיש נתונים, שזה לא שורת הסיכום, ושיש id
+  if (params.node?.rowPinned || !params.data || !params.data.id) return null;
   
-  // רק אדמין מקבל את הכפתורים (לפי ה-isAdmin שהעברנו ב-context)
-  if (!params.context.isAdmin) return null;
+  // רק אדמין מקבל את הכפתורים
+  if (!params.context?.isAdmin) return null;
 
   return (
     <div className="flex gap-3 justify-center items-center h-full">
       <button
+        type="button"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
-          params.context.handleEdit(params.data);
+          if (params.context?.handleEdit) {
+            params.context.handleEdit(params.data);
+          }
         }}
         className="hover:scale-125 transition-transform cursor-pointer"
         title="עריכה"
@@ -30,9 +35,13 @@ const ActionButtonsRenderer = (params: any) => {
         ✏️
       </button>
       <button
+        type="button"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
-          params.context.handleDelete(params.data.id);
+          if (params.context?.handleDelete) {
+            params.context.handleDelete(params.data.id);
+          }
         }}
         className="hover:scale-125 transition-transform cursor-pointer text-red-500"
         title="מחיקה"
@@ -243,7 +252,10 @@ const components = useMemo(() => ({
     }
   };
 
-  const handleEdit = (data: any) => {
+  // רפרנס לטופס כדי שנימנע מחיפוש כללי ב-DOM
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const handleEdit = useCallback((data: any) => {
     if (!isAdmin) return;
     setEditingId(data.id);
     
@@ -256,22 +268,36 @@ const components = useMemo(() => ({
     // סנכרון המדריך כדי שרשימת בתי הספר שלו תופיע ב-Select בעת עריכה
     const instructor = uniqueInstructors.find(i => i.email === data.email);
     setAdminSelectedInstructor(instructor || null);
-    const form = document.querySelector('form') as HTMLFormElement;
-    if (form) {
-      // עדכון שדות הטופס הסטנדרטיים
-      form.date.value = new Date(data.date).toISOString().split('T')[0];
-      form.lessons.value = data.lessons;
-      form.dailyRate.value = data.dailyRate;
-      form.remarks.value = data.remarks || "";
-      
-      // כפיית הערך על שדה ה-select דרך ה-DOM ליתר ביטחון
-      if (form.schoolName) {
-        form.schoolName.value = data.schoolName;
+    
+    // שימוש ב-setTimeout כדי לאפשר ל-React לעדכן את ה-DOM (כמו ה-Select של בתי הספר) לפני שאנחנו משנים את הערכים ידנית
+    setTimeout(() => {
+      const form = formRef.current;
+      if (form) {
+        // מילוי שדות הטופס הסטנדרטיים
+        if (form.date) form.date.value = new Date(data.date).toISOString().split('T')[0];
+        if (form.lessons) form.lessons.value = data.lessons;
+        if (form.dailyRate) form.dailyRate.value = data.dailyRate;
+        if (form.remarks) form.remarks.value = data.remarks || "";
+        
+        // מילוי פרטי המדריך לאדמין
+        if (isAdmin && instructor) {
+          if (form.firstName) form.firstName.value = data.firstName;
+          if (form.lastName) form.lastName.value = data.lastName;
+          if (form.email) form.email.value = data.email || "";
+          // עדכון ה-Select של בחירת המדריך אם קיים
+          const instructorSelect = form.querySelector('select:first-of-type') as HTMLSelectElement;
+          if (instructorSelect) instructorSelect.value = data.email || "";
+        }
+        
+        // כפיית הערך על שדה ה-select של ביה"ס
+        if (form.schoolName) form.schoolName.value = data.schoolName;
+        if (form.cityName) form.cityName.value = data.cityName;
+        
+        // גלילה חלקה לטופס
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
+    }, 100);
+  }, [isAdmin, uniqueInstructors]);
 
   const handleDelete = async (id: string) => {
     if (!isAdmin) return;
@@ -321,6 +347,19 @@ const handleMakePayment = async () => {
 
   const [pinnedBottomRowData, setPinnedBottomRowData] = useState<any[]>([]);
 
+  // 1. הגדרת רפרנס קבוע לפעולות כדי שכפתורי העריכה/מחיקה תמיד יכירו את הנתונים העדכניים (מונע באג אי-תגובה)
+  const contextRef = useRef({ handleEdit, handleDelete, isAdmin });
+  useEffect(() => {
+    contextRef.current = { handleEdit, handleDelete, isAdmin };
+  }, [handleEdit, handleDelete, isAdmin]);
+
+  const gridContext = useMemo(() => ({
+    handleEdit: (data: any) => contextRef.current.handleEdit(data),
+    handleDelete: (id: string) => contextRef.current.handleDelete(id),
+    get isAdmin() { return contextRef.current.isAdmin; }
+  }), []);
+
+  // 2. חישוב סכומים מעודכן שמונע את תקיעת הלשוניות (מונע לולאה אינסופית)
   const calculateTotals = useCallback(() => {
     if (!gridRef.current?.api) return;
     let totalRate = 0;
@@ -333,154 +372,29 @@ const handleMakePayment = async () => {
       }
     });
     
-    // חישוב ממוצע תשלום לשיעור (ומוודאים שלא מחלקים באפס)
     const averagePerLesson = totalLessons > 0 ? (totalRate / totalLessons) : 0;
     const remarksText = totalLessons > 0 ? `ממוצע לשיעור: ₪${averagePerLesson.toLocaleString('he-IL', { maximumFractionDigits: 2 })}` : '';
     
-    setPinnedBottomRowData([{
-      firstName: 'סה"כ',
-      schoolName: '',
-      date: '',
-      lessons: totalLessons,
-      dailyRate: totalRate,
-      remarks: remarksText
-    }]);
+    setPinnedBottomRowData(prev => {
+      // עוצרים את העדכון אם הסכומים לא השתנו כדי לשחרר את הדפדפן
+      if (prev.length > 0 && prev[0].dailyRate === totalRate && prev[0].lessons === totalLessons) {
+        return prev;
+      }
+      return [{
+        firstName: 'סה"כ',
+        schoolName: '',
+        date: '',
+        lessons: totalLessons,
+        dailyRate: totalRate,
+        remarks: remarksText
+      }];
+    });
   }, []);
 
-  return (
-    <div className="space-y-8">
-      {/* טופס הדיווח - זמין תמיד להזנה */}
-      <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-        <h3 className="text-lg font-bold mb-4 text-slate-700">
-          {editingId ? "עריכת דיווח (Admin)" : "דיווח שעות חדש"}
-        </h3>
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {isAdmin && (
-            <div className="flex flex-col gap-1 lg:col-span-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 mb-2">
-              <h4 className="text-sm font-bold text-yellow-800 mb-2">דיווח עבור מדריך אחר (Admin)</h4>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-slate-500">בחר מדריך קיים</label>
-                  <select 
-                    className="p-3 border rounded-lg bg-white"
-                    onChange={(e) => {
-                      const inst = uniqueInstructors.find(i => i.email === e.target.value);
-                      setAdminSelectedInstructor(inst || null);
-                      setSelectedSchool(null); // איפוס המוסד בשינוי מדריך
-                      const form = e.target.form;
-                      if (form && inst) {
-                        form.firstName.value = inst.firstName;
-                        form.lastName.value = inst.lastName;
-                        form.email.value = inst.email;
-                      }
-                    }}
-                  >
-                    <option value="">-- בחר מדריך --</option>
-                    {uniqueInstructors.map(i => (
-                      <option key={i.email} value={i.email}>{i.firstName} {i.lastName}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-slate-500">שם פרטי</label>
-                  <input name="firstName" required className="p-3 border rounded-lg bg-white" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-slate-500">שם משפחה</label>
-                  <input name="lastName" required className="p-3 border rounded-lg bg-white" />
-                </div>
-                <div className="flex flex-col gap-1">
-  <label className="text-xs font-bold text-slate-500">אימייל (אופציונלי)</label>
-  <input name="email" type="email" className="p-3 border rounded-lg bg-white" placeholder="ניתן להשאיר ריק" />
-</div>
-              </div>
-            </div>
-          )}
-        {/* שדה שם ביה"ס עם אפשרות בחירה או הקלדה לאדמין */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-500">שם ביה"ס</label>
-            <div className="flex gap-1">
-              <select 
-  name="schoolName" 
-  // השדה חובה רק אם אתה לא אדמין, או אם אתה אדמין ועדיין לא הקלדת שם בתיבה הידנית
-  required={!isAdmin && !selectedSchool?.name}
-  value={selectedSchool?.name || ""}
-                onChange={(e) => {
-                  const schoolName = e.target.value;
-                  const schoolList = (isAdmin && adminSelectedInstructor) ? adminSelectedInstructor.schools : assignedSchools;
-                  const school = schoolList?.find((s: any) => s.name === schoolName);
-                  setSelectedSchool(school || { name: schoolName, city: "" });
-                }}
-                className="p-3 border rounded-lg bg-slate-50 focus:bg-white transition-colors flex-1"
-              >
-                <option value="">בחר מוסד...</option>
-                {(isAdmin && adminSelectedInstructor ? adminSelectedInstructor.schools : assignedSchools)?.map((s: any) => (
-                  <option key={s.name} value={s.name}>{s.name}</option>
-                ))}
-              </select>
-              {isAdmin && (
-                <input 
-                  placeholder="או הקלד שם חדש..."
-                  className="p-3 border rounded-lg bg-white w-1/3 text-xs border-dashed"
-                 onBlur={(e) => {
-                    const val = e.target.value.trim();
-                    if (val) {
-                      setSelectedSchool({ 
-                        name: val, 
-                        city: selectedSchool?.city || "" 
-                      });
-                    }
-                  }}
-                />
-              )}
-            </div>
-          </div>
-          
-          {/* שדה עיר - מתמלא אוטומטית או ניתן להזנה ידנית לאדמין */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-500">עיר</label>
-            <input 
-              name="cityName" 
-              value={selectedSchool?.city || ""} 
-              readOnly={!isAdmin} 
-              onChange={(e) => isAdmin && setSelectedSchool(prev => ({ ...prev!, city: e.target.value }))}
-              placeholder={isAdmin ? "הזן עיר..." : ""}
-              className={`p-3 border rounded-lg ${!isAdmin ? 'bg-slate-200 cursor-not-allowed' : 'bg-white shadow-inner'}`} 
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-500">תאריך</label>
-            <input type="date" name="date" required max={new Date().toISOString().split('T')[0]} className="p-3 border rounded-lg bg-slate-50" />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-500">כמות שיעורים</label>
-            <select name="lessons" required className="p-3 border rounded-lg bg-slate-50">
-              {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-500">תשלום ליום הדרכה/הוראה (₪)</label>
-            <input type="number" name="dailyRate" step="0.01" required className="p-3 border rounded-lg bg-slate-50" />
-          </div>
-
-          <div className="flex flex-col gap-1 lg:col-span-2">
-            <label className="text-xs font-bold text-slate-500">הערות</label>
-            <input name="remarks" className="p-3 border rounded-lg bg-slate-50" />
-          </div>
-
-          <div className="lg:col-span-4 flex justify-end">
-            <button type="submit" className={`px-8 py-3 rounded-xl font-bold text-white shadow-md transition-all ${editingId ? 'bg-orange-600' : 'bg-teal-600'}`}>
-              {editingId ? "שמור שינויים" : "שלח דיווח"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* שורת פעולות: הכל מוצמד לימין בתוך מיכל ממורכז */}
-      <div className="flex flex-col md:flex-row items-center justify-start gap-4 mb-4 mx-auto" style={{ maxWidth: '1000px' }}>
+ return (
+    <div className="space-y-8 flex flex-col">
+      {/* שורת פעולות - מורחבת על כל הרוחב */}
+      <div className="flex flex-col md:flex-row items-center justify-start gap-4 w-full">
         
         {/* כפתור תשלום - ראשון מימין */}
         {isAdmin && reports.length > 0 && (
@@ -525,9 +439,10 @@ const handleMakePayment = async () => {
           <span className="absolute left-3 top-2.5 opacity-30">🔍</span>
         </div>
       </div>
-      {/* תצוגת מדריכים חסרי דיווח עם כפתורי ווצאפ - מוצג לאדמין בלבד */}
+
+      {/* תצוגת מדריכים חסרי דיווח - מורחבת על כל הרוחב */}
       {isAdmin && selectedMonth && (
-        <div className="mx-auto mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg shadow-sm" style={{ maxWidth: '1000px' }}>
+        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg shadow-sm w-full">
           <h4 className="text-sm font-bold text-orange-800 mb-2 flex items-center gap-2">
             <span>⚠️</span> מדריכים פעילים בתוכניות שטרם דיווחו בחודש זה ({missingInstructors.length}):
           </h4>
@@ -537,11 +452,9 @@ const handleMakePayment = async () => {
           ) : (
             <div className="flex flex-wrap gap-2">
               {missingInstructors.map(inst => {
-                // הכנת מספר הטלפון וההודעה לווצאפ
                 const phone = inst.CellPhone ? inst.CellPhone.replace(/\D/g, '') : '';
                 const waPhone = phone.startsWith('0') ? '972' + phone.substring(1) : phone;
                 const monthNames = ["", "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
-                // הורדנו את האימוג'י כדי למנוע סימני שאלה, ושינינו את הקישור שיפתח את תוכנת הדסקטופ
                 const message = encodeURIComponent(`היי ${inst.FirstName}, רק תזכורת קטנה להזין דיווח שעות במערכת עבור חודש ${monthNames[parseInt(selectedMonth)]}. תודה!`);
                 const waLink = `whatsapp://send?phone=${waPhone}&text=${message}`;
 
@@ -556,118 +469,242 @@ const handleMakePayment = async () => {
                   >
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" className="text-green-500">
                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                            </svg>
-                            {inst.FirstName} {inst.LastName}
-                          </a>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-<section 
-        className="ag-theme-quartz mx-auto" 
-        style={{ 
-          height: 450, 
-          width: "100%",
-          // במחשב (מעל 768 פיקסלים) נגביל ל-1000 פיקסלים, בנייד 100%
-          maxWidth: typeof window !== 'undefined' && window.innerWidth > 768 ? '1000px' : '100%'
-        }}
+                    </svg>
+                    {inst.FirstName} {inst.LastName}
+                  </a>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* טבלת הדיווחים - מורחבת על כל הרוחב */}
+      <section 
+        className="ag-theme-quartz w-full" 
+        style={{ height: 450 }}
       >
         <AgGridReact
-  ref={gridRef}
-  rowData={filteredReports}
-  tooltipShowDelay={0}
-  quickFilterText={quickFilterText}
-  defaultColDef={defaultColDef}
-  components={components}
-  pinnedBottomRowData={pinnedBottomRowData}
-  onModelUpdated={calculateTotals}
-  onGridReady={(params) => {
-    if (window.innerWidth < 768) params.api.sizeColumnsToFit();
-    calculateTotals();
-  }}
-  onGridSizeChanged={(params) => {
-    if (window.innerWidth < 768) params.api.sizeColumnsToFit();
-  }}
-  getRowStyle={(params) => {
-    if (params.node.rowPinned) {
-      return { fontWeight: 'bold', backgroundColor: '#e2e8f0' };
-    }
-    if (params.data?.paymentId) {
-      return { backgroundColor: '#fee2e2', color: '#991b1b' };
-    }
-    return undefined;
-  }}
-  enableRtl={true}
-  context={{ handleEdit, handleDelete, isAdmin }}
-  rowSelection="multiple"
-  isRowSelectable={(rowNode) => !rowNode.rowPinned && !rowNode.data?.paymentId}
-  suppressRowClickSelection={true}
-  columnDefs={[
-    { 
-      field: "firstName", 
-      headerName: "שם", 
-      hide: !isAdmin,
-      checkboxSelection: (params) => !params.node.rowPinned && isAdmin,
-      headerCheckboxSelection: isAdmin,
-      width: 110 // הוקטן מ-150
-    },
-    { 
-      field: "date", 
-      headerName: "תאריך", 
-      width: 105, // שונה מ-minWidth: 120 לרוחב קבוע קטן יותר
-      filter: 'agDateColumnFilter', // שומר על לוח שנה
-      filterParams: {
-        buttons: ['reset', 'apply'],
-        closeOnApply: true
-      },
-      valueFormatter: p => {
-        // מונע שגיאת "Invalid Date" בשורת הסיכום
-        if (p.node?.rowPinned) return '';
-        if (!p.value) return '';
-        const d = new Date(p.value);
-        return isNaN(d.getTime()) ? '' : d.toLocaleDateString('he-IL');
-      }
-    },
-    { field: "schoolName", headerName: 'ביה"ס', minWidth: 200, flex: 2 }, // הוגדל ה-minWidth וה-flex כדי שיתפוס את רוב המקום שמתפנה
-    { 
-      field: "lessons", 
-      headerName: "שיעורים", 
-      width: 80, // הוקטן מ-90
-      valueFormatter: p => {
-        // מונע שגיאת "Invalid Number" מ-AG Grid במקרה של תא ריק
-        if (p.value === undefined || p.value === null || p.value === '') return '';
-        return p.value;
-      }
-    },
-    { 
-      field: "dailyRate", 
-      headerName: "תשלום", 
-      width: 85, // הוקטן מ-100
-      valueFormatter: p => {
-        if (p.value === undefined || p.value === null || p.value === '') return '';
-        // מוסיף פסיקים למספרים גדולים כדי שיראה קריא ומסודר
-        return `₪${Number(p.value).toLocaleString('he-IL')}`;
-      }
-    },
-    { 
-      field: "remarks", 
-      headerName: "הערות", 
-      minWidth: 200, 
-      flex: 2, 
-      cellRenderer: "RemarksCellRenderer",
-      tooltipValueGetter: (p: any) => p.value 
-    },
-    { 
-      headerName: "פעולות", 
-      cellRenderer: ActionButtonsRenderer, 
-      width: 100,
-      hide: !isAdmin 
-    }
-  ]}
-/>
+          ref={gridRef}
+          rowData={filteredReports}
+          tooltipShowDelay={0}
+          quickFilterText={quickFilterText}
+          defaultColDef={defaultColDef}
+          components={components}
+          pinnedBottomRowData={pinnedBottomRowData}
+          // אירועים בטוחים יותר שלא תוקעים את המערכת בלולאה
+          onFilterChanged={calculateTotals}
+          onRowDataUpdated={calculateTotals}
+          onGridReady={(params) => {
+            params.api.sizeColumnsToFit();
+            calculateTotals();
+          }}
+          // הוסר onGridSizeChanged שגרם לתקיעות מיותרות
+          getRowStyle={(params) => {
+            if (params.node.rowPinned) {
+              return { fontWeight: 'bold', backgroundColor: '#e2e8f0' };
+            }
+            if (params.data?.paymentId) {
+              return { backgroundColor: '#fee2e2', color: '#991b1b' };
+            }
+            return undefined;
+          }}
+          enableRtl={true}
+          // שימוש ב-context המאובטח שלנו מהשלב הקודם כדי שהעריכה תעבוד
+          context={gridContext}
+          rowSelection="multiple"
+          isRowSelectable={(rowNode) => !rowNode.rowPinned && !rowNode.data?.paymentId}
+          suppressRowClickSelection={true}
+          columnDefs={[
+            { 
+              field: "firstName", 
+              headerName: "שם", 
+              hide: !isAdmin,
+              checkboxSelection: (params) => !params.node.rowPinned && isAdmin,
+              headerCheckboxSelection: isAdmin,
+              width: 110 
+            },
+            { 
+              field: "date", 
+              headerName: "תאריך", 
+              width: 105, 
+              filter: 'agDateColumnFilter', 
+              filterParams: {
+                buttons: ['reset', 'apply'],
+                closeOnApply: true
+              },
+              valueFormatter: p => {
+                if (p.node?.rowPinned) return '';
+                if (!p.value) return '';
+                const d = new Date(p.value);
+                return isNaN(d.getTime()) ? '' : d.toLocaleDateString('he-IL');
+              }
+            },
+            { field: "schoolName", headerName: 'ביה"ס', minWidth: 200, flex: 2 }, 
+            { 
+              field: "lessons", 
+              headerName: "שיעורים", 
+              width: 80, 
+              valueFormatter: p => {
+                if (p.value === undefined || p.value === null || p.value === '') return '';
+                return p.value;
+              }
+            },
+            { 
+              field: "dailyRate", 
+              headerName: "תשלום", 
+              width: 85, 
+              valueFormatter: p => {
+                if (p.value === undefined || p.value === null || p.value === '') return '';
+                return `₪${Number(p.value).toLocaleString('he-IL')}`;
+              }
+            },
+            { 
+              field: "remarks", 
+              headerName: "הערות", 
+              minWidth: 200, 
+              flex: 2, 
+              cellRenderer: "RemarksCellRenderer",
+              tooltipValueGetter: (p: any) => p.value 
+            },
+            { 
+              headerName: "פעולות", 
+              cellRenderer: ActionButtonsRenderer, 
+              width: 100,
+              hide: !isAdmin 
+            }
+          ]}
+        />
       </section>
+
+      {/* טופס הדיווח - הוסר ה-maxWidth */}
+      <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 w-full">
+        <h3 className="text-lg font-bold mb-4 text-slate-700">
+          {editingId ? "עריכת דיווח (Admin)" : "דיווח שעות חדש"}
+        </h3>
+        <form ref={formRef} onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {isAdmin && (
+            <div className="flex flex-col gap-1 lg:col-span-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200 mb-2">
+              <h4 className="text-sm font-bold text-yellow-800 mb-2">דיווח עבור מדריך אחר (Admin)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500">בחר מדריך קיים</label>
+                  <select 
+                    className="p-3 border rounded-lg bg-white"
+                    onChange={(e) => {
+                      const inst = uniqueInstructors.find(i => i.email === e.target.value);
+                      setAdminSelectedInstructor(inst || null);
+                      setSelectedSchool(null); 
+                      const form = e.target.form;
+                      if (form && inst) {
+                        form.firstName.value = inst.firstName;
+                        form.lastName.value = inst.lastName;
+                        form.email.value = inst.email;
+                      }
+                    }}
+                  >
+                    <option value="">-- בחר מדריך --</option>
+                    {uniqueInstructors.map(i => (
+                      <option key={i.email} value={i.email}>{i.firstName} {i.lastName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500">שם פרטי</label>
+                  <input name="firstName" required className="p-3 border rounded-lg bg-white" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500">שם משפחה</label>
+                  <input name="lastName" required className="p-3 border rounded-lg bg-white" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500">אימייל (אופציונלי)</label>
+                  <input name="email" type="email" className="p-3 border rounded-lg bg-white" placeholder="ניתן להשאיר ריק" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-500">שם ביה"ס</label>
+            <div className="flex gap-1">
+              <select 
+                name="schoolName" 
+                required={!isAdmin && !selectedSchool?.name}
+                value={selectedSchool?.name || ""}
+                onChange={(e) => {
+                  const schoolName = e.target.value;
+                  const schoolList = (isAdmin && adminSelectedInstructor) ? adminSelectedInstructor.schools : assignedSchools;
+                  const school = schoolList?.find((s: any) => s.name === schoolName);
+                  setSelectedSchool(school || { name: schoolName, city: "" });
+                }}
+                className="p-3 border rounded-lg bg-slate-50 focus:bg-white transition-colors flex-1"
+              >
+                <option value="">בחר מוסד...</option>
+                {(isAdmin && adminSelectedInstructor ? adminSelectedInstructor.schools : assignedSchools)?.map((s: any) => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+              </select>
+              {isAdmin && (
+                <input 
+                  placeholder="או הקלד שם חדש..."
+                  className="p-3 border rounded-lg bg-white w-1/3 text-xs border-dashed"
+                 onBlur={(e) => {
+                    const val = e.target.value.trim();
+                    if (val) {
+                      setSelectedSchool({ 
+                        name: val, 
+                        city: selectedSchool?.city || "" 
+                      });
+                    }
+                  }}
+                />
+              )}
+            </div>
+          </div>
+          
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-500">עיר</label>
+            <input 
+              name="cityName" 
+              value={selectedSchool?.city || ""} 
+              readOnly={!isAdmin} 
+              onChange={(e) => isAdmin && setSelectedSchool(prev => ({ ...prev!, city: e.target.value }))}
+              placeholder={isAdmin ? "הזן עיר..." : ""}
+              className={`p-3 border rounded-lg ${!isAdmin ? 'bg-slate-200 cursor-not-allowed' : 'bg-white shadow-inner'}`} 
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-500">תאריך</label>
+            <input type="date" name="date" required max={new Date().toISOString().split('T')[0]} className="p-3 border rounded-lg bg-slate-50" />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-500">כמות שיעורים</label>
+            <select name="lessons" required className="p-3 border rounded-lg bg-slate-50">
+              {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-500">תשלום ליום הדרכה/הוראה (₪)</label>
+            <input type="number" name="dailyRate" step="0.01" required className="p-3 border rounded-lg bg-slate-50" />
+          </div>
+
+          <div className="flex flex-col gap-1 lg:col-span-2">
+            <label className="text-xs font-bold text-slate-500">הערות</label>
+            <input name="remarks" className="p-3 border rounded-lg bg-slate-50" />
+          </div>
+
+          <div className="lg:col-span-4 flex justify-end">
+            <button type="submit" className={`px-8 py-3 rounded-xl font-bold text-white shadow-md transition-all ${editingId ? 'bg-orange-600' : 'bg-teal-600'}`}>
+              {editingId ? "שמור שינויים" : "שלח דיווח"}
+            </button>
+          </div>
+        </form>
+      </section>
+
     </div>
   );
 }

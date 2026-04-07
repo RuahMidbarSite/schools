@@ -36,8 +36,19 @@ export default function PaidPaymentsTab() {
 
   // הגדרת ה-Renderer בתוך ה-components של הטבלה למניעת שגיאות hooks
   // הקוד החדש והמתוקן
+ // הגדרת ה-Renderer בתוך ה-components של הטבלה למניעת שגיאות hooks
+  // הקוד החדש והמתוקן
   const gridComponents = useMemo(() => ({
     CustomFilter: CustomFilter, // הוספת הרכיב כאן
+    RemarksCellRenderer: (params: any) => {
+      const text = params.value || '';
+      if (!text) return null;
+      return (
+        <div title={text} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', cursor: 'default' }}>
+          {text}
+        </div>
+      );
+    },
     ProofFileRenderer: (params: any) => {
       const { proofUrl, firstName, lastName, id } = params.data;
 
@@ -119,23 +130,29 @@ export default function PaidPaymentsTab() {
 
     const map = new Map();
     paid.forEach(r => {
+      // חילוץ תאריך הדיווח וחיבור שלו להערה
+      const formattedDate = r.date ? new Date(r.date).toLocaleDateString('he-IL') : '';
+      const remarkWithDate = r.remarks ? `${formattedDate}: ${r.remarks}` : null;
+
       if (!map.has(r.paymentId)) {
         map.set(r.paymentId, { 
             ...r, 
             id: r.paymentId, 
             reportsCount: 1, 
             totalAmount: Number(r.dailyRate),
-            proofUrl: r.proofUrl || r.payment?.proofUrl || ""
+            proofUrl: r.proofUrl || r.payment?.proofUrl || "",
+            allRemarks: remarkWithDate ? [remarkWithDate] : [] // מאתחל מערך להערות עם תאריך
         });
       } else {
         const item = map.get(r.paymentId);
         item.totalAmount += Number(r.dailyRate);
         item.reportsCount += 1;
         if (r.proofUrl) item.proofUrl = r.proofUrl;
+        if (remarkWithDate) item.allRemarks.push(remarkWithDate); // מוסיף הערה משולבת תאריך
       }
     });
     return Array.from(map.values());
-  }, [reports, selectedMonth]); // כאן התיקון הקריטי - הוספת המעקב אחרי החודש
+  }, [reports, selectedMonth]);
 // חישוב המדריכים שטרם העבירו קבלה (ומשיכת מספרי הטלפון שלהם)
   const waitingForReceiptInstructors = useMemo(() => {
     const uniqueInstructorsMap = new Map();
@@ -297,7 +314,20 @@ export default function PaidPaymentsTab() {
             { field: "firstName", headerName: "שם פרטי", flex: 1 },
             { field: "lastName", headerName: "משפחה", flex: 1 },
             { field: "totalAmount", headerName: "סכום כולל", valueFormatter: p => `₪${p.value}`, flex: 1 },
-            { field: "reportsCount", headerName: "דיווחים", width: 100 },
+            { field: "reportsCount", headerName: "דיווחים", width: 90 },
+            { 
+              headerName: "הערות", 
+              minWidth: 150,
+              flex: 1,
+              cellRenderer: "RemarksCellRenderer",
+              valueGetter: (p: any) => {
+                if (Array.isArray(p.data.allRemarks) && p.data.allRemarks.length > 0) {
+                  return Array.from(new Set(p.data.allRemarks.filter(Boolean))).join(" | ");
+                }
+                return "";
+              },
+              tooltipValueGetter: (p: any) => p.value 
+            },
             { 
               headerName: "אסמכתא", 
               cellRenderer: "ProofFileRenderer", 
