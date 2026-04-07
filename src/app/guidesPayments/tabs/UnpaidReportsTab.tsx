@@ -45,6 +45,25 @@ const ActionButtonsRenderer = (params: any) => {
 
 export default function UnpaidReportsTab({ isAdmin }: { isAdmin: boolean }) {
   const { user } = useUser();
+  // הוסף את זה כאן:
+  const RemarksCellRenderer = useCallback((params: any) => {
+    const text = params.value || '';
+    if (!text) return null;
+    return (
+      <div
+        title={text}
+        style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          width: '100%',
+          cursor: 'default',
+        }}
+      >
+        {text}
+      </div>
+    );
+  }, []);
   const { selectedYear } = useContext(YearContext);
   const gridRef = useRef<AgGridReact>(null);
 const defaultColDef = useMemo(() => ({
@@ -99,7 +118,8 @@ const uniqueInstructors = useMemo(() => {
     (user?.publicMetadata?.assignedSchools as {name: string, city: string}[]) || [], 
   [user]);
 const components = useMemo(() => ({
-    CustomFilter: CustomFilter
+    CustomFilter: CustomFilter,
+    RemarksCellRenderer: RemarksCellRenderer
   }), []);
   // חישוב מדריכים פעילים שטרם דיווחו
   const missingInstructors = useMemo(() => {
@@ -528,6 +548,7 @@ const handleMakePayment = async () => {
         <AgGridReact
   ref={gridRef}
   rowData={filteredReports}
+  tooltipShowDelay={0}
   quickFilterText={quickFilterText}
   defaultColDef={defaultColDef}
   components={components}
@@ -570,8 +591,15 @@ const handleMakePayment = async () => {
 },
     { field: "schoolName", headerName: 'ביה"ס', minWidth: 150, flex: 1 },
     { field: "lessons", headerName: "שיעורים", width: 90 },
-    { field: "dailyRate", headerName: "תעריף", valueFormatter: p => `₪${p.value}`, width: 100 },
-    { field: "remarks", headerName: "הערות", minWidth: 200, flex: 2 },
+    { field: "dailyRate", headerName: "תשלום ליום", valueFormatter: p => `₪${p.value}`, width: 100 },
+    { 
+      field: "remarks", 
+      headerName: "הערות", 
+      minWidth: 200, 
+      flex: 2,
+      cellRenderer: "RemarksCellRenderer",
+      tooltipValueGetter: (p: any) => p.value 
+    },
     { 
       headerName: "פעולות", 
       cellRenderer: ActionButtonsRenderer, 

@@ -173,7 +173,7 @@ model ContactsInProgram {
 model Program {
   Objectid String @id @default(auto()) @map("_id") @db.ObjectId
   Programid                 Int             
-  Year                      String?            
+  Year                      String?              @default("תשפד")
   Proposal                  String?              @default("")
   Status                    String?             @default("")
   Product                   String?

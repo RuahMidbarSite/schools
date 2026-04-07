@@ -3,7 +3,6 @@ import useColumnHook from "../SmallContactsTable/hooks/ColumnHooks";
 import useColumnEffects from "../SmallContactsTable/hooks/ColumnEffects"; 
 import useColumnComponent from "../SmallContactsTable/hooks/ColumnComponent"; 
 import { useExternalEffect } from "../GeneralFiles/Hooks/ExternalUseEffect";
-import { CURRENT_HEBREW_YEAR} from "@/util/currentyear";
 
 import { SchoolsContact } from "@prisma/client";
 import { useState, useRef, useCallback, useMemo, useContext, useEffect, forwardRef, useImperativeHandle } from "react";
@@ -41,8 +40,6 @@ import YearFilter from "./components/YearFilter";
 import StatusFilter from "./components/StatusFilter";
 import Redirect from "@/components/Auth/Components/Redirect";
 import { GoogleDriveAuthStatus } from "@/components/GoogleDriveAuthStatus";
-
-
 
 // --- Styles & Formatters ---
 
@@ -504,7 +501,7 @@ console.log("SANITY CHECK VALUES:", JSON.stringify({
 
     const newRowData = { 
         Programid: nextId, 
-        Year: selectedYear || CURRENT_HEBREW_YEAR, 
+        Year: selectedYear || "תשפד", 
         Status: defaultStatus || "חדש",
         CityName: null, 
         Area: null,
@@ -606,152 +603,8 @@ const onSaveChangeButtonClick = useCallback(async () => {
       }
   }, [onGridReady]);
 
-const handleAiSubmit = async () => {
-  if (!aiInput.trim()) return;
-  setAiLoading(true);
-  abortControllerRef.current = new AbortController();
-
-  try {
-    const res = await fetch('/api/ai-match', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: aiInput }),
-      signal: abortControllerRef.current.signal
-    });
-
-    const data = await res.json();
-    
-    // --- 1. הכנת נתונים בסיסית ---
-    const schoolPart = (data.RawSchoolName || "").trim();
-    const cityPart = (data.City || "").trim();
-    const ChosenDay = (data.ChosenDay || "").trim();
-    
-    const normalizeRegion = (text: any) => String(text || "").replace(/^אזור\s+/, "").trim();
-    const aiDistrict = normalizeRegion(data.District);
-
-    const getFld = (obj: any, fields: string[]) => {
-      for (const field of fields) {
-        if (obj?.[field]) return obj[field];
-      }
-      return "";
-    };
-
-    // פונקציית עזר לניקוי "בית ספר" מהשם לצורך השוואה נקייה
-    const cleanName = (str: string) => str.replace(/^(בית ספר|בי"ס|בי״ס)\s+/g, "").trim();
-    const schoolPartClean = cleanName(schoolPart);
-
-    let matchedSchool = null;
-
-    // --- 2. לוגיקת הצלבה חכמה (למניעת פרומפטים מיותרים) ---
-    if (schoolPartClean || cityPart) {
-      // שלב א': חיפוש התאמה מדויקת (Exact Match) - הכי בטוח
-      matchedSchool = AllSchools.find(s => {
-        const dbName = cleanName(String(getFld(s, ["SchoolName", "שם בית ספר"])));
-        const dbCity = String(getFld(s, ["CityName", "City", "עיר", "city"])).trim();
-        
-        const isNameExact = dbName === schoolPartClean;
-        // התאמת עיר: אם ה-AI לא נתן עיר, נסתפק בשם. אם נתן, חייב להתאים.
-        const isCityExact = !cityPart || dbCity === cityPart; 
-        
-        return isNameExact && isCityExact;
-      });
-
-      // שלב ב': אם לא נמצא דיוק, חיפוש גמיש (Includes)
-      if (!matchedSchool) {
-        matchedSchool = AllSchools.find(s => {
-          const dbName = cleanName(String(getFld(s, ["SchoolName", "שם בית ספר"])));
-          const dbCity = String(getFld(s, ["CityName", "City", "עיר", "city"])).trim();
-          const dbArea = normalizeRegion(getFld(s, ["AreaName", "District", "אזור", "area"]));
-
-          const isNameMatch = schoolPartClean ? dbName.includes(schoolPartClean) : true;
-          const isCityMatch = cityPart ? dbCity.includes(cityPart) : true;
-          const isDistrictMatch = aiDistrict ? dbArea.includes(aiDistrict) : true;
-
-          return isNameMatch && isCityMatch && isDistrictMatch;
-        });
-      }
-    }
-
-    // שלב ג': רק אם באמת לא מצאנו כלום, נציע אפשרויות
-    if (!matchedSchool && schoolPartClean) {
-      const suggestions = AllSchools.filter(s => 
-        cleanName(String(getFld(s, ["SchoolName", "שם בית ספר"]))).includes(schoolPartClean)
-      ).slice(0, 5);
-
-      if (suggestions.length > 0) {
-        const suggestionsText = suggestions.map((s, i) => 
-          `${i + 1}. ${getFld(s, ["SchoolName", "שם בית ספר"])}-${getFld(s, ["CityName", "City", "עיר", "city"])}`
-        ).join("\n");
-        
-        const userChoice = prompt(`לא נמצאה התאמה מדויקת. האם התכוונת ל:\n\n${suggestionsText}`, "1");
-        if (userChoice) matchedSchool = suggestions[parseInt(userChoice) - 1];
-      }
-    }
-
-    // --- 3. בניית השורה החדשה ---
-    const contact = matchedSchool ? AllContacts.find(c => c.Schoolid === matchedSchool.Schoolid && c.IsRepresentive) : null;
-    
-    // שליפת עיר: עדיפות ל-DB, גיבוי ל-AI
-    const dbCity = matchedSchool ? getFld(matchedSchool, ["CityName", "City", "עיר", "city"]) : "";
-    const finalCity = dbCity || cityPart;
-
-    const sName = matchedSchool ? getFld(matchedSchool, ["SchoolName", "שם בית ספר"]) : schoolPart;
-    const finalSchoolName = matchedSchool ? sName : (finalCity ? `${sName}-${finalCity}` : sName);
-
-    const newRow = { 
-      Programid: ++maxIndex.current, 
-      ProgramName: data.ProgramName || "חדש", 
-      SchoolName: finalSchoolName, 
-      Schoolid: matchedSchool ? matchedSchool.Schoolid : null, 
-      SchoolsContact: contact ? contact.ContactName : "",
-      CityName: finalCity,
-      Area: matchedSchool ? getFld(matchedSchool, ["AreaName", "Area", "אזור", "area"]) : data.District,
-      // המרה לאובייקט Date עבור פריזמה
-      Date: data.Date ? new Date(data.Date) : null,
-      Weeks: Number(data.Weeks) || 0,
-      LessonsPerDay: Number(data.LessonsPerDay) || 0,
-      PricingPerPaidLesson: Number(data.PricingPerPaidLesson) || 0,
-      Year: CURRENT_HEBREW_YEAR,
-      ChosenDay: ChosenDay || "", 
-      // לוגיקת סטטוס חסינה
-      Status: (defaultStatus && defaultStatus !== "All") ? defaultStatus : "טיוטה",
-      isNew: true,
-      totalPaid: 0
-    };
-
-    // --- 4. עדכון ה-UI ---
-    gridRef.current?.api.applyTransaction({ add: [newRow], addIndex: 0 });
-    setHasNewRows(true);
-    
-    setTimeout(() => {
-      gridRef.current?.api.ensureIndexVisible(0);
-      gridRef.current?.api.setFocusedCell(0, 'ProgramName');
-    }, 100);
-
-    setAiInput("");
-  } catch (e) { 
-    if ((e as Error).name !== 'AbortError') {
-      console.error("AI matching error:", e);
-      alert("שגיאה בעיבוד הנתונים");
-    }
-  } finally { 
-    setAiLoading(false); 
-  }
-};
-  const onCancelChanges = useCallback(() => {
-    if (gridRef.current) {
-      const nodesToRemove: any[] = [];
-      gridRef.current.api.forEachNode((node) => {
-        if (node.data.isNew) {
-          nodesToRemove.push(node.data);
-        }
-      });
-      if (nodesToRemove.length > 0) {
-        gridRef.current.api.applyTransaction({ remove: nodesToRemove });
-      }
-      setHasNewRows(false);
-    }
-  }, []);
+  const handleAiSubmit = async () => {};
+  const onCancelChanges = useCallback(() => { if (gridRef.current) onGridReady({}); }, [onGridReady]);
 
   const onDeleteRows = useCallback(async () => {
     const selectedData = gridRef.current?.api.getSelectedRows();
@@ -887,8 +740,7 @@ const checkDriveStatus = useCallback(async () => {
       onInput={(e: any) => gridRef.current?.api.setQuickFilter(e.target.value)} 
     />
     
-<div className="flex flex-row-reverse items-center gap-2 bg-slate-200 p-1 rounded border border-slate-300 mx-2">
-    <button 
+<div className="flex flex-row-reverse items-center gap-2 bg-slate-200 p-1 rounded border border-slate-300 mx-2"><button 
         id="savechangesbutton" 
         onClick={onSaveChangeButtonClick} 
         className={`hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white ${hasNewRows ? '' : 'hidden'}`}
@@ -899,9 +751,9 @@ const checkDriveStatus = useCallback(async () => {
       <button 
         id="cancelchangesbutton" 
         onClick={onCancelChanges} 
-        className={`hover:bg-gray-500 bg-gray-600 rounded px-3 py-1 text-white ${hasNewRows ? '' : 'hidden'}`}
+        className="hover:bg-gray-500 bg-gray-600 rounded px-3 py-1 text-white hidden"
       >
-        ביטול
+        בטול
       </button>
       
       {!aiLoading ? ( 

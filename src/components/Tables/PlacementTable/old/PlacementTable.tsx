@@ -435,50 +435,43 @@ if (professionTypes && professionTypes.length > 0) {
   const handleAssignCandidate = useCallback((data: Guide) => {
       const GRAY_HEX = "#D3D3D3";
 
+      // *** בדיקת תקינות ראשונית ***
       if (!data || !data.Guideid) return;
 
+      if (AllCandidates && AllCandidates.some(c => c.Guideid === data.Guideid && c.Programid === ProgramID.current)) {
+          return; 
+      }
 
       setAllColorCandidates(prevColors => {
         const safePrev = prevColors || [];
-        if (safePrev.some(c => c.Guideid === data.Guideid && c.Programid === ProgramID.current)) return prevColors;
+        const cleanList = safePrev.filter(c => !(c.Guideid === data.Guideid && c.Programid === ProgramID.current));
         
         const newEntry = { Guideid: data.Guideid, Programid: ProgramID.current, ColorHexCode: GRAY_HEX, id: -1 };
-        const newList = [...safePrev, newEntry];
+        const newList = [...cleanList, newEntry];
+        
         updateStorage({ ColorCandidates: newList });
         return newList;
       });
 
-      setAllCandidates(prevCandidates => {
-          const safePrev = prevCandidates || [];
-          
-          // בדיקה אם הוא כבר קיים כדי למנוע כפילויות בזמן הלולאה
-          if (safePrev.some(c => c.Guideid === data.Guideid && c.Programid === ProgramID.current)) {
-              return safePrev; 
-          }
+      const new_candidate_to_assign: Partial<Guides_ToAssign> = { Guideid: data.Guideid, Programid: ProgramID.current };
+      const updated_candidates = AllCandidates ? [...AllCandidates, new_candidate_to_assign as Guides_ToAssign] : [new_candidate_to_assign as Guides_ToAssign];
+      
+      const new_candidate_detail = AllGuides.find((guide) => guide.Guideid === data.Guideid);
+      
+      // *** התיקון הנוסף: הגנה מפני מועמדים לא קיימים ***
+      if (!new_candidate_detail) return; 
+      // *************************************************
 
-          const new_candidate_to_assign = { Guideid: data.Guideid, Programid: ProgramID.current };
-          const updated_candidates = [...safePrev, new_candidate_to_assign as Guides_ToAssign];
-          
-          updateStorage({ Candidates: updated_candidates });
-          return updated_candidates;
-      });
+      const updated_details = AllCandidates_Details ? [...AllCandidates_Details, new_candidate_detail] : [new_candidate_detail];
 
-      setAllCandidates_Details(prevDetails => {
-          const safePrev = prevDetails || [];
-          const new_candidate_detail = AllGuides.find((guide) => guide.Guideid === data.Guideid);
-          
-          if (!new_candidate_detail) return safePrev; 
-          
-          if (safePrev.some(c => c.Guideid === data.Guideid)) return safePrev; // מונע כפילות
+      setAllCandidates(updated_candidates);
+      setAllCandidates_Details(updated_details);
+      updateStorage({ Candidates: updated_candidates });
 
-          return [...safePrev, new_candidate_detail];
-      });
-
-      // קריאות לשרת (נשאר ללא שינוי)
       setAssignCandidate(data.Guideid, ProgramID.current);
       setColorCandidate(data.Guideid, ProgramID.current, GRAY_HEX);
 
-  }, [AllGuides]);
+  }, [AllCandidates, AllGuides, AllCandidates_Details]);
 
 
   // Handle Left -> Right (Unassign)
@@ -617,6 +610,7 @@ if (professionTypes && professionTypes.length > 0) {
       }
 
       const data = await response.json();
+      
       if (data.matches && Array.isArray(data.matches) && data.matches.length > 0) {
          let addedCount = 0;
          let names = [];

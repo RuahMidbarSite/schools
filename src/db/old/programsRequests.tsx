@@ -1,7 +1,6 @@
 "use server";
 import prisma from "@/db/prisma";
 import { Program } from "@prisma/client";
-import {CURRENT_HEBREW_YEAR } from '@/util/currentyear';
 import { unstable_noStore as noStore, revalidatePath } from "next/cache";
 
 // --- יצירת תוכנית חדשה (בודדת) ---
@@ -18,7 +17,7 @@ export const createProgram = async (data: any) => {
     const newProgram = await prisma.program.create({
       data: {
         Programid: dataToSave.Programid,
-        Year: dataToSave.Year || CURRENT_HEBREW_YEAR,
+        Year: dataToSave.Year || "תשפד",
         Status: dataToSave.Status || "חדש",
         ...dataToSave 
       }
@@ -60,7 +59,7 @@ export const saveNewPrograms = async (programs: any[]) => {
 
         const baseData = {
             Programid: dataToSave.Programid,
-            Year: dataToSave.Year ||CURRENT_HEBREW_YEAR,
+            Year: dataToSave.Year || "תשפד",
             Status: dataToSave.Status || "חדש",
         };
 

@@ -91,21 +91,22 @@ export default function NavBarClient() {
 
       <div className="d-flex align-items-center gap-3">
         <SignedIn>
-  <div className="d-flex align-items-center gap-3">
-    {/* הצגת שם המשתמש משמאל לעיגול הפרופיל */}
-    {user && (
-      <span className="text-white/90 text-sm font-medium hidden md:block border-l border-white/20 pl-3">
-        {user.firstName} {user.lastName}
-      </span>
-    )}
-    <div className="hover:scale-110 transition-transform duration-300">
-      <UserButton />
-    </div>
-  </div>
-</SignedIn>
-        <Navbar.Brand className="ms-2 text-white font-bold text-lg tracking-wide">
+          {/* שימוש ב-div אחד שעוטף את השם והכפתור יחד למניעת שגיאות קינון */}
+          <div className="d-flex align-items-center gap-2">
+            {user && (
+              <span className="text-white/90 text-sm font-medium hidden md:block border-l border-white/20 pl-2">
+                {user.firstName} {user.lastName}
+              </span>
+            )}
+            <div className="hover:scale-110 transition-transform duration-300">
+              <UserButton />
+            </div>
+          </div>
+        </SignedIn>
+        
+        <div className="navbar-brand ms-2 text-white font-bold text-lg tracking-wide">
           {title}
-        </Navbar.Brand>
+        </div>
         <ModeToggle />
       </div>
     </Navbar>
