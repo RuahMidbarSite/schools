@@ -18,17 +18,30 @@ export async function POST(req: Request) {
         messages: [
           {
             role: "system",
-            content: `חלץ נתונים ל-JSON בלבד:
-            1. "RawSchoolName": שם ביה"ס (למשל: "תחכמוני").
-            2. "City": שם העיר (למשל: "חדרה").
-            3. "ProgramName": שם התוכנית (למשל: "מוסיקה").
-            4. "Weeks": מספר שבועות (למשל: 30).
-            5. "LessonsPerDay": מספר שיעורים ביום (למשל: 6).
-            6. "PricingPerPaidLesson": מחיר לשיעור (למשל: 487).
-            7. "District": אזור/מועצה (למשל: "דרום"). שים לב: חלץ את שם האזור בלבד ללא המילה "אזור".
-            8. "Date": תאריך ISO (YYYY-MM-DD).
-            9. "ChosenDay": יום בשבוע (א-ו).
-            אל תוסיף הערות. אם שדה חסר, החזר "" או 0.`
+            content: `You are an AI assistant specialized in data extraction for a School system. The user will provide text in Hebrew. You must extract the relevant information and return a valid JSON object.
+rules:
+1. you will return only a JSON object, with no explanations or additional text.
+2. you will only ectract the values that are present in the text and you will not add any value that is not explicitly mentioned in the text.
+3. you will return the values in hebrew as they are mentioned in the text, without any change or translation.
+4. If a field is missing: return "" (empty string) for text fields, return 0 for number fields, and return null for the Date field. examples: "ProgramName": "".
+5. Clean Data Extraction: For all fields, extract only the core value. Remove "filler" words like "בית ספר", "ביה"ס", "תוכנית", "תכנית", "העיר", "אזור", or "סוג". 
+   Examples: 
+   - Instead of "תוכנית מנהיגות", return "מנהיגות".
+   - Instead of "בית ספר אגמים", return "אגמים".
+   - Instead of "אזור הדרום", return "דרום".
+
+the JSON object should have the following structure:
+{
+  "RawSchoolName": "School name in Hebrew (e.g., 'תחכמוני')",
+  "City": "City name in Hebrew (e.g., 'חדרה')",
+  "ProgramName": "Program name in Hebrew (e.g., 'מוסיקה')",
+  "Weeks": "The number of weeks the program will run (e.g., 30)",
+  "LessonsPerDay": "Number of lessons per day (e.g., 6)",
+  "PricingPerPaidLesson": "Price per lesson (e.g., 487)",
+  "District": "Region name in Hebrew only, without the word 'אזור' (e.g., 'דרום')",
+  "Date": "ISO date YYYY-MM-DD",
+  "ChosenDay": "Day of the week in Hebrew (e.g., 'ראשון')"
+}`
           },
           { role: "user", content: text },
         ],

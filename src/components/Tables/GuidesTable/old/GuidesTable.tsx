@@ -328,17 +328,7 @@ const quickAssignFilteredPrograms = useMemo(() => {
   }, [onClearFilterButtonClick, InTheMiddleOfAddingRows]);
 const handleSmartConfirm = async (newGuides: any[]) => {
   const errors: string[] = [];
-//check if user is authenticated with Google Drive before trying to save guides with CVs 
-  const authData: any = await getFromStageGuidesAuth();
-  const accessToken = authData?.authResult?.access_token;
-  const hasFiles = newGuides.some(g => g.cvFileData);
-  if (!accessToken && hasFiles) {
-    const confirmWithoutDrive = window.confirm(
-      "לבצע שמירה ללא קורות חיים? אינך מחובר ל-Google Drive, ולכן הקבצים לא יישמרו."
-    );
-    
-    if (!confirmWithoutDrive) return; //if user is not connected and doesn't want to save without CVs, exit the function
-  }
+
   for (const guide of newGuides) {
     try {
       if (!guide.CellPhone) {
@@ -361,18 +351,13 @@ const handleSmartConfirm = async (newGuides: any[]) => {
           LastName: (guide.LastName || "").trim(),
           CellPhone: cleanPhone,
           City: guide.City || "",
-          Area: guide.Area || "",
           Professions: guide.Profession || guide.Professions || "",
           Remarks: guide.Notes || guide.Remarks || "",
           Status: "פעיל",
           ReligiousSector: "יהודי",
-          isAssigned: false,
-          cvFileData: guide.cvFileData || null, 
-          cvFileName: guide.cvFileName || null,
-          accessToken: accessToken
+          isAssigned: false
         })
       });
-
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "שגיאה לא ידועה" }));
@@ -380,19 +365,24 @@ const handleSmartConfirm = async (newGuides: any[]) => {
       }
 
       const savedGuide = await response.json();
-      maxIndex.current = Math.max(maxIndex.current, savedGuide.Guideid);
 
-      //update the grid with the saved guide (with the new ID from the database)
+      // --- בדיקה אם המדריך כבר קיים בטבלה לפי ה-ID שלו ---
       const existingNode = gridRef.current?.api.getRowNode(String(savedGuide.Guideid));
 
       if (existingNode) {
+        // אם המדריך קיים - עדכון הנתונים בשורה הקיימת (מונע כפילות ויזואלית)
         existingNode.setData(savedGuide);
+        
+        // עדכון ה-state הפנימי של ה-rowData כדי שהבדיקות הבאות יכירו את המידע החדש
         setRowData(prev => prev?.map(g => g.Guideid === savedGuide.Guideid ? savedGuide : g) || []);
       } else {
+        // אם המדריך חדש - הוספת שורה חדשה לטבלה
         gridRef.current?.api.applyTransaction({
           add: [savedGuide],
           addIndex: 0
         });
+        
+        // הוספה ל-state עבור בדיקת כפילויות עתידית בחלונית ה-AI
         setRowData(prev => [savedGuide, ...(prev || [])]);
       }
 
@@ -404,18 +394,6 @@ const handleSmartConfirm = async (newGuides: any[]) => {
 
   if (errors.length > 0) {
     alert(`שגיאות בשמירה:\n${errors.join('\n')}`);
-  }
-
-  // ✅ Update storage cache with fresh data from database
-  try {
-    const freshGuides = await getAllGuides();
-    if (freshGuides && freshGuides.length > 0) {
-      updateStorage({ Guides: freshGuides });
-      setRowData(freshGuides); // Ensure grid shows fresh data too
-    }
-  } catch (error) {
-    console.error("Error updating guide cache:", error);
-    // Continue anyway - grid already displays the new data
   }
 
   setSmartImportOpen(false);
@@ -896,31 +874,13 @@ if (!InTheMiddleOfAddingRows && event.data.Guideid && event.newValue !== event.o
       event.column.getColId(),
       event.newValue,
       event.data.Guideid
-    ).then(async () => {
+    ).then(() => {
       if (typeof window !== "undefined") {
-        // ✅ Fetch fresh data from database after cell edit
-        try {
-          const freshGuides = await getAllGuides();
-          if (freshGuides && freshGuides.length > 0) {
-            updateStorage({ Guides: freshGuides });
-            setRowData(freshGuides);
-          } else {
-            // Fallback: update with grid data
-            const future_data: Guide[] = [];
-            gridRef.current.api.forEachNode((node: any) => {
-              future_data.push(node.data);
-            });
-            updateStorage({ Guides: future_data });
-          }
-        } catch (error) {
-          console.error("Error refreshing guides cache:", error);
-          // Fallback: update with grid data
-          const future_data: Guide[] = [];
-          gridRef.current.api.forEachNode((node: any) => {
-            future_data.push(node.data);
-          });
-          updateStorage({ Guides: future_data });
-        }
+        const future_data: Guide[] = [];
+        gridRef.current.api.forEachNode((node: any) => {
+          future_data.push(node.data);
+        });
+        updateStorage({ Guides: future_data });
       }
     });
   }
@@ -1089,19 +1049,10 @@ const validateCellphone = (cellphone: any, numbers: string[]) => {
   
   setRowData((data) => [...data, ...cleanNewlyAdded]);
   
-   addInstructorsRows(cleanNewlyAdded).then(async () => { 
-    try {
-      const freshGuides = await getAllGuides();
-      if (freshGuides && freshGuides.length > 0) {
-        updateStorage({ Guides: freshGuides }); 
-      } else {
-        updateStorage({ Guides: future_data });
-      }
-    } catch (error) {
-      console.error("Error refreshing guides cache:", error);
-      updateStorage({ Guides: future_data });
-    }
+  addInstructorsRows(cleanNewlyAdded).then((professions) => {
+    updateStorage({ Guides: future_data, Professions: professions });
   });
+  
   dataRowCount.current = rowCount.current;
   
   const saveBtn = document.getElementById("savechangesbutton");

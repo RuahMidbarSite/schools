@@ -59,18 +59,3 @@ export async function updateProposalCreds(): Promise<ServerResponse> {
         return { success: false, message: errorMsg };
     }
 }
-
-// במקום res: Response ו-Callback מורכב, פשוט נשתמש ב-any ו-Function
-export const handleAiError = (res: any, stopLoadingCallback?: Function): boolean => {
-  if (res.ok) return false; 
-
-  if (res.status === 429) {
-    alert("⚠️הגענו למגבלת השימוש ב-AI. אנא המתן מספר דקות ונסה שוב, או פנה למנהל המערכת.");
-  } else {
-    alert(`שגיאת תקשורת עם ה-AI (קוד: ${res.status}). אנא נסה שוב מאוחר יותר.`);
-  }
-
-  if (stopLoadingCallback) stopLoadingCallback();
-  
-  return true; 
-};

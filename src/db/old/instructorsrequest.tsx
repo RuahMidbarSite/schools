@@ -304,29 +304,16 @@ export const getAllCandidatesByProgramID = async (programID: number) => {
 
 
 }
-export const setAssignCandidate = async (Guideid: number, Programid: number): Promise<any> => {
-  // החלפנו מ-create ל-upsert כדי למנוע קריסות אם המדריך כבר שובץ
-  return prisma.guides_ToAssign.upsert({
-    where: {
-      Programid_Guideid: {
-        Guideid: Guideid,
-        Programid: Programid
-      }
-    },
-    update: {}, // אם הוא כבר קיים כמועמד, אל תעשה כלום (הכל טוב)
-    create: {
-      Guideid: Guideid,
-      Programid: Programid
-    }
-  });
-};
-export const removedAssignCandidate = async (Guideid: number, Programid: number): Promise<any> => {
-  return prisma.guides_ToAssign.deleteMany({ 
-    where: { 
-      Guideid: Guideid, 
-      Programid: Programid 
-    } 
-  })
+export const setAssignCandidate = async (Guideid: number, Programid: number): Promise<Guides_ToAssign> => {
+  // We do this because it might be possible for a guide to be Candidate for multiple programs.
+  // Also, we don't check if the entry already exists because this situation should never happen
+
+  return prisma.guides_ToAssign.create({ data: { Guideid: Guideid, Programid: Programid } })
+
+}
+export const removedAssignCandidate = async (Guideid: number, Programid: number): Promise<Guides_ToAssign> => {
+  return prisma.guides_ToAssign.delete({ where: { Programid_Guideid: { Guideid: Guideid, Programid: Programid } } })
+
 }
 export const removeAssignCandidatesManyAccordingToProgramIds = async (Programids: number[],): Promise<{count:number}> => {
   if (Programids.length === 0) { return null }
@@ -455,45 +442,5 @@ export const updateProgramMsg = async (Programid: number, msg: string) => {
     console.error("Error message:", error.message)
     console.error("Full error:", error)
     return { success: false, error: error.message }
-  }
-};
-
-
-export const returnAllGuidesBulk = async (guideIds: number[], programId: number, colorHex: string) => {
-  "use server";
-  
-  try {
-    const uniqueGuideIds = Array.from(new Set(guideIds));
-    
-    if (uniqueGuideIds.length === 0) return { success: true };
-
-    
-    await prisma.$transaction([
-      prisma.guides_ToAssign.deleteMany({
-        where: {
-          Programid: programId,
-          Guideid: { in: uniqueGuideIds }
-        }
-      }),
-      prisma.colorCandidate.deleteMany({
-        where: {
-          Programid: programId,
-          Guideid: { in: uniqueGuideIds }
-        }
-      }),
-      prisma.colorCandidate.createMany({
-        data: uniqueGuideIds.map(id => ({
-          Guideid: id,
-          Programid: programId,
-          ColorHexCode: colorHex
-        }))
-      })
-    ]);
-
-    return { success: true };
-
-  } catch (error: any) {
-    console.error("❌ Bulk Action Failed:", error.message);
-    throw error; 
   }
 };

@@ -2,7 +2,7 @@
 import { getContact, getContactBySchoolID } from "@/db/contactsRequests"
 import { Program, School, SchoolsContact } from "@prisma/client"
 import { ICellRendererParams } from "ag-grid-community"
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react"
 
 interface ContactRepresentive extends ICellRendererParams<Program> {
  AllContacts:SchoolsContact[],
@@ -15,70 +15,76 @@ export interface ContactRepresentiveRef {
 }
 export const RepresentiveComponent = forwardRef<ContactRepresentiveRef, ContactRepresentive>(({  AllContacts,AllSchools, api, value, column, node, ...props }, ref) => {
       const [SchoolID, setSchoolID] = useState(props.data?.Schoolid)
-      const [Link, setLink] = useState(null)
-      const [Name,setName] = useState(null)
+      const [Link, setLink] = useState<string | null>(null)
+      const [Name,setName] = useState<string | null>(null)
 
     const create_name = useCallback((contact: SchoolsContact) => {
 
-    const { FirstName, LastName, Role } = contact;
+        const { FirstName, LastName, Role } = contact;
 
     // Create an array to hold non-null values
-    const parts = [];
+        const parts = [];
 
     // Check each variable and push to the array if it's not null
-    if (FirstName) parts.push(FirstName);
-    if (Role) parts.push(Role);
-
-    // Join the parts with a space and check if there are any values
-    const result = parts.length > 0 ? parts.join(' ') : 'Unknown';
-
-    return result;
+        if (FirstName) parts.push(FirstName);
+        if (Role) parts.push(Role);
+        return parts.length > 0 ? parts.join(' ') : 'Unknown';
   }, []) 
  
-  const updateContact = useCallback((Contact:SchoolsContact)=>{
+  const updateContact = useCallback((Contact: SchoolsContact | undefined) => {
       if (Contact) {
         const contact_name = create_name(Contact)
-       setName(contact_name)
-      const formatted_cellPhone = Contact.Cellphone.replace('+972', '').replace(/[-\s]/g, '');
-      const link = `whatsapp://send/?phone=972${formatted_cellPhone}`;
-      setLink(link)
+        setName(contact_name)
+        // check if we have a phone number to create a WhatsApp link
+        if (Contact.Cellphone) {
+            const formatted_cellPhone = Contact.Cellphone.replace('+972', '').replace(/[-\s]/g, '');
+            const link = `whatsapp://send/?phone=972${formatted_cellPhone}`;
+            setLink(link)
+        } else {
+            setLink(null)
+        }
     } else {
       setName(null)
       setLink(null)
     }
-},[create_name])
-    // this on load
+}, [create_name])
+
+  const processValue = useCallback((cellValue: any, currentSchoolId: any) => {
+
+    if (cellValue && typeof cellValue === 'string' && cellValue.trim() !== '') {// If the cell value is a non-empty string, try to extract contact info from it
+        if (cellValue.includes('#')) {
+
+            const parts = cellValue.split('#');
+            const extractedName = parts[0].trim();
+            setName(extractedName || "איש קשר"); //if there is only a phone number and no name, we can use the phone number as the name
+            setLink(parts[1] || null);
+        } else {
+           const extractedName = cellValue.trim();
+            setName(extractedName || "איש קשר");// also
+            setLink(null);
+        }
+    } 
+    else if (AllContacts) {// If the cell value is empty, try to find a contact from AllContacts based on the current SchoolID
+        const contact = AllContacts.find((c) => c.Schoolid === currentSchoolId && c?.IsRepresentive === true);
+        updateContact(contact);
+    }
+  }, [AllContacts, updateContact]);
 
   useEffect(() => {
-    if (AllContacts&& AllSchools && Name===null) {
-       const school:School = AllSchools.find((school)=>school.Schoolid===SchoolID)
-       const contact:SchoolsContact = AllContacts.find((contact)=>contact.Schoolid===school?.Schoolid && contact?.IsRepresentive === true)
-       updateContact(contact)
-
-    }
-
-  }, [AllContacts, AllSchools, SchoolID, props.data.Schoolid, updateContact,Name])
+    processValue(value, SchoolID);
+  }, [value, SchoolID, processValue])
 
 
-    // Method to update the value
   const updateValue = (Contact: SchoolsContact) => {
     updateContact(Contact)
-
-
   };
-  // Refresh method
+
   const refresh = (params: ContactRepresentive): boolean => {
-    if(params.data.Schoolid !== SchoolID) {
-           const contact:SchoolsContact = AllContacts.find((contact)=>contact.Schoolid===params.data.Schoolid && contact?.IsRepresentive === true)
-       setSchoolID(params.data.Schoolid)
-       updateContact(contact)
-     }
-    // Logic to refresh the component
-    console.log('Refresh called with params:', params);
-    return true; // Return true or false based on the refresh logic
+    setSchoolID(params.data.Schoolid);
+    processValue(params.value, params.data.Schoolid); 
+    return true; 
   };
 
-  // Use imperative handle to expose methods to parent
   useImperativeHandle(ref, () => ({
     updateValue,
     refresh,
@@ -86,13 +92,14 @@ export const RepresentiveComponent = forwardRef<ContactRepresentiveRef, ContactR
 
   return (
     <a
-          href={Link}
-          className="font-medium text-blue-600 no-underline dark:text-blue-500 hover:underline"
-        > {Name} </a>
-   
-      )
-
- })
+      href={Link || "#"}
+      className={`font-medium no-underline hover:underline ${Link ? 'text-blue-600 dark:text-blue-500' : 'text-gray-600 dark:text-gray-400 cursor-default'}`}
+      onClick={(e) => { if (!Link) e.preventDefault(); }}
+    > 
+      {Name} 
+    </a>
+  )
+})
 RepresentiveComponent.displayName="RepresentiveComponentFromPrograms"
   
 export default RepresentiveComponent

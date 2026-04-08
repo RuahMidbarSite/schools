@@ -1,7 +1,37 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
+import * as vision from '@google-cloud/vision';
 
 const prisma = new PrismaClient();
+
+// יצירת לקוח Google Vision
+let visionClient: vision.ImageAnnotatorClient | null = null;
+
+function getVisionClient() {
+  if (!visionClient) {
+    // Google Vision יכול לעבוד עם credentials בשתי דרכים:
+    // 1. משתנה סביבה GOOGLE_APPLICATION_CREDENTIALS שמצביע על קובץ JSON
+    // 2. העברת credentials ישירות בקוד
+    
+    // תמיכה במספר משתני סביבה (אם יש לך כבר משתנה אחר)
+    const credentials = process.env.GOOGLE_VISION_CREDENTIALS 
+                     || process.env.GOOGLE_DRIVE_CREDENTIALS
+                     || process.env.GOOGLE_CREDENTIALS;
+    
+    if (credentials) {
+      // אם יש credentials כ-JSON string
+      visionClient = new vision.ImageAnnotatorClient({
+        credentials: JSON.parse(credentials)
+      });
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      // אם יש נתיב לקובץ credentials
+      visionClient = new vision.ImageAnnotatorClient();
+    } else {
+      throw new Error("Google Vision credentials not configured");
+    }
+  }
+  return visionClient;
+}
 
 async function getDynamicProfessions() {
   try {
@@ -14,15 +44,48 @@ async function getDynamicProfessions() {
   }
 }
 
-export async function POST(req: Request) {
+async function extractTextFromImage(base64Image: string): Promise<string> {
   try {
-    const body = await req.json();
-    const { rawText, image, isImage } = body;
+    const client = getVisionClient();
+    
+    // הסרת הפרפיקס data:image/...;base64, אם קיים
+    const base64Data = base64Image.includes('base64,') 
+      ? base64Image.split('base64,')[1] 
+      : base64Image;
 
-    const dynamicList = await getDynamicProfessions();
+    // שליחת התמונה ל-Google Vision
+    const [result] = await client.textDetection({
+      image: { content: base64Data }
+    });
 
-    const basePrompt = `
-    Analyze the content and extract instructor details.
+    const detections = result.textAnnotations;
+    
+    if (!detections || detections.length === 0) {
+      throw new Error("לא נמצא טקסט בתמונה");
+    }
+
+    // הטקסט המלא הוא באינדקס 0
+    const fullText = detections[0].description || "";
+    
+    console.log("✅ Google Vision extracted text:", fullText.substring(0, 200) + "...");
+    
+    return fullText;
+    
+  } catch (error: any) {
+    console.error("Google Vision error:", error);
+    throw new Error(`שגיאה בזיהוי הטקסט: ${error.message}`);
+  }
+}
+
+async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise<any> {
+  const apiKey = process.env.GROQ_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Groq API Key is missing");
+  }
+
+  const basePrompt = `
+    Analyze the text and extract instructor details.
 
     0. **CRITICAL FILTERING RULE - Read before anything else**:
        - You are looking ONLY for people who are OFFERING their services as instructors (job seekers, freelancers presenting themselves).
@@ -65,109 +128,106 @@ export async function POST(req: Request) {
     
     Return ONLY a valid JSON object:
     { "guides": [{ "FirstName": "...", "LastName": "...", "Profession": "...", "Notes": "...", "CellPhone": "...", "City": "..." }] }
-    `;
+  `;
 
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { 
+      "Authorization": `Bearer ${apiKey}`, 
+      "Content-Type": "application/json" 
+    },
+    body: JSON.stringify({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: "You are a data extraction assistant. Always output valid JSON." },
+        { role: "user", content: basePrompt + "\n\nTEXT TO ANALYZE:\n" + text }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    }),
+  });
+
+  const aiData = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(aiData.error?.message || "Groq API error");
+  }
+  
+  const content = aiData.choices[0].message.content;
+  return JSON.parse(content);
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { rawText, image, isImage } = body;
+
+    console.log("📥 Received request:", { 
+      hasRawText: !!rawText, 
+      hasImage: !!image, 
+      isImage 
+    });
+
+    const dynamicList = await getDynamicProfessions();
     let result;
 
     if (isImage && image) {
-      // שימוש ב-Claude API עם Vision
-      const apiKey = process.env.ANTHROPIC_API_KEY;
+      console.log("🖼️ Processing image with Google Vision API...");
       
-      if (!apiKey) {
-        throw new Error("Anthropic API Key is missing");
+      // שלב 1: חילוץ טקסט מהתמונה באמצעות Google Vision
+      const extractedText = await extractTextFromImage(image);
+      
+      if (!extractedText || extractedText.trim().length === 0) {
+        return NextResponse.json({ 
+          guides: [],
+          message: "לא נמצא טקסט בתמונה"
+        });
       }
 
-      // הסרת הפרפיקס data:image/...;base64, אם קיים
-      const base64Data = image.includes('base64,') 
-        ? image.split('base64,')[1] 
-        : image;
-
-      // זיהוי סוג התמונה
-      let mediaType = "image/jpeg";
-      if (image.includes('image/png')) mediaType = "image/png";
-      else if (image.includes('image/gif')) mediaType = "image/gif";
-      else if (image.includes('image/webp')) mediaType = "image/webp";
-
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2000,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: mediaType,
-                    data: base64Data,
-                  },
-                },
-                {
-                  type: "text",
-                  text: basePrompt + "\n\nExtract the instructor information from this image. If the image contains text from WhatsApp or any messaging app, extract all relevant details."
-                }
-              ],
-            },
-          ],
-        }),
-      });
-
-      const aiData = await response.json();
+      console.log("📝 Extracted text length:", extractedText.length, "characters");
       
-      if (aiData.error) {
-        throw new Error(aiData.error.message || "Claude API error");
-      }
-
-      const content = aiData.content[0].text;
-      
-      // ניקוי התשובה מ-markdown code blocks אם קיימים
-      const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      result = JSON.parse(cleanContent);
+      // שלב 2: ניתוח הטקסט באמצעות Groq (בדיוק כמו טקסט רגיל)
+      console.log("🤖 Analyzing text with Groq...");
+      result = await analyzeTextWithGroq(extractedText, dynamicList);
 
     } else if (rawText) {
-      // שימוש ב-Groq API לטקסט בלבד (הפונקציונליות המקורית)
-      const apiKey = process.env.GROQ_API_KEY;
-
-      if (!apiKey) {
-        throw new Error("Groq API Key is missing");
-      }
-
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { 
-          "Authorization": `Bearer ${apiKey}`, 
-          "Content-Type": "application/json" 
-        },
-        body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: "You are a data extraction assistant. Always output valid JSON." },
-            { role: "user", content: basePrompt + "\n\nTEXT TO ANALYZE:\n" + rawText }
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.1,
-        }),
-      });
-
-      const aiData = await response.json();
-      const content = aiData.choices[0].message.content;
-      result = JSON.parse(content);
+      console.log("📝 Processing text with Groq API...");
+      result = await analyzeTextWithGroq(rawText, dynamicList);
+      
     } else {
-      throw new Error("No input provided");
+      throw new Error("No input provided (neither text nor image)");
+    }
+
+    console.log("✅ Final result:", result);
+
+    // וידוא שהתוצאה תקינה
+    if (!result || !result.guides) {
+      console.error("Invalid result structure:", result);
+      return NextResponse.json({ 
+        error: "Invalid response structure from AI",
+        guides: [] 
+      }, { status: 500 });
     }
 
     return NextResponse.json(result);
 
   } catch (error: any) {
-    console.error("AI Extraction Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("❌ AI Extraction Error:", error);
+    console.error("Stack:", error.stack);
+    
+    // הודעות שגיאה ברורות למשתמש
+    let userMessage = error.message;
+    
+    if (error.message.includes("credentials")) {
+      userMessage = "שגיאה בהגדרות Google Vision. אנא בדוק את ה-credentials.";
+    } else if (error.message.includes("quota")) {
+      userMessage = "חרגת ממכסת השימוש ב-Google Vision. נסה שוב מאוחר יותר.";
+    }
+    
+    return NextResponse.json({ 
+      error: userMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      guides: []
+    }, { status: 500 });
   }
 }

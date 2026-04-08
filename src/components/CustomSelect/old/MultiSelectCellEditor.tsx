@@ -1,39 +1,9 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle, useMemo } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Trash2 } from 'lucide-react'; // או כל אייקון אחר, אם אין לך lucide תשתמש בטקסט רגיל
 
 export const MultiSelectCellEditor = forwardRef((props: any, ref) => {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-  
-  // === לוגיקת עיבוד הימים מתוך props.days ===
-  // === לוגיקת עיבוד הימים ===
-  const options = useMemo(() => {
-    // 🔥 שדרוג חדש: אם שלחנו רשימה קשיחה מבחוץ (כמו לעמודת Days), תשתמש רק בה!
-    if (props.staticOptions) {
-      return props.staticOptions;
-    }
-
-    // מילון תרגום למקרה ששולחים אותיות (עבור עמודת ChosenDay)
-    const daysMap: Record<string, string> = {
-      'א': 'ראשון', 'ב': 'שני', 'ג': 'שלישי', 
-      'ד': 'רביעי', 'ה': 'חמישי', 'ו': 'שישי',
-      'ראשון': 'ראשון', 'שני': 'שני', 'שלישי': 'שלישי',
-      'רביעי': 'רביעי', 'חמישי': 'חמישי', 'שישי': 'שישי'
-    };
-
-    let rawDays = props.days || props.values || [];
-    if (typeof rawDays === 'string') {
-      rawDays = rawDays.split(',').map((s: string) => s.trim()).filter(Boolean);
-    }
-
-    let mappedDays = rawDays.map((d: string) => daysMap[d] || d);
-    mappedDays = [...new Set(mappedDays)].filter(Boolean);
-
-    if (mappedDays.length === 0) {
-      return ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'];
-    }
-
-    return mappedDays;
-  }, [props.days, props.values, props.staticOptions]);
+  const options = props.values || [];
 
   useEffect(() => {
     if (props.value) {
@@ -46,7 +16,7 @@ export const MultiSelectCellEditor = forwardRef((props: any, ref) => {
 
   useImperativeHandle(ref, () => ({
     getValue() {
-      return selectedOptions.join(',');
+      return selectedOptions.join(', ');
     },
     isPopup() {
       return true;
@@ -83,7 +53,7 @@ export const MultiSelectCellEditor = forwardRef((props: any, ref) => {
         >
             נקה הכל 🗑️
         </button>
-        <h6 className="text-gray-500 text-xs font-bold m-0 text-right w-full pr-2">בחר ימים:</h6>
+        <h6 className="text-gray-500 text-xs font-bold m-0">בחר ימים:</h6>
       </div>
 
       {/* רשימת האפשרויות */}

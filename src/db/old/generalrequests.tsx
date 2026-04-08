@@ -642,34 +642,6 @@ export const updateSchoolStatus = async (status: string, schoolIds: any[]) => {
   }
 };
 
-export const addProfessionType = async (professionName: string) => {
-  "use server";
-  try {
-    // בודקים אם במקרה המקצוע כבר קיים
-    const existing = await prisma.professionTypes.findFirst({
-      where: { ProfessionName: professionName }
-    });
-    
-    if (existing) return existing;
-
-    // מוצאים את ה-ID המקסימלי כדי לייצר ID חדש (כמו שעשית בסטטוסים)
-    const allProfessions = await prisma.professionTypes.findMany();
-    const maxId = allProfessions.length > 0 ? Math.max(...allProfessions.map((p: any) => p.ProfessionId || 0)) : 0;
-
-    // יוצרים את המקצוע החדש בטבלה
-    const newProfession = await prisma.professionTypes.create({
-      data: {
-        ProfessionId: maxId + 1,
-        ProfessionName: professionName,
-        FieldName: "כללי" // אפשר לשים ערך דיפולטיבי אם זה שדה חובה במסד נתונים
-      },
-    });
-    return newProfession;
-  } catch (error) {
-    console.error('Error adding profession type:', error);
-    return null; 
-  }
-}
 export const addSchoolStatuses = async (status: string) => {
   "use server";
   try {
@@ -710,51 +682,9 @@ export const getAllProfessionTypes = async () => {
   }
 }
 
-
-
-
-export const mapGradeToEducationStage = (grade: string, rawText: string): string => {
-  if (!rawText) return "";
-
-  // 1. מקרי קצה ישירים בטקסט
-  if (rawText.includes('מתי"א') || rawText.includes("חינוך מיוחד")) return "מתיא";
-  if (rawText.includes("מועצה")) return "מועצה";
-  if (rawText.includes("רשות מקומית")) return "רשות מקומית";
-
-  let isYesodi = false;
-  let isHatav = false;
-  let isTichon = false;
-
-  const g = grade || "";
-  if (g.includes("-")) {
-    const gradesOrder = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י', 'יא', 'יב'];
-    const parts = g.split("-").map(p => p.trim());
-    
-    const startIndex = gradesOrder.indexOf(parts[0]);
-    const endIndex = gradesOrder.indexOf(parts[1]);
-
-    // אם מצאנו את שתי האותיות והסדר הגיוני
-    if (startIndex !== -1 && endIndex !== -1 && startIndex <= endIndex) {
-      if (startIndex <= 5) isYesodi = true;                  // התחיל ביסודי (א'-ו')
-      if (startIndex <= 8 && endIndex >= 6) isHatav = true;  // נוגע בחטיבה מתישהו (ז'-ט')
-      if (endIndex >= 9) isTichon = true;                    // נגמר בתיכון (י'-יב')
-    }
-  }
-  if (rawText.includes("יסודי") || /(^|[^י])(א|ב|ג|ד|ה|ו)(?![א-ת])/.test(g)) isYesodi = true;
-  if (rawText.includes("חטיב") || rawText.includes('חט"ב') || /(ז|ח|ט)/.test(g)) isHatav = true;
-  if (rawText.includes("תיכון") || rawText.includes("בגרויות") || rawText.includes('חט"ע') || /(י|יא|יב)/.test(g)) isTichon = true;
-
-  // 4. החזרת הערך למונגו לפי השילובים (הסדר קריטי!)
-  if (isYesodi && isHatav && isTichon) return "יסודי חטב חטע";
-  if (isYesodi && isHatav) return "יסודי חטב";
-  if (isHatav && isTichon) return "חטב חטע";
-  if (isYesodi && isTichon) return "יסודי חטע";
-  
-  if (isYesodi) return "יסודי";
-  if (isHatav) return "חטב";
-  if (isTichon) return "תיכון";
-
-  if (rawText.includes("כללי")) return "כללי";
-
-  return "";
-}
+// זה יחזיר מערך של:
+// [
+//   { ProfessionId, ProfessionName, FieldName },
+//   { ProfessionId, ProfessionName, FieldName },
+//   ...
+// ]

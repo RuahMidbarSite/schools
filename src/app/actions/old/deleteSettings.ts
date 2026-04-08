@@ -94,7 +94,7 @@ export async function deleteSettingItem(
 
     // 3. אם הכל נקי - בצע מחיקה
     // @ts-ignore
-    await prisma[collectionName].deleteMany({
+    await prisma[collectionName].delete({
       where: { [idField]: id },
     });
 

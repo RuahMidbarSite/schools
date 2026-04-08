@@ -1,9 +1,8 @@
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
+  // שמירה על הגדרות ה-4MB הקיימות שלך
   experimental: {
-    serverComponentsExternalPackages: ['pdf-parse', 'pdfjs-dist'],
-    
     serverActions: {
       bodySizeLimit: '4mb',
     },
