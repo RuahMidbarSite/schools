@@ -2,16 +2,14 @@
 
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ['pdf-parse', 'pdfjs-dist'],
-    
     serverActions: {
       bodySizeLimit: '4mb',
     },
+    serverComponentsExternalPackages: ['pdf2json'], 
   },
 
-  // התעלמות משגיאות TypeScript ו-ESLint בזמן ה-Build
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: true, 
   },
   eslint: {
     ignoreDuringBuilds: true,
