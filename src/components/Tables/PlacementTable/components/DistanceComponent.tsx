@@ -9,7 +9,7 @@ interface DistanceComponentParams extends ICellRendererParams<Guide> {
     Programs: Program[]
 }
 
-// מילון נרמול לשגיאות כתיב נפוצות
+// check if the city name is in the alias map, if so return the alias, otherwise return the original name
 export const cityAliasMap: Record<string, string> = {
     // מרכז וגוש דן
     "תל אביב": "תל אביב-יפו",
@@ -58,12 +58,14 @@ export const normalizeCityName = (cityName?: string | null) => {
     const cleanName = cityName.trim();
     return cityAliasMap[cleanName] || cleanName;
 };
-
-// פנייה ל-Geoapify מפות + שמירה ב-LocalStorage (Cache)
-// מטמון נפרד לקואורדינטות כדי לחסוך Geocoding כפול
+// caching coordinates in memory to avoid redundant API calls during the same session
 const coordsCache = new Map<string, number[]>();
 
 export const fetchGeoapifyDistance = async (originCity: string, destCity: string): Promise<number | null> => {
+    // 5 seconds timeout to prevent server hang
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const distCacheKey = `geo_dist_${originCity}_${destCity}`;
     const cachedDist = localStorage.getItem(distCacheKey);
     if (cachedDist) return parseInt(cachedDist, 10);
@@ -82,7 +84,9 @@ export const fetchGeoapifyDistance = async (originCity: string, destCity: string
                 return parsed;
             }
 
+            // using Geoapify's geocoding API to get coordinates for the city
             const res = await fetch(`https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(city + ", ישראל")}&limit=1&apiKey=${apiKey}`);
+            clearTimeout(timeoutId);
             const data = await res.json();
             if (data?.features?.length > 0) {
                 const c = data.features[0].geometry.coordinates;
@@ -104,6 +108,7 @@ export const fetchGeoapifyDistance = async (originCity: string, destCity: string
             targets: [{ location: destCoords }]
         };
 
+        // calling Geoapify's route matrix API to get the distance between the two cities
         const matrixRes = await fetch(`https://api.geoapify.com/v1/routematrix?apiKey=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -118,6 +123,7 @@ export const fetchGeoapifyDistance = async (originCity: string, destCity: string
         }
         return null;
     } catch (e) {
+        clearTimeout(timeoutId);
         console.error("Geoapify Error:", e);
         return null;
     }
@@ -157,7 +163,7 @@ export const DistanceComponent = ({ Programs, Cities, Distances, currentProgram,
                 return;
             }
 
-            // 1. חיפוש מהיר במסד הנתונים הקיים (קודם כל מנסים בחינם ובלי רשת!)
+            // first 
             const guideCityCode = Cities.find((city) => normalizeCityName(city.CityName) === guideCityName)?.CityCode;
             const programCityCode = Cities.find((city) => normalizeCityName(city.CityName) === programCityName)?.CityCode;
 
@@ -174,7 +180,7 @@ export const DistanceComponent = ({ Programs, Cities, Distances, currentProgram,
                 }
             }
 
-            // 2. Fallback ל-Geoapify אם העיר חסרה בטבלה הממשלתית
+            // if we don't have distance in DB and we have a valid city name, we will call Geoapify API to get the distance
             const apiDist = await fetchGeoapifyDistance(guideCityName, programCityName);
 
             if (apiDist !== null) {

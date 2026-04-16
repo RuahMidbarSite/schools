@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 
-
-// this API handles placement consulting requests (the left side of the placements page)
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -23,10 +21,6 @@ export async function POST(req: Request) {
             role: "system",
             content: `You are an Expert Educational Consultant for "Ruach Midbar". 
             Your goal is to evaluate EVERY candidate provided, score them realistically from 0 to 100, and provide a clear, natural recommendation reason in Hebrew.
-
-            ### GLOBAL LANGUAGE RULE (CRITICAL):
-            - ALL output text fields (name, reason, summary) MUST be in HEBREW.
-            - NEVER return English characters in any text field.
 
             ### OUTPUT FORMAT (JSON ONLY):
             {
@@ -56,7 +50,7 @@ export async function POST(req: Request) {
                - If distance is 'לא ידוע', Base = 35.
 
             2. GENERAL BONUSES (Add to base):
-               - If 'hasCV' is true: Add +10 points. (When mentioning this in Hebrew, ALWAYS spell it "קורות חיים" and NEVER "קורוט").
+               - If 'hasCV' is true: Add +10 points.
                - If 'isAssigned' is true (experience): Add +10 points.
 
             3. NOTES SENTIMENT ANALYSIS & PENALTIES (CRITICAL):
@@ -76,7 +70,7 @@ export async function POST(req: Request) {
                - For each profession they have that matches the program's needs: Add +5 points.
 
             ### REASONING & FORMATTING RULES (STRICT):
-            - Write reasons ONLY IN PERFECT HEBREW. Pay close attention to correct spelling (e.g., ALWAYS use "קורות חיים").
+            - Write reasons ONLY IN HEBREW.
             -  DO NOT EXPLAIN THE MATH: NEVER mention points, base scores, or subtractions in the 'reason' field (e.g., DO NOT write "הוספנו 10 נקודות" or "העניק לו 60 נקודות"). The reason MUST sound like a natural human evaluation.
             -  SORTING: You MUST sort the "recommendations" array from the highest score to the lowest score before outputting the JSON.`
           },

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Spinner, Table, Form } from 'react-bootstrap';
 import { Guide } from "@prisma/client";
 import Draggable from 'react-draggable'; 
+import { handleAiError } from "@/util/localServerRequests";
 
 interface Props {
   show: boolean;
@@ -11,36 +12,41 @@ interface Props {
 }
 
 export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Props) => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); 
+  const [isConfirming, setIsConfirming] = useState(false); 
   const [draftGuides, setDraftGuides] = useState<any[]>([]);
   const nodeRef = useRef(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
-  // פונקציה לטיפול בהדבקת תמונות
+  // for reading files as base64
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleImagePaste = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return;
 
     setLoading(true);
     try {
-      // המרת התמונה ל-base64
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
+      const base64Image = await readFileAsDataURL(file);
       
-      reader.onload = async () => {
-        const base64Image = reader.result as string;
-        
-        const res = await fetch('/api/ai-extract-guides', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            image: base64Image,
-            isImage: true 
-          }),
-        });
-        
-        const data = await res.json();
-        processExtractedGuides(data.guides);
-      };
+      const res = await fetch('/api/ai-extract-guides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          image: base64Image,
+          isImage: true 
+        }),
+      });
+      if (handleAiError(res, () => setLoading(false))) return;
+      const data = await res.json();
+      processExtractedGuides(data.guides);
     } catch (err) {
       console.error("Image extraction error:", err);
       alert("שגיאה בעיבוד התמונה");
@@ -49,7 +55,6 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     }
   }, [existingGuides]);
 
-  // פונקציה לטיפול בהדבקת טקסט (הפונקציה המקורית)
   const handleTextPaste = useCallback(async (text: string) => {
     if (!text || loading) return;
 
@@ -60,6 +65,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rawText: text }),
       });
+      if (handleAiError(res, () => setLoading(false))) return;
       const data = await res.json();
       processExtractedGuides(data.guides);
     } catch (err) {
@@ -69,8 +75,47 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     }
   }, [existingGuides, loading]);
 
-  // פונקציה משותפת לעיבוד המדריכים שחולצו
+  const handlePdfSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || file.type !== 'application/pdf') return;
+
+    setLoading(true);
+    try {
+      const base64String = await readFileAsDataURL(file);
+      const cleanBase64 = base64String.split('base64,')[1];
+      
+      const res = await fetch('/api/ai-extract-guides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          file: cleanBase64,
+          isImage: false 
+        }),
+      });
+      if (handleAiError(res, () => setLoading(false))) return;
+
+      const data = await res.json();
+      
+      const enrichedGuides = data.guides.map((g: any) => ({
+        ...g,
+        cvFileData: cleanBase64, 
+        cvFileName: file.name,
+      }));
+
+      processExtractedGuides(enrichedGuides);
+    } catch (err) {
+      console.error("PDF extraction error:", err);
+      alert("שגיאה בעיבוד קובץ ה-PDF");
+    } finally {
+      setLoading(false);
+      if (pdfInputRef.current) {
+        pdfInputRef.current.value = '';
+      }
+    }
+  };
+
   const processExtractedGuides = (guides: any[]) => {
+   
     const newItems = guides.map((g: any) => {
       const cleanAIPhone = g.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
       
@@ -81,7 +126,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
 
       const isDuplicateInCurrentDraft = draftGuides.some(draft => {
         const cleanDraftPhone = draft.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
-        return cleanDraftPhone === cleanAIPhone;
+        return cleanDraftPhone === cleanAIPhone; 
       });
 
       const isDuplicate = isDuplicateInMainTable || isDuplicateInCurrentDraft;
@@ -90,6 +135,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         ...g, 
         isDuplicate,
         selected: !isDuplicate,
+        Area:g.Area || "",
         tempId: Math.random() 
       };
     });
@@ -97,12 +143,10 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     setDraftGuides(prev => [...prev, ...newItems]);
   };
 
-  // מאזין להדבקה (תמיכה גם בטקסט וגם בתמונות)
   const handlePaste = useCallback(async (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
-    // בדיקה אם יש תמונה בלוח
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith('image/')) {
         const file = items[i].getAsFile();
@@ -114,21 +158,18 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
       }
     }
 
-    // אם אין תמונה, נטפל בטקסט
     const text = e.clipboardData?.getData('text');
     if (text) {
       await handleTextPaste(text);
     }
   }, [handleImagePaste, handleTextPaste]);
 
-  // טיפול בבחירת קובץ דרך כפתור העלאה
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     await handleImagePaste(file);
     
-    // איפוס ה-input כדי לאפשר העלאה של אותו קובץ שוב
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -155,18 +196,19 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         ref={nodeRef}
         style={{
           position: 'fixed', 
-          top: '15%', left: '15%', width: '950px', 
+          top: '10%', left: '10%', width: '1100px', 
           backgroundColor: 'white', border: '1px solid #ccc',
           borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.3)',
           zIndex: 10000, direction: 'rtl', display: 'flex', flexDirection: 'column'
         }}
       >
         <div className="drag-handle p-2 bg-primary text-white d-flex justify-content-between align-items-center rounded-top" style={{ cursor: 'move' }}>
-          <h6 className="m-0">🪄 הזנה חכמה מצטברת (Ctrl+V להדבקה | תמיכה בטקסט ותמונות)</h6>
+          <h6 className="m-0">🪄 הזנה חכמה מצטברת (Ctrl+V להדבקה | תמיכה בטקסט, תמונות ו-PDF)</h6>
           <Button variant="link" className="text-white p-0" onClick={onClose} style={{ textDecoration: 'none', fontSize: '20px' }}>&times;</Button>
         </div>
 
         <div className="p-3" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+          {/* Loading Indicator */}
           {loading && <div className="text-center mb-3"><Spinner animation="border" size="sm" /> מנתח נתונים...</div>}
           
           {draftGuides.length === 0 ? (
@@ -178,28 +220,50 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
                 </div>
                 <div className="my-2">או</div>
                 <div>
-                  <strong>📸 תמונה:</strong> 
+                  <strong>📸 תמונה / קורות חיים:</strong> 
                   <ul className="text-start d-inline-block mb-0">
                     <li>צלם מסך (Print Screen) והדבק כאן (Ctrl+V)</li>
-                    <li>או לחץ על הכפתור למטה להעלאת קובץ תמונה</li>
+                    <li>או לחץ על הכפתורים למטה להעלאת קובץ מהמחשב</li>
                   </ul>
                 </div>
               </div>
-              <div className="mt-3">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                  id="image-upload"
-                />
-                <label htmlFor="image-upload">
-                  <Button as="span" variant="outline-primary" size="sm">
-                    📤 העלה תמונה מהמחשב
-                  </Button>
-                </label>
+              
+              <div className="mt-3 d-flex gap-2 justify-content-center">
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                    id="image-upload"
+                    disabled={loading}
+                  />
+                  <label htmlFor="image-upload">
+                    <Button as="span" variant="outline-primary" size="sm" disabled={loading} style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>
+                      📤 העלה תמונה
+                    </Button>
+                  </label>
+                </div>
+
+                <div>
+                  <input
+                    ref={pdfInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    onChange={handlePdfSelect}
+                    style={{ display: 'none' }}
+                    id="pdf-upload"
+                    disabled={loading}
+                  />
+                  <label htmlFor="pdf-upload">
+                    <Button as="span" variant="outline-danger" size="sm" disabled={loading} style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>
+                      📄 העלה קורות חיים (PDF)
+                    </Button>
+                  </label>
+                </div>
               </div>
+
             </div>
           ) : (
             <Table striped bordered hover size="sm" style={{ fontSize: '13px' }}>
@@ -216,8 +280,10 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
                   <th>שם משפחה</th>
                   <th>טלפון</th>
                   <th>עיר</th>
+                  <th>אזור</th> 
                   <th>הערות</th> 
                   <th>מקצועות</th> 
+                  <th className="text-center">קובץ מצורף</th>
                 </tr>
               </thead>
               <tbody>
@@ -238,10 +304,14 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
                     <td contentEditable onBlur={(e) => updateDraftField(idx, 'LastName', e.currentTarget.innerText)}>{guide.LastName}</td>
                     <td contentEditable onBlur={(e) => updateDraftField(idx, 'CellPhone', e.currentTarget.innerText)}>{guide.CellPhone}</td>
                     <td contentEditable onBlur={(e) => updateDraftField(idx, 'City', e.currentTarget.innerText)}>{guide.City}</td>
+                    <td contentEditable onBlur={(e) => updateDraftField(idx, 'Area', e.currentTarget.innerText)}>{guide.Area}</td>
                     <td contentEditable onBlur={(e) => updateDraftField(idx, 'Notes', e.currentTarget.innerText)} style={{ fontSize: '11px', color: '#666' }}>
                       {guide.Notes}
                     </td>
                     <td><strong>{guide.Profession}</strong></td>
+                    <td className="text-center">
+                      {guide.cvFileData ? <span title={guide.cvFileName}>📄 כֵּן</span> : <span className="text-muted">❌ לא</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -250,14 +320,25 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         </div>
 
         <div className="p-3 border-top d-flex justify-content-between bg-light rounded-bottom">
-          <Button variant="outline-danger" size="sm" onClick={() => setDraftGuides([])}>נקה הכל</Button>
+          <Button variant="outline-danger" size="sm" onClick={() => setDraftGuides([])} disabled={isConfirming}>נקה הכל</Button>
           <div className="d-flex gap-2">
-            <Button variant="secondary" onClick={onClose}>סגור</Button>
+            <Button variant="secondary" onClick={onClose} disabled={isConfirming}>סגור</Button>
             <Button 
               variant="success" 
-              disabled={!draftGuides.some(g => g.selected)}
-              onClick={() => onConfirm(draftGuides.filter(g => g.selected))}
+              disabled={!draftGuides.some(g => g.selected) || isConfirming}
+              onClick={async () => {
+                setIsConfirming(true);
+                try {
+                  await onConfirm(draftGuides.filter(g => g.selected));
+                  setDraftGuides([]); 
+                } catch (err) {
+                  console.error("Confirm error:", err);
+                } finally {
+                  setIsConfirming(false);
+                }
+              }}
             >
+              {isConfirming ? <Spinner animation="border" size="sm" className="me-2" /> : null}
               אשר והוסף ({draftGuides.filter(g => g.selected).length}) מדריכים
             </Button>
           </div>

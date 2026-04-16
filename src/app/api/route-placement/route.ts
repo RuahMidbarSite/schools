@@ -22,11 +22,15 @@ export async function POST(req: Request) {
             content: `You are the Expert Recruitment Matcher for "Ruah Midbar". 
             Your EXACT goal is to find and return the TOP ${aiCount || 1} WINNING candidates.
 
+            ### GLOBAL LANGUAGE RULE (CRITICAL):
+            - ALL output text fields (name, internal_analysis, explanation) MUST be in HEBREW.
+            - NEVER return English characters in any text field.
+            
             ### OUTPUT INSTRUCTIONS (CRITICAL):
             Return a valid JSON object EXACTLY like this structure:
             
             {
-              "internal_analysis": "MANDATORY CHECKLIST: For EVERY candidate, state their ID and evaluate: 1. Profession Match (Pass/Fail) 2. Schedule Match (Pass/Fail) 3. Distance. End with a strict DISQUALIFIED or QUALIFIED status.",
+              "internal_analysis": "MANDATORY CHECKLIST: For EVERY candidate, state their name and evaluate: 1. Profession Match (Pass/Fail) 2. Schedule Match (Pass/Fail) 3. Distance. End with a strict DISQUALIFIED or QUALIFIED status.",
               "matches": [
                 { 
                   "id": "WINNER_ID", 
@@ -47,7 +51,7 @@ export async function POST(req: Request) {
             - PROFESSION MISMATCH: 
               * If program 'plan' has a specific topic (like 'ספורט'), candidate MUST match it.
               * If program 'plan' is empty or "מותאמת", treat ALL candidates as a perfect profession match (SKIP this elimination).
-            - UNAVAILABLE: Notes say "busy", "abroad", or "לא לשבץ". If notes are empty, treat as AVAILABLE.
+            - UNAVAILABLE: Notes say things like "busy", "abroad", "לא לשבץ", "לא יכול/ה", "לא פנוי/ה", "בחופשת לידה". If they explicitly state they cannot work, DISQUALIFY them immediately. If notes are empty, treat as AVAILABLE.
             - SCHEDULE COLLISION (CRITICAL): The program's 'days' represent OPTIONAL days (e.g., "א,ב" means Sunday OR Monday).
               * HEBREW DAYS: א=ראשון, ב=שני, ג=שלישי, ד=רביעי, ה=חמישי, ו=שישי.
               * THE "AT LEAST ONE" RULE: A candidate is QUALIFIED if they are available for AT LEAST ONE of the program's days.
@@ -55,9 +59,9 @@ export async function POST(req: Request) {
               * DISQUALIFICATION TRIGGER: Disqualify ONLY IF the candidate's blocked days explicitly cover EVERY SINGLE ONE of the program's days. 
               * EXAMPLE OF A QUALIFIED CANDIDATE (DO NOT DISQUALIFY): If the program is "א,ב,ג" and the candidate says "לא פנוי ראשון, שלישי, חמישי", they are QUALIFIED because Monday (ב) is not blocked.
 
-           STEP 2: RANK THE SURVIVORS (The Rule of Distance & VIP Skills)
+            STEP 2: RANK THE SURVIVORS (The Rule of Distance & VIP Skills)
             - ABSOLUTE VIP OVERRIDE: If the program's plan is "מותאמת", any candidate who explicitly has "מותאמת" or "טיפול" in their professions MUST BE SELECTED FIRST. They ALWAYS win over regular candidates, completely REGARDLESS of distance. Distance only matters to break ties between two VIP candidates, or two regular candidates.
-            - Otherwise, distance is the ABSOLUTE PRIMARY metric. A candidate who is significantly closer ALWAYS wins.
+            - DISTANCE IS NEVER AN ELIMINATION FACTOR: If a candidate passed Step 1, they are QUALIFIED. Do NOT disqualify a candidate just because their distance is high (e.g., 100+ km). Sort the qualified survivors and select the closest ones first to fill the quota of ${aiCount || 1}. If you have 3 qualified survivors and need 3 candidates, you MUST return all 3.
             - REGULAR TIE-BREAKERS ('hasCV: true', 'isAssigned: true', positive 'notes') ONLY apply if the distance difference is SMALL (less than 10km) between candidates of the same VIP tier.`
           },
           {
@@ -78,7 +82,6 @@ export async function POST(req: Request) {
     const aiData = await response.json();
     const rawContent = aiData.choices[0].message.content;
 
-    // המרה של המחרוזת שהתקבלה ל-JSON אמיתי כדי לשלוח ל-Frontend
     const jsonResponse = JSON.parse(rawContent);
     return NextResponse.json(jsonResponse);
 

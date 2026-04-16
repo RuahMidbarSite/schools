@@ -19,7 +19,7 @@ import { Button, Container, Row, Spinner, Col, Alert, Badge, Card } from "react-
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
-import { getAllCandidates, getAllColorCandidates, getAllColors, removedAssignCandidate, setAssignCandidate, setColorCandidate, getAllDistances } from "@/db/instructorsrequest";
+import { getAllCandidates, getAllColorCandidates, getAllColors, removedAssignCandidate, setAssignCandidate, setColorCandidate, getAllDistances,returnAllGuidesBulk } from "@/db/instructorsrequest";
 import {
   getAllAssignedInstructors,
   getAllCities,
@@ -42,16 +42,17 @@ import { ThemeContext } from "@/context/Theme/Theme";
 import CustomWhatsAppRenderer from "../GuidesTable/components/CustomWhatsAppRenderer";
 import { ChooseProfessions } from "../GuidesTable/components/CustomChooseProfessions";
 import CustomFilterAreas from "../PlacementTable/components/CustomFilterAreas";
-
+import { Modal, Form } from 'react-bootstrap';
 import { getPrograms } from "@/db/programsRequests";
 import { getAllSchools } from "@/db/schoolrequests";
 import { getAllContacts } from "@/db/contactsRequests";
-import { DistanceComponent } from "./components/DistanceComponent";
+import { DistanceComponent,fetchGeoapifyDistance,normalizeCityName } from "./components/DistanceComponent";
 import { getFromStorage, PlacementFilter, updateStorage } from "./Storage/PlacementDataStorage";
 import { DataType } from "./Storage/PlacementDataStorage";
 import useColumnEffects from "./hooks/ColumnEffects";
 import { useExternalEffect } from "../GeneralFiles/Hooks/ExternalUseEffect";
 import useColumnHook from "../ContactsTable/hooks/ColumnHooks";
+import {handleAiError} from "@/util/localServerRequests";
 
 // --- Imports for Menus ---
 import CustomSelectNoComp from "../PlacementTable/components/CustomSelectNoComp";
@@ -164,7 +165,9 @@ export default function PlacementTable() {
   useEffect(() => {
       ProgramID.current = CurrentProgram.value;
   }, [CurrentProgram.value]);
-
+const [showAiModal, setShowAiModal] = useState(false);
+const [selectedAiProfession, setSelectedAiProfession] = useState("");
+const [aiActionTarget, setAiActionTarget] = useState("");
   const [FilterProf, setFilterProf]: [{ eng_value: string, value: string, active: boolean }[], any] = useState([])
   const [FilterAreas, setFilterAreas]: [{ eng_value: string, value: string, active: boolean }[], any] = useState([])
   const [AllFilters, setAllFilters] = useState<PlacementFilter[]>([])
@@ -451,7 +454,6 @@ if (professionTypes && professionTypes.length > 0) {
       setAllCandidates(prevCandidates => {
           const safePrev = prevCandidates || [];
           
-          // בדיקה אם הוא כבר קיים כדי למנוע כפילויות בזמן הלולאה
           if (safePrev.some(c => c.Guideid === data.Guideid && c.Programid === ProgramID.current)) {
               return safePrev; 
           }
@@ -509,7 +511,8 @@ if (professionTypes && professionTypes.length > 0) {
   }, [AllCandidates, AllCandidates_Details]);
 
   // --- AI Search (Fixed) ---
-  const handleAISearch = async () => {
+ const handleAISearch = () => {
+    // 1. בדיקות תקינות ראשוניות
     if (CurrentProgram.value === -1) {
         alert("⚠️ אנא בחר תוכנית מהרשימה לפני הפעלת ה-AI");
         return;
@@ -517,7 +520,7 @@ if (professionTypes && professionTypes.length > 0) {
     
     const prog = AllPrograms.find(p => p.Programid === CurrentProgram.value);
     if (!prog?.CityName || !prog?.ProgramName) {
-        alert("⚠️ לתוכנית שנבחרה חסר שם עיר או שם תוכנית. לא ניתן לבצע התאמה.");
+        alert("⚠️ לתוכנית שנבחרה חסר שם עיר או שם תוכנית.");
         return;
     }
 
@@ -526,136 +529,197 @@ if (professionTypes && professionTypes.length > 0) {
         return;
     }
 
-    setIsAiLoading(true);
-    
-    const cleanProfession = prog.ProgramName.split('-')[0].trim();
-    const progCityName = prog.CityName;
-    const progCityObj = AllCities.find(c => c.CityName === progCityName);
+    let originalPlan = (prog.Plan && prog.Plan !== "מותאמת") ? prog.Plan : "";
 
-    let potentialCandidates = AllGuides.filter(g => 
-      !AllCandidates?.some(c => c.Guideid === g.Guideid && c.Programid === CurrentProgram.value)
-    ).map(guide => {
-        let distance = -1; 
+    if (!originalPlan || originalPlan === "") {
+        const programName = prog.ProgramName;
         
-        if (guide.City === progCityName) {
-            distance = 0; 
-        } else if (progCityObj) {
-            const guideCityObj = AllCities.find(c => c.CityName === guide.City);
-            if (guideCityObj) {
-                const distRecord = AllDistances.find(d => 
-                    (d.city1id === progCityObj.Cityid && d.city2id === guideCityObj.Cityid) ||
-                    (d.city1id === guideCityObj.Cityid && d.city2id === progCityObj.Cityid)
-                );
-                if (distRecord) distance = distRecord.distance;
-            }
+        const foundProfession = ProfessionTypesList.find(prof => 
+            programName.includes(prof.ProfessionName)
+        );
+
+        if (foundProfession) {
+            console.log(`✨ AI Auto-Detected Plan: ${foundProfession.ProfessionName} from program name: ${programName}`);
+            originalPlan = foundProfession.ProfessionName;
         }
-        
-        return {
-            id: guide.Guideid,
-            name: `${guide.FirstName} ${guide.LastName}`,
-            city: guide.City || "לא צוין",
-            area: guide.Area || "לא צוין",
-            professions: guide.Professions,
-            hasCV: !!guide.CV,
-            dbDistance: distance
-        };
-    });
-
-    if (aiRadius > 0) {
-       potentialCandidates = potentialCandidates.filter(c => {
-          if (c.dbDistance === -1) return false; 
-          return c.dbDistance <= aiRadius;
-       });
     }
 
-    potentialCandidates.sort((a, b) => {
-        if (a.dbDistance === -1) return 1;
-        if (b.dbDistance === -1) return -1;
-        return a.dbDistance - b.dbDistance;
-    });
-
-    if (potentialCandidates.length === 0) {
-        alert(`לא נמצאו מועמדים בטווח של ${aiRadius} ק"מ העונים לקריטריונים.`);
-        setIsAiLoading(false);
+    if (!originalPlan || originalPlan === "") {
+        setSelectedAiProfession(""); 
+        setShowAiModal(true); 
+        setAiActionTarget("placement");
+    } else {
+        runAiLogic(originalPlan); 
+    }
+};
+const handleLeftAiConsultationClick = () => {
+    if (CurrentProgram.value === -1) {
+        alert("⚠️ אנא בחר תוכנית מהרשימה לפני הפעלת התייעצות AI");
         return;
     }
 
-    const finalPayload = potentialCandidates.slice(0, 60);
+    const prog = AllPrograms.find(p => p.Programid === CurrentProgram.value);
+    if (!prog?.ProgramName) {
+        alert("⚠️ לתוכנית שנבחרה חסר שם תוכנית.");
+        return;
+    }
+
+    let originalPlan = (prog.Plan && prog.Plan !== "מותאמת") ? prog.Plan : "";
+
+    if (!originalPlan || originalPlan === "") {
+        const programName = prog.ProgramName;
+        
+        const foundProfession = ProfessionTypesList?.find(prof => 
+            programName.includes(prof.ProfessionName)
+        );
+
+        if (foundProfession) {
+            console.log(`🔍 Consultation Auto-Detect: Found '${foundProfession.ProfessionName}' in '${programName}'`);
+            originalPlan = foundProfession.ProfessionName;
+        }
+    }
+
+    if (!originalPlan || originalPlan === "") {
+        setSelectedAiProfession(""); 
+        setAiActionTarget("consultation"); 
+        setShowAiModal(true); 
+    } else {
+        runConsultationLogic(originalPlan); 
+    }
+};
+const runAiLogic = async (finalPlan) => {
+   setIsAiLoading(true);
+    
+    const prog = AllPrograms.find(p => p.Programid === CurrentProgram.value);
+    const cleanProgramName = prog.ProgramName.split('-')[0].trim();
+    const progCityName = normalizeCityName(prog.CityName);
+    const progCityObj = AllCities.find(c => normalizeCityName(c.CityName) === progCityName);
 
     try {
-        const aiPrompt = `
-        תפקידך לשמש כעוזר לשיבוץ מדריכים.
-        עליך לבחור את ${aiCount} המועמדים המתאימים ביותר.
+        let relevantGuides = AllGuides.filter(g => {
+            const alreadyAssigned = AllCandidates?.some(c => c.Guideid === g.Guideid && c.Programid === CurrentProgram.value);
+            if (alreadyAssigned) return false;
 
-        פרטי התוכנית הדורשת שיבוץ:
-        - עיר: ${progCityName}
-        - תחום: ${cleanProfession}
-        - אזור: ${prog?.District || "לא צוין"}
+            if (finalPlan && finalPlan !== "מותאמת") {
+                if (!g.Professions || g.Professions.trim() === "") return false;
+                const candidateProfessions = g.Professions.split(',').map(p => p.trim().toLowerCase());
+                const planNormalized = finalPlan.trim().toLowerCase();
+                const isMatch = candidateProfessions.some(prof => prof.includes(planNormalized) || planNormalized.includes(prof));
+                if (!isMatch) return false;
+            }
+            return true;
+        });
 
-        רשימת המועמדים לבחירה (JSON):
-        ${JSON.stringify(finalPayload)}
 
-        הנחיות להחזרת תשובה:
-        החזר אך ורק תשובת JSON (ללא טקסט נוסף) במבנה הבא:
-        {
-            "matches": [
-                { "id": "מזהה המדריך", "explanation": "הסבר קצר בעברית למה הוא נבחר" }
-            ]
+        let potentialCandidates = await Promise.all(
+            relevantGuides.map(async (guide) => {
+                let distance = -1; 
+                const guideCityName = normalizeCityName(guide.City);
+                
+                // 1. חיפוש ב-DB
+                if (guideCityName === progCityName) {
+                    distance = 0; 
+                } else if (progCityObj) {
+                    const guideCityObj = AllCities.find(c => normalizeCityName(c.CityName) === guideCityName);
+                    if (guideCityObj) {
+                        const distRecord = AllDistances.find(d => 
+                            (d.OriginId === progCityObj.CityCode && d.DestinationId === guideCityObj.CityCode) ||
+                            (d.OriginId === guideCityObj.CityCode && d.DestinationId === progCityObj.CityCode)
+                        );
+                        if (distRecord) distance = Math.ceil(distRecord.Distance);
+                    }
+                }
+                
+                if (distance === -1 && guideCityName && guideCityName !== "לא צוין") {
+                    const apiDist = await fetchGeoapifyDistance(guideCityName, progCityName);
+                    if (apiDist !== null) distance = apiDist;
+                }
+                
+                return {
+                    id: guide.Guideid,
+                    name: `${guide.FirstName} ${guide.LastName}`,
+                    city: guide.City || "לא צוין",
+                    professions: guide.Professions || "",
+                    hasCV: !!guide.CV,
+                    dbDistance: distance === -1 ? "לא ידוע" : distance,
+                    isAssigned: guide.isAssigned === true,
+                    notes: guide.Notes || ""
+                };
+            })
+        );
+
+        if (aiRadius > 0) {
+            potentialCandidates = potentialCandidates.filter(c => {
+                if (typeof c.dbDistance !== 'number') return false; 
+                return c.dbDistance <= aiRadius;
+            });
         }
-        `;
 
-      const response = await fetch("/api/route-placement", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: aiPrompt 
-        }),
-      });
+       potentialCandidates.sort((a, b) => {
+            if (a.dbDistance === "לא ידוע") return 1;
+            if (b.dbDistance === "לא ידוע") return -1;
+            return (a.dbDistance as number) - (b.dbDistance as number);
+        });
 
-      if (!response.ok) {
-          throw new Error(`Server Error: ${response.status}`);
-      }
+        if (potentialCandidates.length === 0) {
+            alert(`⚠️ לא נמצאו מדריכים מתאימים בטווח של ${aiRadius} ק"מ העונים על דרישות המקצוע.`);
+            setIsAiLoading(false); 
+            return; 
+        }
 
-      const data = await response.json();
-      if (data.matches && Array.isArray(data.matches) && data.matches.length > 0) {
-         let addedCount = 0;
-         let names = [];
+        const finalPayload = potentialCandidates.slice(0, 50);
 
-         data.matches.forEach(match => {
-             const guide = AllGuides.find(g => g.Guideid === Number(match.id));
-             if (guide) {
-                 handleAssignCandidate(guide);
-                 rightApi?.applyTransaction({ remove: [guide] });
-                 
-                 // FIX: Assign Unique ID for Grid (Prevent Crash)
-                 const guideWithId = { ...guide, uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` };
-                 leftApi?.applyTransaction({ add: [guideWithId] });
-                 
-                 names.push(guide.FirstName + " " + guide.LastName);
-                 addedCount++;
-             }
-         });
+        const response = await fetch("/api/route-placement", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                program: { name: cleanProgramName, plan: finalPlan, city: progCityName,
+                days: prog.Days || "",
+                LessonsPerDay: prog.LessonsPerDay || 0,
+                EducationStage: prog.EducationStage || "" },
+                candidates: finalPayload,
+                aiCount: Number(aiCount) || 1
+            }),
+        });
+        if (handleAiError(response, () => setIsAiLoading(false))) return;
+        if (!response.ok) throw new Error(`Server Error: ${response.status}`);
 
-         if (addedCount > 0) {
-             alert(`✅ ה-AI שיבץ ${addedCount} מועמדים:\n${names.join(", ")}\n\nהסבר: ${data.matches[0].explanation}`);
-         } else {
-             alert("ה-AI מצא התאמה, אך המדריכים לא נמצאו בטבלה.");
-         }
+        const data = await response.json();
+        const matches = (data.matches || []).slice(0, aiCount);
+        
+        if (matches.length > 0) {
+            let names: string[] = [];
+            matches.forEach((match: any) => {
+                const guide = AllGuides.find(g => g.Guideid === Number(match.id));
+                if (guide) {
+                    handleAssignCandidate(guide);
+                    rightApi?.applyTransaction({ remove: [guide] });
+                    leftApi?.applyTransaction({ add: [{ ...guide, uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` }] });
+                    names.push(`${guide.FirstName} ${guide.LastName}`);
+                }
+            });
 
-      } else {
-        alert("ה-AI לא מצא התאמה מתאימה בטווח ובנתונים שנשלחו.");
-      }
+            const summary = matches.map((m: any, i: number) => {
+            const g = AllGuides.find(guide => guide.Guideid === Number(m.id));
+            const name = g ? `${g.FirstName} ${g.LastName}` : `מועמד ${m.id}`;
+            return `${i + 1}. ${name}:\n${m.explanation}`;
+        }).join('\n\n---\n\n');
 
-    } catch (e) {
-        console.error("❌ [AI Error]:", e);
-        alert(`שגיאה בתקשורת עם השרת: ${e.message}`);
+        alert(`✅ ה-AI ביצע שיבוץ של ${matches.length} מדריכים:\n\n${summary}`);
+
+        } else {
+            alert("ה-AI לא מצא התאמה מספקת.");
+        }
+
+    } catch (e: any) {
+        alert(`שגיאה: ${e.message}`);
     } finally { 
         setIsAiLoading(false); 
     }
-  };
+};
 
   // 🔥 פונקציית התייעצות AI לכפתור השמאלי
-  const handleLeftAiConsultation = useCallback(async () => {
+  const runConsultationLogic = useCallback(async (finalPlan) => {
     setLeftAiLoading(true);
     setLeftAiResponse(null);
     setLeftAiError(null);
@@ -666,83 +730,133 @@ if (professionTypes && professionTypes.length > 0) {
         throw new Error("חסרים נתוני תוכנית לביצוע הבדיקה");
       }
 
-      // שליפת פרטי התוכנית
       const currentProgramData = AllPrograms?.find(p => p.Programid === CurrentProgram.value);
       if (!currentProgramData) {
         throw new Error("לא נמצאה תוכנית");
       }
 
       const currentSchool = AllSchools?.find(s => s.Schoolid === currentProgramData.Schoolid);
+      
+      // הכנות לחישוב המרחק
+      const progCityName = normalizeCityName(currentProgramData.CityName || "");
+      const progCityObj = AllCities?.find(c => normalizeCityName(c.CityName) === progCityName);
 
-      // שליפת 10 המועמדים מהטבלה השמאלית
-      const topCandidates: any[] = [];
+      // שליפת 10 המועמדים העליונים מהטבלה
+      const topCandidatesRaw: any[] = [];
       if (leftApi) {
         let count = 0;
         leftApi.forEachNodeAfterFilterAndSort((node) => {
           if (count < 10 && node.data) {
-            const { FirstName, LastName, City, Gender, Guideid } = node.data;
-            topCandidates.push({
-              id: Guideid,
-              Name: `${FirstName} ${LastName}`,
-              City: City || "לא צוין",
-              Gender: Gender || "לא צוין",
-            });
+            const { Professions } = node.data;
+
+            if (finalPlan && finalPlan !== "מותאמת") {
+                if (!Professions || Professions.trim() === "") return; // חזור (מדלג) למועמד הבא
+                
+                const candidateProfessions = Professions.split(',').map(p => p.trim());
+                const planNormalized = finalPlan.trim();
+                const isMatch = candidateProfessions.some(prof => prof.includes(planNormalized) || planNormalized.includes(prof));
+                
+                if (!isMatch) return; // אין לו את המקצוע? דלג! הוא לא נכנס למערך ולא מעלה את ה-count
+            }
+
+            topCandidatesRaw.push(node.data);
             count++;
           }
         });
       }
 
-      if (topCandidates.length === 0) {
-        throw new Error("לא נמצאו מועמדים בטבלה. אנא וודא שיש מועמדים מוצגים.");
+      if (topCandidatesRaw.length === 0) {
+        throw new Error(`לא נמצאו בטבלה מועמדים מתאימים לתחום הדרכה: ${finalPlan}.`);
       }
 
-      const candidatesText = topCandidates.map(c => 
-        `- שם: ${c.Name}, עיר: ${c.City}, מגדר: ${c.Gender}`
-      ).join('\n');
+      const topCandidates = await Promise.all(
+        topCandidatesRaw.map(async (data) => {
+          const { Guideid, FirstName, LastName, City, Gender, Professions, CV, isAssigned, Notes } = data;
+          
+          let distance = -1; 
+          const guideCityName = normalizeCityName(City || "");
+          
+          // 1. חיפוש מרחק ב-DB
+          if (guideCityName === progCityName) {
+              distance = 0; 
+          } else if (progCityObj && guideCityName && guideCityName !== "לא צוין") {
+              const guideCityObj = AllCities?.find(c => normalizeCityName(c.CityName) === guideCityName);
+              if (guideCityObj) {
+                  const distRecord = AllDistances?.find(d => 
+                      (d.OriginId === progCityObj.CityCode && d.DestinationId === guideCityObj.CityCode) ||
+                      (d.OriginId === guideCityObj.CityCode && d.DestinationId === progCityObj.CityCode)
+                  );
+                  if (distRecord) distance = Math.ceil(distRecord.Distance);
+              }
+          }
+          
+          // 2. רשת ביטחון Geoapify
+          if (distance === -1 && guideCityName && guideCityName !== "לא צוין") {
+              const apiDist = await fetchGeoapifyDistance(guideCityName, progCityName);
+              if (apiDist !== null) distance = apiDist;
+          }
 
-      const promptData = `
-        אני זקוק לעזרה בשיבוץ מדריך לתוכנית חינוכית.
-        
-        פרטי המוסד והתוכנית:
-        - שם בית ספר: ${currentSchool?.SchoolName || "לא צוין"}
-        - עיר: ${currentProgramData.CityName || "לא צוין"}
-        - אזור: ${currentProgramData.District || "לא צוין"}
-        - שכבה: ${currentProgramData.Grade || "לא צוין"}
-        - שם התוכנית: ${CurrentProgram.label}
-        - פרטים נוספים: ${currentProgramData.Details || "אין פרטים נוספים"}
-        
-        רשימת 10 המועמדים המובילים (לפי סינון קיים):
-        ${candidatesText}
-        
-        בבקשה ספק המלצה מקצועית:
-        1. דרג את המועמדים לפי התאמה (ציון 0-100)
-        2. הסבר את הסיבות לדירוג
-        3. תן המלצה ברורה למי לשבץ
-        
-        החזר תשובה בפורמט JSON הבא בלבד:
-        {
-          "recommendations": [
-            {
-              "name": "שם המדריך",
-              "score": 95,
-              "reason": "הסבר מפורט למה הוא מתאים"
-            }
-          ],
-          "summary": "סיכום קצר של ההמלצה הכללית"
-        }
-      `;
+          return {
+            id: Guideid,
+            name: `${FirstName} ${LastName}`,
+            city: City || "לא צוין",
+            gender: Gender || "לא צוין",
+            professions: Professions || "",
+            hasCV: !!CV,
+            isAssigned: isAssigned === true,
+            notes: Notes || "",
+            // עכשיו יש לנו את המרחק האמיתי!
+            dbDistance: distance === -1 ? "לא ידוע" : distance 
+          };
+        })
+      );
 
-      const response = await fetch("/api/route-placement", {
+      // בניית האובייקט המסודר ל-API
+      const payload = {
+            program: {
+                name: CurrentProgram.label,
+                school: currentSchool?.SchoolName || "",
+                city: currentProgramData.CityName || "",
+                plan: finalPlan, 
+                days: currentProgramData.Days || "",
+                LessonsPerDay: currentProgramData.LessonsPerDay || 0,
+                EducationStage: currentProgramData.EducationStage || ""
+            },
+            candidates: topCandidates
+      };
+
+      // קריאה ל-Route החדש שלנו
+      const response = await fetch("/api/placementConsulting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: promptData }),
+        body: JSON.stringify(payload),
       });
 
+      if (handleAiError(response, () => setLeftAiLoading(false))) return;
       if (!response.ok) {
         throw new Error(`שגיאת שרת: ${response.status}`);
       }
 
       const data = await response.json();
+      
+      if (data.recommendations && Array.isArray(data.recommendations)) {
+        data.recommendations.sort((a, b) => b.score - a.score);
+        
+        if (data.recommendations.length > 0) {
+          const maxRawScore = data.recommendations[0].score;
+          
+          if (maxRawScore > 0) {
+            const scaleFactor = Math.min(1.5, 95 / maxRawScore);
+            
+            data.recommendations = data.recommendations.map(rec => ({
+              ...rec,
+              rawScore: rec.score, 
+              score: Math.min(100, Math.round(rec.score * scaleFactor)) 
+            }));
+          }
+        }
+      }
+
       setLeftAiResponse(data);
 
     } catch (error: any) {
@@ -751,7 +865,7 @@ if (professionTypes && professionTypes.length > 0) {
     } finally {
       setLeftAiLoading(false);
     }
-  }, [CurrentProgram, AllPrograms, AllSchools, leftApi]);
+  }, [CurrentProgram, AllPrograms, AllSchools, leftApi, AllCities, AllDistances]);
 
   // 🔥 לוגיקת גרירה לחלון הצף של ה-AI השמאלי
   useEffect(() => {
@@ -1077,7 +1191,6 @@ const updateLeftTable = () => {
           setAllAssignedGuides_Details={setAllAssignedGuides_Details} AllYears={AllYears} AllStatuses={AllStatuses} setAllCandidates={setAllCandidates} setAllCandidates_Details={setAllCandidates_Details}
           AllColorCandidates={AllColorCandidates}
           setAllColorCandidates={setAllColorCandidates}
-          onAIConsultation={handleAISearch}
         />
         </div>
       </Container>
@@ -1111,7 +1224,43 @@ const updateLeftTable = () => {
     return profPass && areaPass;
 
   }, [FilterProf, FilterAreas])
+const handleReturnAllCandidates = async () => {
+    if (!leftRowData || leftRowData.length === 0) return;
+    
+    const guidesToReturn = [...leftRowData];
+    const guideIds = guidesToReturn.map(g => g.Guideid);
+    const progId = ProgramID.current;
+    const RED_HEX = "#FF0000";
 
+    setAllColorCandidates(prevColors => {
+        const safePrev = prevColors || [];
+        let newList = [...safePrev];
+        
+        newList = newList.filter(c => !(guideIds.includes(c.Guideid) && c.Programid === progId));
+        
+        guideIds.forEach(guideId => {
+            newList.push({ Guideid: guideId, Programid: progId, ColorHexCode: RED_HEX, id: -1 });
+        });
+        
+        updateStorage({ ColorCandidates: newList });
+        return newList;
+    });
+
+    leftApi?.applyTransaction({ remove: guidesToReturn });
+    const cleanedGuides = guidesToReturn.map(({ uiUniqueId, ...rest }: any) => rest);
+    rightApi?.applyTransaction({ add: cleanedGuides });
+
+    setAllCandidates(prev => prev?.filter(c => !(c.Programid === progId && guideIds.includes(c.Guideid))) || []);
+    setAllCandidates_Details(prev => prev?.filter(g => !guideIds.includes(g.Guideid)) || []);
+
+    try {
+        await returnAllGuidesBulk(guideIds, progId, RED_HEX);
+        console.log("✅ Server updated in background");
+    } catch (error) {
+        console.error("❌ Background update failed:", error);
+        alert("חלה שגיאה בסנכרון מול השרת. מומלץ לרענן את הדף.");
+    }
+};
   const ProfCellRenderer = useCallback((props: ICellRendererParams<Guide>) => {
     const professionsText = props.data.Professions || '';
     
@@ -1371,12 +1520,19 @@ if (!isMounted) return null;
 >
     שיבוץ
 </Button>
-
+<Button 
+  variant="warning" 
+  size="sm"
+  disabled={isAiLoading || !leftRowData?.length} 
+  onClick={handleReturnAllCandidates}
+>
+  ↺ החזרת הכל
+</Button>
   {/* 🔥 כפתור התייעצות AI חדש */}
   <Button 
       variant="info" 
       size="sm"
-      onClick={handleLeftAiConsultation}
+      onClick={handleLeftAiConsultationClick}
       disabled={leftAiLoading}
       className="d-flex align-items-center gap-2"
       style={{ 
@@ -1606,7 +1762,59 @@ if (!isMounted) return null;
           </div>
         </>
       )}
+{/* הפופ-אפ המעוצב של React Bootstrap */}
+<Modal show={showAiModal} onHide={() => setShowAiModal(false)} centered dir="rtl">
+    <Modal.Header closeButton>
+        <Modal.Title>בחירת תחום הדרכה</Modal.Title>
+    </Modal.Header>
+    
+    <Modal.Body>
+        <p className="text-muted mb-3">
+            בחרת בתוכנית מותאמת. איזה תחום הדרכה תרצה לחפש? 
+            <br />
+            <small>אם תשאיר על "מותאמת", ה-AI יתעדף מדריכים מתאימים או יחפש את הקרובים ביותר מכל התחומים.</small>
+        </p>
+        
+        <Form.Select 
+          value={selectedAiProfession} 
+          onChange={(e) => setSelectedAiProfession(e.target.value)}
+      >
+          <option value="מותאמת">-- חיפוש כללי / תעדוף מותאמת --</option>
 
+          {ProfessionTypesList.map((prof, index) => {
+              const profName = prof.ProfessionName || prof.name || prof;
+              
+              return (
+                  <option key={prof.id || prof.Professionid || index} value={profName}>
+                      {profName}
+                  </option>
+              );
+          })}
+      </Form.Select>
+    </Modal.Body>
+    
+    <Modal.Footer>
+        <Button variant="secondary" onClick={() => setShowAiModal(false)}>
+            ביטול
+        </Button>
+        <Button 
+    variant="success" 
+    onClick={() => {
+        setShowAiModal(false);
+        const planToPass = selectedAiProfession || "מותאמת";
+        
+        // מנתבים את התנועה לפי מי שפתח אותנו
+        if (aiActionTarget === "consultation") {
+            runConsultationLogic(planToPass);
+        } else {
+            runAiLogic(planToPass);
+        }
+    }}
+>
+    ✨ הפעל AI
+</Button>
+    </Modal.Footer>
+</Modal>
    </Suspense>
     </div>
   );

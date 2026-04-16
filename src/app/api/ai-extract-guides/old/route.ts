@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import * as vision from '@google-cloud/vision';
+import { PDFParse } from 'pdf-parse';// pdf library for parsing PDF files
+import { getAllDistricts } from '@/db/generalrequests';
 
 const prisma = new PrismaClient();
 
@@ -83,7 +85,8 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
   if (!apiKey) {
     throw new Error("Groq API Key is missing");
   }
-
+  const districts = await getAllDistricts();
+  const validAreas = districts.map(d => d.AreaName).join(", ");
   const basePrompt = `
     Analyze the text and extract instructor details.
 
@@ -115,19 +118,31 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
        - Remove any '+', '972', spaces, or parentheses. 
        - Return ONLY the clean digits.
 
-    4. **Notes (SPECIFIC FOCUS & SUMMARY)**:
-       - PRIORITY: Extract specific sub-specialties or styles (e.g., if Profession is 'Dance', include 'Hip-Hop' or 'Ballet'; if 'Music', include 'Guitar' or 'Drums').
-       - Provide a concise summary of experience and availability (up to 15 words).
-       - STRICTLY REMOVE: The City name and the exact main Profession Names (to avoid redundancy).
-       - INCLUDE: Vital details like 'היפ הופ', 'פילאטיס מכשירים', 'בעל ניסיון בבתי ספר', or 'זמין לבקרים'.
+    4. **Notes (CRITICAL DISPATCH INFO & SUMMARY)**:
+      - PRIORITY 1 (Sub-specialties): Extract specific styles/instruments not in the main profession (e.g., 'Hip-Hop', 'Guitar', 'פילאטיס מכשירים').
+      - PRIORITY 2 (Availability & Schedule): Explicitly note specific days/hours they CAN or CANNOT work, and if they seek full-time/part-time (משרה מלאה/חלקית).
+      - PRIORITY 3 (Target Audience): Note preferences for specific age groups or education stages (e.g., 'יסודי', 'נוער', 'הגיל הרך').
+      - PRIORITY 4 (Logistics & Constraints): Mention any missing equipment, special requirements, or mobility/travel limits.
+      - STRICTLY REMOVE: The City name and the exact main Profession Names (to avoid redundancy).
+      - FORMATTING: Keep it extremely concise, punchy, and highly scannable. Maximum 20-25 words. Use commas or short phrases instead of full sentences.
+      - EXAMPLE OUTPUT: "היפ הופ וברייקדאנס, מעדיף יסודי. פנוי א,ג,ה בבוקר. חסר בידורית. לא עובד עם נוער."
 
     5. **City**: 
        - First priority: extract the city where the instructor LIVES if mentioned.
        - Second priority: if no city of residence is mentioned, use the area or city where they TEACH or WORK (e.g., "אזור רחובות", "בתל אביב").
        - If multiple areas mentioned, take the first one.
-    
+
+    6. **Area Mapping (NEW - CRITICAL)**:
+       - The ONLY allowed Areas are: [${validAreas}].
+       - If an Area is mentioned, use it.
+       - IMPORTANT: If NO Area is mentioned but a City is found, use your knowledge of Israel to map the City to the most logical Area from the list above.
+       - Example: "תל אביב" -> "מרכז", "חיפה" -> "צפון", "באר שבע" -> "דרום".
+       - Return EXACTLY one name from the list above. If unknown, return ""
+
+    7. **hourlyRate**: If an hourly rate is mentioned, extract it as a number. Remove any currency symbols or text (e.g., "₪", "ש"ח", "לשעה") and return only the digits.
+
     Return ONLY a valid JSON object:
-    { "guides": [{ "FirstName": "...", "LastName": "...", "Profession": "...", "Notes": "...", "CellPhone": "...", "City": "..." }] }
+    { "guides": [{ "FirstName": "...", "LastName": "...", "Profession": "...", "Notes": "...", "CellPhone": "...", "City": "..." , "Area": "..." }] }
   `;
 
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -160,45 +175,44 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { rawText, image, isImage } = body;
+    const { rawText, image, isImage, file } = body; // get the file field from the request body 
 
     console.log("📥 Received request:", { 
       hasRawText: !!rawText, 
       hasImage: !!image, 
+      hasFile: !!file,
       isImage 
     });
 
     const dynamicList = await getDynamicProfessions();
     let result;
+    let textToAnalyze = ""; // the returned text
 
     if (isImage && image) {
       console.log("🖼️ Processing image with Google Vision API...");
-      
-      // שלב 1: חילוץ טקסט מהתמונה באמצעות Google Vision
-      const extractedText = await extractTextFromImage(image);
-      
-      if (!extractedText || extractedText.trim().length === 0) {
-        return NextResponse.json({ 
-          guides: [],
-          message: "לא נמצא טקסט בתמונה"
-        });
-      }
-
-      console.log("📝 Extracted text length:", extractedText.length, "characters");
-      
-      // שלב 2: ניתוח הטקסט באמצעות Groq (בדיוק כמו טקסט רגיל)
-      console.log("🤖 Analyzing text with Groq...");
-      result = await analyzeTextWithGroq(extractedText, dynamicList);
-
-    } else if (rawText) {
+      textToAnalyze = await extractTextFromImage(image);
+    } 
+    else if (rawText) {
       console.log("📝 Processing text with Groq API...");
-      result = await analyzeTextWithGroq(rawText, dynamicList);
-      
-    } else {
-      throw new Error("No input provided (neither text nor image)");
+      textToAnalyze = rawText;
+    } 
+    else if (file) {
+      console.log("📄 Processing PDF file...");
+      // Base64 decode the file and parse it with PDFParse
+      const pdfBuffer = Buffer.from(file, 'base64');
+      const parser = new PDFParse({ data: pdfBuffer });
+      const pdfResult = await parser.getText();
+      textToAnalyze = pdfResult.text;
+      await parser.destroy();
+    } 
+    else {
+      throw new Error("No input provided (neither text, image nor file)");
     }
 
-    console.log("✅ Final result:", result);
+    if (textToAnalyze) {
+      console.log("🤖 Analyzing text with Groq...");
+      result = await analyzeTextWithGroq(textToAnalyze, dynamicList);
+    }
 
     // וידוא שהתוצאה תקינה
     if (!result || !result.guides) {
@@ -213,21 +227,17 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("❌ AI Extraction Error:", error);
-    console.error("Stack:", error.stack);
-    
-    // הודעות שגיאה ברורות למשתמש
-    let userMessage = error.message;
-    
-    if (error.message.includes("credentials")) {
-      userMessage = "שגיאה בהגדרות Google Vision. אנא בדוק את ה-credentials.";
-    } else if (error.message.includes("quota")) {
-      userMessage = "חרגת ממכסת השימוש ב-Google Vision. נסה שוב מאוחר יותר.";
-    }
-    
+
+    // 🌟 התיקון כאן: בודקים אם השגיאה קשורה למכסה (Rate Limit)
+    const errorMsg = error.message || "";
+    const isRateLimit = errorMsg.toLowerCase().includes("rate limit") || 
+                        errorMsg.includes("429");
+
     return NextResponse.json({ 
-      error: userMessage,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      error: errorMsg,
       guides: []
-    }, { status: 500 });
+    }, { 
+      status: isRateLimit ? 429 : 500 // אם זה Rate Limit, מחזירים 429
+    });
   }
 }

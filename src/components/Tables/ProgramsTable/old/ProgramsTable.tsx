@@ -4,12 +4,17 @@ import useColumnEffects from "../SmallContactsTable/hooks/ColumnEffects";
 import useColumnComponent from "../SmallContactsTable/hooks/ColumnComponent"; 
 import { useExternalEffect } from "../GeneralFiles/Hooks/ExternalUseEffect";
 import { CURRENT_HEBREW_YEAR} from "@/util/currentyear";
-
+import { addProfessionType } from "@/db/generalrequests";
 import { SchoolsContact } from "@prisma/client";
 import { useState, useRef, useCallback, useMemo, useContext, useEffect, forwardRef, useImperativeHandle } from "react";
 import { AgGridReact } from "ag-grid-react";
 import Select from "react-select";
-
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogContentText from "@mui/material/DialogContentText";
+import DialogTitle from "@mui/material/DialogTitle";
+import {handleAiError} from "@/util/localServerRequests";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -25,7 +30,7 @@ import { CustomLinkDrive } from "../GeneralFiles/GoogleDrive/CustomLinkDrive";
 import useDrivePicker from "@/util/Google/GoogleDrive/Component";
 
 import { deletePrograms, updateProgramsColumn, getAllProgramsData, createProgram, saveNewPrograms } from "@/db/programsRequests";
-import { getAllDistricts, getAllGuides, getAllAssignedInstructors, getPayments } from "@/db/generalrequests";
+import { getAllDistricts, getAllGuides, getAllAssignedInstructors, getPayments, getAllProfessionTypes, mapGradeToEducationStage } from "@/db/generalrequests";
 
 import { ThemeContext } from "@/context/Theme/Theme";
 import { YearContext } from "@/context/YearContext";
@@ -207,7 +212,14 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
 
   const [AllSchools, setAllSchools] = useState<any[]>([]);
   const [AllContacts, setAllContacts] = useState<SchoolsContact[]>([]);
+  const [AllProfessionTypes, setAllProfessionTypes] = useState<any[]>([]);
 
+    const [newPlanDialog, setNewPlanDialog] = useState<{
+        isOpen: boolean;
+        newPlanName: string;
+        programName: string;
+        aiFullData: any; 
+    } | null>(null);
   const { updateColStateFromCache, updateColState } = useColumnEffects(gridRef, colState, setColState);
   useExternalEffect(updateColStateFromCache, [colDefinition]);
   useExternalEffect(updateColState, [colState]);
@@ -227,9 +239,23 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
       }
   }, [hookOnColumnResized, setColState]);
 
-  useEffect(() => {
+useEffect(() => {
     if (isGridReady && colState && colState.length > 0 && gridRef.current?.api) {
-        gridRef.current.api.applyColumnState({ state: colState, applyOrder: true });
+        
+        let stateToApply = [...colState];
+        
+        const isPlanInState = stateToApply.some((col: any) => col.colId === "Plan");
+        
+        if (!isPlanInState) {
+            const programNameIndex = stateToApply.findIndex((col: any) => col.colId === "ProgramName");
+            
+            const planColState = { colId: "Plan", width: 120, hide: false, pinned: null };
+            
+            const insertIndex = programNameIndex >= 0 ? programNameIndex + 1 : 6;
+            stateToApply.splice(insertIndex, 0, planColState);
+        }
+
+        gridRef.current.api.applyColumnState({ state: stateToApply, applyOrder: true });
     }
   }, [colState, isGridReady]);
 
@@ -277,12 +303,13 @@ export default function ProgramsTable({ SchoolIDs }: { SchoolIDs?: number[] }) {
     setHasNewRows(false); 
     try {
         // טעינת נתוני תשלומים בנוסף לשאר הנתונים
-        const [storageData, areasData, guidesData, assignedGuidesData, paymentsData] = await Promise.all([
+        const [storageData, areasData, guidesData, assignedGuidesData, paymentsData, professionTypesData] = await Promise.all([
             getAllProgramsData(), 
             getAllDistricts(),
             getAllGuides(),              
             getAllAssignedInstructors(),
-            getPayments() // <--- הוספת פונקציית הטעינה כאן
+            getPayments(), // <--- הוספת פונקציית הטעינה כאן
+            getAllProfessionTypes() // <--- הוספת טעינת סוגי המקצועות
         ]);        
 
         if (!storageData) return;
@@ -324,6 +351,7 @@ if (paymentsData) {
         setRowData(initialData);
         setAllSchools(schools);
         setAllContacts(storageData.schoolsContacts || []);
+        setAllProfessionTypes(professionTypesData || []);
         maxIndex.current = rawPrograms.length > 0 ? Math.max(...rawPrograms.map((p: any) => p.Programid)) : 0;
 // המשך הפונקציה (הגדרת manualColumns) להלן...
 
@@ -350,12 +378,13 @@ if (paymentsData) {
             { field: "Status", header: "סטטוס", width: 85, special: "status" },
             { field: "Order", header: "הצעה", width: 65, special: "drive" }, 
             { field: "ProgramName", header: "שם תוכנית", width: 100, special: "link" },
+            { field: "Plan", header: "סוג תוכנית", width: 120, special: "plan" },
             // MOVED HERE: Date (תאריך)
             { field: "Date", header: "תאריך", width: 95, special: "date" },
             { field: "SchoolName", header: "שם בית ספר", width: 210, special: "school", editable: true },
             { field: "Area", header: "אזור", width: 70, editable: true, cellStyle: STYLES.GEO_COL, cellEditor: RegionSelectEditor, cellEditorParams: { values: areaValues }, singleClickEdit: true, filterParams: { values: areaValues } },
             { field: "CityName", colId: "City", header: "עיר", width: 100, cellStyle: STYLES.GEO_COL, filterParams: { values: getUniqueValues("CityName") } },
-            { field: "ChosenDay", header: "יום נבחר", width: 65, special: "days" },
+            { field: "ChosenDay", header: "יום נבחר", width: 80, special: "days" },
             { field: "SchoolsContact", header: "איש קשר", width: 140, special: "contact" },
             { field: "Assigned_guide", header: "מדריך משובץ", width: 60, special: "guide" },
             { field: "Grade", header: "שכבה", width: 60, cellStyle: STYLES.CENTER },
@@ -457,6 +486,11 @@ if (paymentsData) {
             }
             if (col.special === "link") return { ...base, cellRenderer: ProgramLinkRenderer, cellEditor: ProgramDetailsEditor, cellEditorPopup: true };
             
+            if (col.special === "plan") {
+                const planValues = professionTypesData?.map((p: any) => p.ProfessionName) || [];
+                return { ...base, cellEditor: CustomSelectCellEditor, cellEditorParams: { values: planValues }, filterParams: { values: planValues } };
+            }
+            
             if (col.special === "school") return { 
                 ...base, 
                 cellEditor: SchoolChoosing, 
@@ -474,7 +508,26 @@ if (paymentsData) {
                 const yearValues = storageData.Years?.map((v:any) => v.YearName);
                 return { ...base, cellEditor: CustomSelectCellEditor, cellEditorParams: { values: yearValues }, filter: YearFilter, filterParams: { values: yearValues } };
             }
-            if (col.special === "days") return { ...base, cellEditor: MultiSelectCellEditor, cellEditorPopup: true, cellEditorParams: { values: ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי'] }, valueFormatter: arrayToStringFormatter };
+            if (col.field === "Days") return {
+                ...base,
+                cellEditor: MultiSelectCellEditor,
+                cellEditorPopup: true,
+                cellEditorParams: { 
+                    // מעבירים רשימה קשיחה של אותיות בלבד!
+                    staticOptions: ['א', 'ב', 'ג', 'ד', 'ה', 'ו'] 
+                },
+                valueFormatter: arrayToStringFormatter // או כל פורמטר שיש לך להצגת פסיקים
+            };
+            if (col.special === "days") return { 
+            ...base, 
+            cellEditor: MultiSelectCellEditor, 
+            cellEditorPopup: true, 
+            // הופכים לפונקציה ששולפת את ה-Days של השורה הספציפית!
+            cellEditorParams: (params) => ({ 
+                days: params.data?.Days 
+            }), 
+            valueFormatter: arrayToStringFormatter 
+            };
 if (col.special === "guide") {
     return { 
         ...base, 
@@ -505,7 +558,8 @@ console.log("SANITY CHECK VALUES:", JSON.stringify({
     const newRowData = { 
         Programid: nextId, 
         Year: selectedYear || CURRENT_HEBREW_YEAR, 
-        Status: defaultStatus || "חדש",
+        Status: defaultStatus || "לשבץ",
+        Plan: "",
         CityName: null, 
         Area: null,
         isNew: true 
@@ -567,44 +621,63 @@ const handleDuplicateRow = useCallback(() => {
     }, 100);
   }, [maxIndex.current]);
 const onSaveChangeButtonClick = useCallback(async () => {
-      const newRows: any[] = [];
-      gridRef.current?.api.forEachNode((node) => {
-          if (node.data.isNew) {
-              const cleanRow = { ...node.data };
-              delete cleanRow.totalPaid;
-              // מחיקת מזהים טכניים ישנים כדי שהדאטה-בייס ייצר חדשים אוטומטית
-              delete cleanRow.id;       
-              delete cleanRow.Objectid; 
-              
-              // מחיקת משתנה החישוב שאינו קיים בבסיס הנתונים
-              delete cleanRow.totalPaid;
-              // תיקון קריטי: המרת lessonsPerDay ל-LessonsPerDay ומספר
-              if (cleanRow.lessonsPerDay !== undefined) {
-                  cleanRow.LessonsPerDay = Number(cleanRow.lessonsPerDay);
-                  delete cleanRow.lessonsPerDay; 
-              }
-              if (cleanRow.LessonsPerDay !== undefined && cleanRow.LessonsPerDay !== null) {
-                   cleanRow.LessonsPerDay = Number(cleanRow.LessonsPerDay);
-              }
+    const newRows: any[] = [];
+    let validationError = false;
 
-              newRows.push(cleanRow);
-          }
-      });
+    gridRef.current?.api.forEachNode((node) => {
+        if (node.data.isNew) {
+            // 🌟 ולידציה: בדיקה ששם בית ספר ושם תוכנית אינם ריקים
+            const schoolName = node.data.SchoolName?.trim();
+            const programName = node.data.ProgramName?.trim();
 
-      if (newRows.length === 0) {
-          console.log("No new rows to save.");
-          return;
-      }
-      
-      try {
-          await saveNewPrograms(newRows);
-          alert("נשמר בהצלחה!");
-          onGridReady({});
-      } catch (error) {
-          console.error("Save failed:", error);
-          alert("שגיאה בשמירה.");
-      }
-  }, [onGridReady]);
+            if (!schoolName || !programName) {
+                validationError = true;
+                // נסמן למשתמש איזה שורה בעייתית על ידי פוקוס
+                gridRef.current?.api.ensureIndexVisible(node.rowIndex!);
+                gridRef.current?.api.setFocusedCell(node.rowIndex!, !schoolName ? 'SchoolName' : 'ProgramName');
+                return; // יוצא רק מה-forEachNode הנוכחי
+            }
+
+            const cleanRow = { ...node.data };
+            delete cleanRow.totalPaid;
+            delete cleanRow.id;       
+            delete cleanRow.Objectid; 
+            
+            if (cleanRow.lessonsPerDay !== undefined) {
+                cleanRow.LessonsPerDay = Number(cleanRow.lessonsPerDay);
+                delete cleanRow.lessonsPerDay; 
+            }
+            if (cleanRow.LessonsPerDay !== undefined && cleanRow.LessonsPerDay !== null) {
+                 cleanRow.LessonsPerDay = Number(cleanRow.LessonsPerDay);
+            }
+            if (cleanRow.Status === "טיוטה") {
+                cleanRow.Status = "לשבץ";              
+                node.setDataValue('Status', 'לשבץ');
+            }
+            newRows.push(cleanRow);
+        }
+    });
+
+    // אם נמצאה שורה חסרה, נעצור את השמירה ונציג הודעה
+    if (validationError) {
+        alert("לא ניתן לשמור תוכנית ללא שם בית ספר ושם תוכנית. נא להשלים את הפרטים החסרים בשורות המסומנות.");
+        return;
+    }
+
+    if (newRows.length === 0) {
+        console.log("No new rows to save.");
+        return;
+    }
+    
+    try {
+        await saveNewPrograms(newRows);
+        alert("נשמר בהצלחה!");
+        onGridReady({});
+    } catch (error) {
+        console.error("Save failed:", error);
+        alert("שגיאה בשמירה.");
+    }
+}, [onGridReady]);
 
 const handleAiSubmit = async () => {
   if (!aiInput.trim()) return;
@@ -612,19 +685,24 @@ const handleAiSubmit = async () => {
   abortControllerRef.current = new AbortController();
 
   try {
+    const validPlanNames = AllProfessionTypes?.map((p: any) => p.ProfessionName).filter(Boolean) || [];
+
     const res = await fetch('/api/ai-match', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: aiInput }),
+      body: JSON.stringify({ 
+      text: aiInput,
+      validPlans: validPlanNames // send valid plan names to AI for better recognition
+  }),
       signal: abortControllerRef.current.signal
     });
-
+    if (handleAiError(res, () => setAiLoading(false))) return;
+    
     const data = await res.json();
     
-    // --- 1. הכנת נתונים בסיסית ---
+    //data extracted from AI:
     const schoolPart = (data.RawSchoolName || "").trim();
     const cityPart = (data.City || "").trim();
-    const ChosenDay = (data.ChosenDay || "").trim();
     
     const normalizeRegion = (text: any) => String(text || "").replace(/^אזור\s+/, "").trim();
     const aiDistrict = normalizeRegion(data.District);
@@ -636,27 +714,25 @@ const handleAiSubmit = async () => {
       return "";
     };
 
-    // פונקציית עזר לניקוי "בית ספר" מהשם לצורך השוואה נקייה
     const cleanName = (str: string) => str.replace(/^(בית ספר|בי"ס|בי״ס)\s+/g, "").trim();
     const schoolPartClean = cleanName(schoolPart);
 
     let matchedSchool = null;
 
-    // --- 2. לוגיקת הצלבה חכמה (למניעת פרומפטים מיותרים) ---
+    // find existing school in DB - first try exact match, then flexible match, then prompt user if no match
     if (schoolPartClean || cityPart) {
-      // שלב א': חיפוש התאמה מדויקת (Exact Match) - הכי בטוח
+      //exact match
       matchedSchool = AllSchools.find(s => {
         const dbName = cleanName(String(getFld(s, ["SchoolName", "שם בית ספר"])));
         const dbCity = String(getFld(s, ["CityName", "City", "עיר", "city"])).trim();
         
         const isNameExact = dbName === schoolPartClean;
-        // התאמת עיר: אם ה-AI לא נתן עיר, נסתפק בשם. אם נתן, חייב להתאים.
         const isCityExact = !cityPart || dbCity === cityPart; 
         
         return isNameExact && isCityExact;
       });
 
-      // שלב ב': אם לא נמצא דיוק, חיפוש גמיש (Includes)
+      //  flexible match
       if (!matchedSchool) {
         matchedSchool = AllSchools.find(s => {
           const dbName = cleanName(String(getFld(s, ["SchoolName", "שם בית ספר"])));
@@ -672,7 +748,7 @@ const handleAiSubmit = async () => {
       }
     }
 
-    // שלב ג': רק אם באמת לא מצאנו כלום, נציע אפשרויות
+    // fallback to prompt if no exact match
     if (!matchedSchool && schoolPartClean) {
       const suggestions = AllSchools.filter(s => 
         cleanName(String(getFld(s, ["SchoolName", "שם בית ספר"]))).includes(schoolPartClean)
@@ -688,38 +764,108 @@ const handleAiSubmit = async () => {
       }
     }
 
-    // --- 3. בניית השורה החדשה ---
-    const contact = matchedSchool ? AllContacts.find(c => c.Schoolid === matchedSchool.Schoolid && c.IsRepresentive) : null;
+    // Get official contact from DB if school matched
+    let dbContact = matchedSchool 
+      ? AllContacts.find(c => 
+          (c.Schoolid === matchedSchool.Schoolid && c.IsRepresentive) || 
+          (matchedSchool.RepresentiveID && c.Contactid === matchedSchool.RepresentiveID)
+        ) 
+      : null;
     
-    // שליפת עיר: עדיפות ל-DB, גיבוי ל-AI
+    const aiContactRaw = (data.SchoolsContact || "").trim();
+    let finalContactValue = "";
+
+    if (aiContactRaw) {// Try to extract phone number from AI contact info first
+     const phoneMatch = aiContactRaw.match(/05\d[-\s]?\d{7}/); 
+      
+      if (phoneMatch) {
+        const exactPhoneFound = phoneMatch[0]; 
+        const cleanPhone = exactPhoneFound.replace(/\D/g, '').replace(/^0/, '972'); 
+        const namePart = aiContactRaw.replace(exactPhoneFound, '').trim(); 
+        
+        finalContactValue = `${namePart}#whatsapp://send/?phone=${cleanPhone}#`;
+      } else {
+        finalContactValue = aiContactRaw; 
+      }
+    } else if (dbContact) {// if no AI contact but we have a DB contact, use it
+      const dbPhone = (dbContact as any).Phone || (dbContact as any).CellPhone || "";
+      const cleanDbPhone = dbPhone.replace(/\D/g, '').replace(/^0/, '972');
+      
+      if (cleanDbPhone) {
+        finalContactValue = `${dbContact.FirstName}#whatsapp://send/?phone=${cleanDbPhone}#`;
+      } else {
+        finalContactValue = dbContact.FirstName;
+      }
+    } else if (matchedSchool && matchedSchool.Representive) {
+      finalContactValue = matchedSchool.Representive;
+    }
+
+    // prioritize DB city over AI
     const dbCity = matchedSchool ? getFld(matchedSchool, ["CityName", "City", "עיר", "city"]) : "";
     const finalCity = dbCity || cityPart;
 
     const sName = matchedSchool ? getFld(matchedSchool, ["SchoolName", "שם בית ספר"]) : schoolPart;
     const finalSchoolName = matchedSchool ? sName : (finalCity ? `${sName}-${finalCity}` : sName);
 
+    // Sanitize program name
+    const forbiddenNames = ["חדש", "פעיל", "לשבץ", "תוכנית", "תכנית"];
+    let finalProgramName = data.ProgramName?.trim();
+    if (!finalProgramName || forbiddenNames.includes(finalProgramName)) {
+      finalProgramName = data.Plan || "";
+    }
+    const calculatedEducationStage = await mapGradeToEducationStage(data.Grade, aiInput);
+    // יצירת השורה - שים לב ששדה Plan עכשיו יכול להישאר ריק במקום "מותאמת"
     const newRow = { 
       Programid: ++maxIndex.current, 
-      ProgramName: data.ProgramName || "חדש", 
+      ProgramName: finalProgramName,
+      Plan: data.Plan || "", 
       SchoolName: finalSchoolName, 
       Schoolid: matchedSchool ? matchedSchool.Schoolid : null, 
-      SchoolsContact: contact ? contact.ContactName : "",
+      SchoolsContact: finalContactValue, // Saved in "Name#WhatsappLink#" format
       CityName: finalCity,
       Area: matchedSchool ? getFld(matchedSchool, ["AreaName", "Area", "אזור", "area"]) : data.District,
-      // המרה לאובייקט Date עבור פריזמה
       Date: data.Date ? new Date(data.Date) : null,
+      Days: data.Days || "",
+      ChosenDay: data.ChosenDay || "", 
       Weeks: Number(data.Weeks) || 0,
       LessonsPerDay: Number(data.LessonsPerDay) || 0,
       PricingPerPaidLesson: Number(data.PricingPerPaidLesson) || 0,
+      FreeLessonNumbers: Number(data.FreeLessonNumbers) || 0,
+      Grade: data.Grade || "",
+      Product: data.Product || "תלמידים", 
       Year: CURRENT_HEBREW_YEAR,
-      ChosenDay: ChosenDay || "", 
-      // לוגיקת סטטוס חסינה
       Status: (defaultStatus && defaultStatus !== "All") ? defaultStatus : "טיוטה",
       isNew: true,
-      totalPaid: 0
+      totalPaid: 0,
+      EducationStage: calculatedEducationStage || data.EducationStage || ""
     };
 
-    // --- 4. עדכון ה-UI ---
+    // 🔥 הלוגיקה החדשה לחלונית המקצועות:
+    const aiExtractedPlan = data.Plan?.trim();
+
+    if (aiExtractedPlan && aiExtractedPlan !== "") {
+        // בודקים אם הנושא שה-AI חילץ קיים במאגר
+        const planExists = AllProfessionTypes.some(
+            (p: any) => p.ProfessionName === aiExtractedPlan
+        );
+
+        if (!planExists) {
+            // המקצוע לא קיים! מקפיצים את הדיאלוג ושומרים את newRow
+            setNewPlanDialog({
+                isOpen: true,
+                newPlanName: aiExtractedPlan,
+                programName: finalProgramName,
+                aiFullData: newRow 
+            });
+            
+            // מנקים ועוצרים את התהליך (הוספת השורה תקרה אחרי אישור הפופ-אפ)
+            setAiInput("");
+            setAiLoading(false);
+            return; 
+        }
+    }
+
+    // אם המקצוע קיים (או שאין מקצוע בכלל) -> מעדכנים את ה-UI מיד
     gridRef.current?.api.applyTransaction({ add: [newRow], addIndex: 0 });
     setHasNewRows(true);
     
@@ -737,6 +883,41 @@ const handleAiSubmit = async () => {
   } finally { 
     setAiLoading(false); 
   }
+};
+
+const handleConfirmNewPlan = async () => {
+    if (!newPlanDialog) return;
+
+    try {
+        const newProfessionName = newPlanDialog.newPlanName;
+        
+        // 1. שמירת המקצוע החדש ב-Database (הפונקציה החדשה שלנו!)
+        await addProfessionType(newProfessionName);
+
+        // 2. עדכון הסטייט המקומי כדי שהטבלה תכיר אותו מיד בלי רענון
+        // בהנחה שהסטייט של המקצועות אצלך נקרא AllProfessionTypes
+        setAllProfessionTypes((prev: any) => [...prev, { 
+            ProfessionId: Date.now(), // ID זמני לתצוגה
+            ProfessionName: newProfessionName, 
+            FieldName: "כללי" 
+        }]);
+
+        // 3. הוספת שורת התוכנית לטבלה
+        gridRef.current?.api.applyTransaction({ add: [newPlanDialog.aiFullData], addIndex: 0 });
+        setHasNewRows(true);
+        
+        setTimeout(() => {
+            gridRef.current?.api.ensureIndexVisible(0);
+            gridRef.current?.api.setFocusedCell(0, 'ProgramName');
+        }, 100);
+
+        alert(`המקצוע "${newProfessionName}" התווסף בהצלחה והתוכנית נוצרה!`);
+    } catch (error) {
+        console.error("שגיאה בהוספת המקצוע:", error);
+        alert("שגיאה בהוספת המקצוע החדש למאגר.");
+    } finally {
+        setNewPlanDialog(null); // סוגרים את הדיאלוג
+    }
 };
   const onCancelChanges = useCallback(() => {
     if (gridRef.current) {
@@ -913,15 +1094,15 @@ const checkDriveStatus = useCallback(async () => {
       )}
       
       <input 
-  type="text" 
-  className="bg-white text-gray-700 border border-gray-300 text-right outline-none px-2 rounded" 
-  placeholder="הזנה חכמה..." 
-  value={aiInput} 
-  onChange={(e) => setAiInput(e.target.value)} 
-  onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()} 
-  style={{ direction: 'rtl', width: '660px', fontSize: '14px' }} 
-  disabled={aiLoading} 
-/>
+        type="text" 
+        className="bg-white text-gray-700 border border-gray-300 text-right outline-none px-2 rounded" 
+        placeholder="הזנה חכמה..." 
+        value={aiInput} 
+        onChange={(e) => setAiInput(e.target.value)} 
+        onKeyDown={(e) => e.key === 'Enter' && handleAiSubmit()} 
+        style={{ direction: 'rtl', width: '660px', fontSize: '14px' }} 
+        disabled={aiLoading} 
+      />
     </div>
   </div>
 </Navbar>
@@ -1000,6 +1181,40 @@ const checkDriveStatus = useCallback(async () => {
         />
       </div>
       {WindowManager()} 
+
+      {/* 🔥 הדיאלוג לזיהוי נושא/מקצוע חדש מה-AI */}
+      <Dialog 
+          open={newPlanDialog?.isOpen || false} 
+          onClose={() => setNewPlanDialog(null)}
+          dir="rtl"
+      >
+          <DialogTitle className="text-right text-primary font-bold">
+              ✨ זיהוי נושא חדש לתוכנית
+          </DialogTitle>
+          <DialogContent>
+              <DialogContentText className="text-right mb-4 text-dark" style={{ fontSize: '1.1rem', lineHeight: '1.6' }}>
+                  ה-AI זיהה שבית הספר מבקש תוכנית תחת השם: <strong>"{newPlanDialog?.programName}"</strong>.
+                  <br /><br />
+                  נושא התוכנית סווג כ-<strong>"{newPlanDialog?.newPlanName}"</strong>, אך נושא זה אינו קיים כרגע במאגר המקצועות של המערכת.
+                  <br /><br />
+                  האם ברצונך להוסיף את <strong>"{newPlanDialog?.newPlanName}"</strong> למאגר המקצועות ולייצר את התוכנית?
+              </DialogContentText>
+          </DialogContent>
+          <DialogActions className="p-3 bg-light border-top">
+              <Button 
+                  variant="secondary"
+                  onClick={() => setNewPlanDialog(null)}
+              >
+                  ביטול
+              </Button>
+              <Button 
+                  variant="primary" 
+                  onClick={handleConfirmNewPlan}
+              >
+                  הוסף מקצוע וצור תוכנית
+              </Button>
+          </DialogActions>
+      </Dialog>
     </>
   );
 }

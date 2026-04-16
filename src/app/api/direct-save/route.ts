@@ -5,8 +5,35 @@ import { Readable } from "stream";
 
 const prisma = new PrismaClient();
 
-//function to upload file to Google Drive (base64) and return the file link
-async function uploadToDrive(base64Data: string, fileName: string, accessToken?: string) {
+// Prevent duplicate folders in Drive by querying existing ones under the specific parent
+async function getOrCreateFolder(drive: any, folderName: string, parentId: string): Promise<string> {
+  const query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  
+  const res = await drive.files.list({
+    q: query,
+    spaces: 'drive',
+    fields: 'files(id, name)',
+  });
+
+  if (res.data.files && res.data.files.length > 0) {
+    return res.data.files[0].id;
+  }
+
+  const folderMetadata = {
+    name: folderName,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [parentId],
+  };
+
+  const folder = await drive.files.create({
+    requestBody: folderMetadata,
+    fields: 'id',
+  });
+
+  return folder.data.id;
+}
+
+async function uploadToDrive(base64Data: string, fileName: string, accessToken: string | undefined, guideInfo: any) {
   try {
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: accessToken });
@@ -15,15 +42,25 @@ async function uploadToDrive(base64Data: string, fileName: string, accessToken?:
     const buffer = Buffer.from(base64Data, "base64");
     const stream = Readable.from(buffer);
 
-    //if there's a specific folder ID in env, upload there, otherwise upload to root
-    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    const parents = folderId ? [folderId] : [];
+    const area = guideInfo.Area || "";
+    const city = guideInfo.City || "";
+    const fullName = `${guideInfo.FirstName || ""} ${guideInfo.LastName || ""}`.trim() || "שם לא ידוע";
+    
+    // Mirroring the frontend folder hierarchy to keep Drive organized
+    const foldersToNavigate = ["מסמכי מדריכים", area, city, fullName, "קורות חיים"];
+    
+    let currentParentId = "root"; 
+
+    for (const folderName of foldersToNavigate) {
+      if (!folderName) continue; // Skip empty names to avoid broken paths
+      currentParentId = await getOrCreateFolder(drive, folderName, currentParentId);
+    }
 
     const response = await drive.files.create({
       requestBody: { 
         name: fileName,
         mimeType: "application/pdf",
-        parents: parents 
+        parents: [currentParentId] 
       },
       media: { 
         mimeType: "application/pdf", 
@@ -33,13 +70,14 @@ async function uploadToDrive(base64Data: string, fileName: string, accessToken?:
     });
 
     if (response.data.id) {
+      // Ensure the generated link is accessible without auth
       await drive.permissions.create({
         fileId: response.data.id,
-        requestBody: { role: 'reader', type: 'anyone' },
+        requestBody: { role: 'reader', type: 'anyone' }, 
       });
     }
 
-    console.log("✅ File uploaded to Drive Root/Folder:", response.data.webViewLink);
+    console.log("✅ File uploaded to precise Drive folder:", response.data.webViewLink);
     return response.data.webViewLink;
   } catch (error: any) {
     console.error("❌ Drive Upload Error:", error.message);
@@ -55,16 +93,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "מספר טלפון הוא שדה חובה" }, { status: 400 });
     }
 
-    const { cvFileData, cvFileName, accessToken, ...guideData } = body;
+    const { cvFileData, cvFileName, accessToken, Guideid, ...guideData } = body;
     let driveLink = null;
 
     if (cvFileData) {
-    driveLink = await uploadToDrive(cvFileData, cvFileName, accessToken);
-  }
+      driveLink = await uploadToDrive(cvFileData, cvFileName, accessToken, guideData);
+    }
 
-    const existingGuide = await prisma.guide.findFirst({
-      where: { CellPhone: guideData.CellPhone }
-    });
+    let existingGuide = null;
+    
+    // Explicit check via Guideid to handle frontend updates safely
+    if (Guideid) {
+      existingGuide = await prisma.guide.findUnique({
+        where: { Guideid: Number(Guideid) }
+      });
+    }
+
+    // Fallback for AI extractions where ID isn't known yet
+    if (!existingGuide) {
+      existingGuide = await prisma.guide.findFirst({
+        where: { CellPhone: guideData.CellPhone }
+      });
+    }
 
     let guide;
 
@@ -72,13 +122,14 @@ export async function POST(req: Request) {
       const updateData: any = {
         FirstName: guideData.FirstName,
         LastName: guideData.LastName,
+        CellPhone: guideData.CellPhone, 
         City: guideData.City,
+        Area: guideData.Area, 
         Professions: guideData.Professions,
         Notes: guideData.Remarks || guideData.Notes || "",
         Status: "פעיל"
       };
 
-      // if there's a new CV, update the link in the existing guide
       if (driveLink) {
         updateData.CV = driveLink;
       }
@@ -88,7 +139,7 @@ export async function POST(req: Request) {
         data: updateData
       });
     } else {
-      // יצירת מדריך חדש
+      // Manual ID increment logic since auto-increment isn't used
       const maxResult = await prisma.guide.aggregate({
         _max: { Guideid: true }
       });

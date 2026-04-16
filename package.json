@@ -56,7 +56,7 @@
     "next": "^14.1.4",
     "patch-package": "^8.0.0",
     "path": "^0.12.7",
-    "pdf-parse": "^2.4.5",
+    "pdf2json": "^4.0.2",
     "postcss": "^8.4.35",
     "qr-code-styling": "^1.9.2",
     "qrcode": "^1.5.4",

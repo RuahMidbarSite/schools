@@ -1,35 +1,37 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import * as vision from '@google-cloud/vision';
-import { PDFParse } from 'pdf-parse';// pdf library for parsing PDF files
+import PDFParser from 'pdf2json'; 
 import { getAllDistricts } from '@/db/generalrequests';
 
 const prisma = new PrismaClient();
 
-// יצירת לקוח Google Vision
 let visionClient: vision.ImageAnnotatorClient | null = null;
 
 function getVisionClient() {
   if (!visionClient) {
-    // Google Vision יכול לעבוד עם credentials בשתי דרכים:
-    // 1. משתנה סביבה GOOGLE_APPLICATION_CREDENTIALS שמצביע על קובץ JSON
-    // 2. העברת credentials ישירות בקוד
+    const credentialsStr = process.env.GOOGLE_CREDENTIALS || 
+                           process.env.GOOGLE_VISION_CREDENTIALS || 
+                           process.env.GOOGLE_DRIVE_CREDENTIALS;
+
+    if (credentialsStr) {
+      try {
+        visionClient = new vision.ImageAnnotatorClient({
+          credentials: JSON.parse(credentialsStr)
+        });
+        console.log("✅ Vision Client initialized using JSON string from ENV");
+      } catch (e) {
+        console.error("❌ Failed to parse GOOGLE_CREDENTIALS JSON:", e);
+      }
+    } 
     
-    // תמיכה במספר משתני סביבה (אם יש לך כבר משתנה אחר)
-    const credentials = process.env.GOOGLE_VISION_CREDENTIALS 
-                     || process.env.GOOGLE_DRIVE_CREDENTIALS
-                     || process.env.GOOGLE_CREDENTIALS;
-    
-    if (credentials) {
-      // אם יש credentials כ-JSON string
-      visionClient = new vision.ImageAnnotatorClient({
-        credentials: JSON.parse(credentials)
-      });
-    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      // אם יש נתיב לקובץ credentials
+    if (!visionClient && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       visionClient = new vision.ImageAnnotatorClient();
-    } else {
-      throw new Error("Google Vision credentials not configured");
+      console.log("🏠 Vision Client initialized using local file path");
+    }
+
+    if (!visionClient) {
+      throw new Error("Google Vision credentials not configured - please set GOOGLE_CREDENTIALS (JSON) or GOOGLE_APPLICATION_CREDENTIALS (Path)");
     }
   }
   return visionClient;
@@ -50,12 +52,10 @@ async function extractTextFromImage(base64Image: string): Promise<string> {
   try {
     const client = getVisionClient();
     
-    // הסרת הפרפיקס data:image/...;base64, אם קיים
     const base64Data = base64Image.includes('base64,') 
       ? base64Image.split('base64,')[1] 
       : base64Image;
 
-    // שליחת התמונה ל-Google Vision
     const [result] = await client.textDetection({
       image: { content: base64Data }
     });
@@ -66,7 +66,6 @@ async function extractTextFromImage(base64Image: string): Promise<string> {
       throw new Error("לא נמצא טקסט בתמונה");
     }
 
-    // הטקסט המלא הוא באינדקס 0
     const fullText = detections[0].description || "";
     
     console.log("✅ Google Vision extracted text:", fullText.substring(0, 200) + "...");
@@ -90,6 +89,11 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
   const basePrompt = `
     Analyze the text and extract instructor details.
 
+    ### GLOBAL LANGUAGE RULE (CRITICAL):
+    - ALL extracted text fields in the JSON (FirstName, LastName, Notes, City, Area) MUST be in HEBREW.
+    - If the original text contains English (e.g., "Tal", "Tel Aviv", "Yoga"), you MUST TRANSLATE or TRANSLITERATE it into Hebrew.
+    - NEVER return English characters in any text field. This is a hard constraint.
+    
     0. **CRITICAL FILTERING RULE - Read before anything else**:
        - You are looking ONLY for people who are OFFERING their services as instructors (job seekers, freelancers presenting themselves).
        - IGNORE and DO NOT extract any message from an employer, organization, or school that is LOOKING TO HIRE an instructor.
@@ -175,7 +179,7 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { rawText, image, isImage, file } = body; // get the file field from the request body 
+    const { rawText, image, isImage, file } = body; 
 
     console.log("📥 Received request:", { 
       hasRawText: !!rawText, 
@@ -186,7 +190,7 @@ export async function POST(req: Request) {
 
     const dynamicList = await getDynamicProfessions();
     let result;
-    let textToAnalyze = ""; // the returned text
+    let textToAnalyze = "";
 
     if (isImage && image) {
       console.log("🖼️ Processing image with Google Vision API...");
@@ -197,13 +201,27 @@ export async function POST(req: Request) {
       textToAnalyze = rawText;
     } 
     else if (file) {
-      console.log("📄 Processing PDF file...");
-      // Base64 decode the file and parse it with PDFParse
+     console.log("📄 Processing PDF file with pdf2json...");
       const pdfBuffer = Buffer.from(file, 'base64');
-      const parser = new PDFParse({ data: pdfBuffer });
-      const pdfResult = await parser.getText();
-      textToAnalyze = pdfResult.text;
-      await parser.destroy();
+      
+      textToAnalyze = await new Promise((resolve, reject) => {
+        const pdfParser = new PDFParser(null, true);
+        
+        pdfParser.on("pdfParser_dataError", (errData: any) => reject(new Error(errData.parserError)));
+        pdfParser.on("pdfParser_dataReady", () => {
+          let extractedText = pdfParser.getRawTextContent();
+          
+          // חיתוך הטקסט ל-8000 תווים (בערך 2000-3000 טוקנים)
+          if (extractedText.length > 8000) {
+              console.log("✂️ Text too long, trimming to 8000 characters");
+              extractedText = extractedText.substring(0, 8000);
+          }
+          
+          resolve(extractedText);
+        });
+        
+        pdfParser.parseBuffer(pdfBuffer);
+      });
     } 
     else {
       throw new Error("No input provided (neither text, image nor file)");
@@ -214,7 +232,6 @@ export async function POST(req: Request) {
       result = await analyzeTextWithGroq(textToAnalyze, dynamicList);
     }
 
-    // וידוא שהתוצאה תקינה
     if (!result || !result.guides) {
       console.error("Invalid result structure:", result);
       return NextResponse.json({ 
@@ -228,7 +245,6 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("❌ AI Extraction Error:", error);
 
-    // 🌟 התיקון כאן: בודקים אם השגיאה קשורה למכסה (Rate Limit)
     const errorMsg = error.message || "";
     const isRateLimit = errorMsg.toLowerCase().includes("rate limit") || 
                         errorMsg.includes("429");
@@ -237,7 +253,7 @@ export async function POST(req: Request) {
       error: errorMsg,
       guides: []
     }, { 
-      status: isRateLimit ? 429 : 500 // אם זה Rate Limit, מחזירים 429
+      status: isRateLimit ? 429 : 500
     });
   }
 }
