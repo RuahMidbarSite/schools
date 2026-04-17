@@ -328,7 +328,7 @@ const quickAssignFilteredPrograms = useMemo(() => {
   }, [onClearFilterButtonClick, InTheMiddleOfAddingRows]);
 const handleSmartConfirm = async (newGuides: any[]) => {
   const errors: string[] = [];
-//check if user is authenticated with Google Drive before trying to save guides with CVs 
+  //check if user is authenticated with Google Drive before trying to save guides with CVs 
   const authData: any = await getFromStageGuidesAuth();
   const accessToken = authData?.authResult?.access_token;
   const hasFiles = newGuides.some(g => g.cvFileData);
@@ -337,7 +337,9 @@ const handleSmartConfirm = async (newGuides: any[]) => {
       "לבצע שמירה ללא קורות חיים? אינך מחובר ל-Google Drive, ולכן הקבצים לא יישמרו."
     );
     
-    if (!confirmWithoutDrive) return; //if user is not connected and doesn't want to save without CVs, exit the function
+    if (!confirmWithoutDrive) {
+      throw new Error("המשתמש ביטל את השמירה");
+    }
   }
   for (const guide of newGuides) {
     try {
@@ -383,7 +385,7 @@ const handleSmartConfirm = async (newGuides: any[]) => {
           accessToken: accessToken
         })
       });
-
+      
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "שגיאה לא ידועה" }));

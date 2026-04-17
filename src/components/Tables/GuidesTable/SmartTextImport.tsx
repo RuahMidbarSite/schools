@@ -17,7 +17,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
   const [draftGuides, setDraftGuides] = useState<any[]>([]);
   const nodeRef = useRef(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
 
   const readFileAsDataURL = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -27,11 +27,15 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
       reader.readAsDataURL(file);
     });
   };
-  const processPdfFile = async (file: File) => {
-    if (file.type !== 'application/pdf') return;
+  
+  const processDocumentFile = async (file: File) => {
+    const isPdf = file.type === 'application/pdf';
+    const isWord = file.name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    
+    if (!isPdf && !isWord) return;
+
     setLoading(true);
     try {
-      // extract the base64 string from the Data URL-PDF
       const base64String = await readFileAsDataURL(file);
       const cleanBase64 = base64String.split('base64,')[1];
       
@@ -50,12 +54,13 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
       }));
       processExtractedGuides(enrichedGuides);
     } catch (err) {
-      console.error("PDF processing error:", err);
-      alert("שגיאה בעיבוד קובץ ה-PDF");
+      console.error("Document processing error:", err);
+      alert("שגיאה בעיבוד המסמך");
     } finally {
       setLoading(false);
     }
   };
+
   const handleImagePaste = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return;
 
@@ -81,14 +86,15 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
       setLoading(false);
     }
   }, [existingGuides]);
+
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         await handleImagePaste(file);
-      } else if (file.type === 'application/pdf') {
-        await processPdfFile(file);
+      } else if (file.type === 'application/pdf' || file.name.endsWith('.docx') || file.type.includes('word') || file.type.includes('document')) {
+        await processDocumentFile(file);
       }
     }
   }, [handleImagePaste]);
@@ -113,42 +119,19 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     }
   }, [existingGuides, loading]);
 
-  const handlePdfSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDocumentSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || file.type !== 'application/pdf') return;
+    if (!file) return;
 
-    setLoading(true);
-    try {
-      const base64String = await readFileAsDataURL(file);
-      const cleanBase64 = base64String.split('base64,')[1];
-      
-      const res = await fetch('/api/ai-extract-guides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          file: cleanBase64,
-          isImage: false 
-        }),
-      });
-      if (handleAiError(res, () => setLoading(false))) return;
+    const isPdf = file.type === 'application/pdf';
+    const isWord = file.name.endsWith('.docx') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    
+    if (!isPdf && !isWord) return;
 
-      const data = await res.json();
-      
-      const enrichedGuides = data.guides.map((g: any) => ({
-        ...g,
-        cvFileData: cleanBase64, 
-        cvFileName: file.name,
-      }));
-
-      processExtractedGuides(enrichedGuides);
-    } catch (err) {
-      console.error("PDF extraction error:", err);
-      alert("שגיאה בעיבוד קובץ ה-PDF");
-    } finally {
-      setLoading(false);
-      if (pdfInputRef.current) {
-        pdfInputRef.current.value = '';
-      }
+    await processDocumentFile(file);
+    
+    if (documentInputRef.current) {
+      documentInputRef.current.value = '';
     }
   };
 
@@ -156,7 +139,6 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     const newItems = guides.map((g: any) => {
       const cleanAIPhone = g.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
       
-      // Finding existing guide by phone AND name, fallback to just phone
       const existingGuide = existingGuides.find(ex => {
         const cleanExistingPhone = ex.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
         return cleanExistingPhone === cleanAIPhone && 
@@ -171,8 +153,10 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         return cleanDraftPhone === cleanAIPhone; 
       });
 
+      const isDuplicate = existingGuide || isDuplicateInCurrentDraft;
       return { 
         ...g, 
+        isDuplicate,
         existingGuide: existingGuide || null,
         selected: !isDuplicateInCurrentDraft,
         Area: g.Area || "",
@@ -188,7 +172,6 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     if (!items) return;
 
     for (let i = 0; i < items.length; i++) {
-      // תמיכה בתמונות
       if (items[i].type.startsWith('image/')) {
         const file = items[i].getAsFile();
         if (file) {
@@ -197,11 +180,11 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
           return;
         }
       }
-      if (items[i].type === 'application/pdf') {
+      if (items[i].type === 'application/pdf' || items[i].type.includes('word') || items[i].type.includes('document')) {
         const file = items[i].getAsFile();
         if (file) {
           e.preventDefault();
-          await processPdfFile(file);
+          await processDocumentFile(file);
           return;
         }
       }
@@ -259,7 +242,6 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         </div>
 
         <div className="p-3" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-          {/* Loading Indicator */}
           {loading && <div className="text-center mb-3"><Spinner animation="border" size="sm" /> מנתח נתונים...</div>}
           
           {draftGuides.length === 0 ? (
@@ -302,10 +284,10 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
 
                 <div>
                   <input
-                    ref={pdfInputRef}
+                    ref={documentInputRef}
                     type="file"
-                    accept="application/pdf"
-                    onChange={handlePdfSelect}
+                    accept=".docx, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={handleDocumentSelect}
                     style={{ display: 'none' }}
                     disabled={loading}
                   />
@@ -314,9 +296,9 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
                     size="sm" 
                     disabled={loading} 
                     style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
-                    onClick={() => pdfInputRef.current?.click()}
+                    onClick={() => documentInputRef.current?.click()}
                   >
-                    📄 העלה קורות חיים (PDF)
+                    📄 העלה קורות חיים (WORD/PDF)
                   </Button>
                 </div>
               </div>
@@ -345,7 +327,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
               </thead>
               <tbody>
                 {draftGuides.map((guide, idx) => (
-                  <tr key={guide.tempId}>
+                 <tr key={guide.tempId} className={guide.isDuplicate ? "table-danger" : ""}>
                     <td>
                       <Form.Check 
                         type="checkbox" 
@@ -387,7 +369,6 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
               const selectedGuides = draftGuides.filter(g => g.selected);
               const hasExisting = selectedGuides.some(g => g.existingGuide);
 
-              // Warn before overriding existing DB records
               if (hasExisting) {
                   const confirmUpdate = window.confirm("מדריך זה כבר קיים. אם תאשר, הפרטים שחולצו יעדכנו את המדריך הקיים. להמשיך?");
                   if (!confirmUpdate) return;

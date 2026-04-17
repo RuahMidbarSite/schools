@@ -19,7 +19,6 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
-  // for reading files as base64
   const readFileAsDataURL = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -28,7 +27,35 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
       reader.readAsDataURL(file);
     });
   };
+  const processPdfFile = async (file: File) => {
+    if (file.type !== 'application/pdf') return;
+    setLoading(true);
+    try {
+      // extract the base64 string from the Data URL-PDF
+      const base64String = await readFileAsDataURL(file);
+      const cleanBase64 = base64String.split('base64,')[1];
+      
+      const res = await fetch('/api/ai-extract-guides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: cleanBase64, isImage: false }),
+      });
+      if (handleAiError(res, () => setLoading(false))) return;
 
+      const data = await res.json();
+      const enrichedGuides = data.guides.map((g: any) => ({
+        ...g,
+        cvFileData: cleanBase64, 
+        cvFileName: file.name,
+      }));
+      processExtractedGuides(enrichedGuides);
+    } catch (err) {
+      console.error("PDF processing error:", err);
+      alert("שגיאה בעיבוד קובץ ה-PDF");
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleImagePaste = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return;
 
@@ -54,7 +81,18 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
       setLoading(false);
     }
   }, [existingGuides]);
-
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        await handleImagePaste(file);
+      } else if (file.type === 'application/pdf') {
+        await processPdfFile(file);
+      }
+    }
+  }, [handleImagePaste]);
+  
   const handleTextPaste = useCallback(async (text: string) => {
     if (!text || loading) return;
 
@@ -115,11 +153,15 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
   };
 
   const processExtractedGuides = (guides: any[]) => {
-   
     const newItems = guides.map((g: any) => {
       const cleanAIPhone = g.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
       
-      const isDuplicateInMainTable = existingGuides.some(ex => {
+      // Finding existing guide by phone AND name, fallback to just phone
+      const existingGuide = existingGuides.find(ex => {
+        const cleanExistingPhone = ex.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
+        return cleanExistingPhone === cleanAIPhone && 
+               (ex.FirstName === g.FirstName || ex.LastName === g.LastName);
+      }) || existingGuides.find(ex => {
         const cleanExistingPhone = ex.CellPhone?.toString().replace(/\D/g, '').replace(/^0/, '');
         return cleanExistingPhone === cleanAIPhone;
       });
@@ -129,13 +171,11 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
         return cleanDraftPhone === cleanAIPhone; 
       });
 
-      const isDuplicate = isDuplicateInMainTable || isDuplicateInCurrentDraft;
-
       return { 
         ...g, 
-        isDuplicate,
-        selected: !isDuplicate,
-        Area:g.Area || "",
+        existingGuide: existingGuide || null,
+        selected: !isDuplicateInCurrentDraft,
+        Area: g.Area || "",
         tempId: Math.random() 
       };
     });
@@ -148,11 +188,20 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     if (!items) return;
 
     for (let i = 0; i < items.length; i++) {
+      // תמיכה בתמונות
       if (items[i].type.startsWith('image/')) {
         const file = items[i].getAsFile();
         if (file) {
           e.preventDefault();
           await handleImagePaste(file);
+          return;
+        }
+      }
+      if (items[i].type === 'application/pdf') {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          await processPdfFile(file);
           return;
         }
       }
@@ -162,7 +211,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     if (text) {
       await handleTextPaste(text);
     }
-  }, [handleImagePaste, handleTextPaste]);
+  }, [handleImagePaste]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -194,16 +243,18 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
     <Draggable nodeRef={nodeRef} handle=".drag-handle">
       <div 
         ref={nodeRef}
+        onDragOver={(e) => e.preventDefault()} 
+        onDrop={handleDrop} 
         style={{
           position: 'fixed', 
           top: '10%', left: '10%', width: '1100px', 
-          backgroundColor: 'white', border: '1px solid #ccc',
+          backgroundColor: 'white', border: '2px solid #0d6efd', 
           borderRadius: '12px', boxShadow: '0 15px 40px rgba(0,0,0,0.3)',
           zIndex: 10000, direction: 'rtl', display: 'flex', flexDirection: 'column'
         }}
       >
         <div className="drag-handle p-2 bg-primary text-white d-flex justify-content-between align-items-center rounded-top" style={{ cursor: 'move' }}>
-          <h6 className="m-0">🪄 הזנה חכמה מצטברת (Ctrl+V להדבקה | תמיכה בטקסט, תמונות ו-PDF)</h6>
+          <h6 className="m-0">🪄 הזנה חכמה (גרור קבצים לכאן | Ctrl+V להדבקה)</h6>
           <Button variant="link" className="text-white p-0" onClick={onClose} style={{ textDecoration: 'none', fontSize: '20px' }}>&times;</Button>
         </div>
 
@@ -221,7 +272,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
                 <div className="my-2">או</div>
                 <div>
                   <strong>📸 תמונה / קורות חיים:</strong> 
-                  <ul className="text-start d-inline-block mb-0">
+                  <ul className="text-start d-inline-block mb-0" style={{ direction: 'rtl' }}>
                     <li>צלם מסך (Print Screen) והדבק כאן (Ctrl+V)</li>
                     <li>או לחץ על הכפתורים למטה להעלאת קובץ מהמחשב</li>
                   </ul>
@@ -236,14 +287,17 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
                     accept="image/*"
                     onChange={handleFileSelect}
                     style={{ display: 'none' }}
-                    id="image-upload"
                     disabled={loading}
                   />
-                  <label htmlFor="image-upload">
-                    <Button as="span" variant="outline-primary" size="sm" disabled={loading} style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>
-                      📤 העלה תמונה
-                    </Button>
-                  </label>
+                  <Button 
+                    variant="outline-primary" 
+                    size="sm" 
+                    disabled={loading} 
+                    style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    📤 העלה תמונה
+                  </Button>
                 </div>
 
                 <div>
@@ -253,14 +307,17 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
                     accept="application/pdf"
                     onChange={handlePdfSelect}
                     style={{ display: 'none' }}
-                    id="pdf-upload"
                     disabled={loading}
                   />
-                  <label htmlFor="pdf-upload">
-                    <Button as="span" variant="outline-danger" size="sm" disabled={loading} style={{ cursor: loading ? 'not-allowed' : 'pointer' }}>
-                      📄 העלה קורות חיים (PDF)
-                    </Button>
-                  </label>
+                  <Button 
+                    variant="outline-danger" 
+                    size="sm" 
+                    disabled={loading} 
+                    style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
+                    onClick={() => pdfInputRef.current?.click()}
+                  >
+                    📄 העלה קורות חיים (PDF)
+                  </Button>
                 </div>
               </div>
 
@@ -288,7 +345,7 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
               </thead>
               <tbody>
                 {draftGuides.map((guide, idx) => (
-                  <tr key={guide.tempId} className={guide.isDuplicate ? "table-danger" : ""}>
+                  <tr key={guide.tempId}>
                     <td>
                       <Form.Check 
                         type="checkbox" 
@@ -326,17 +383,26 @@ export const SmartTextImport = ({ show, onClose, existingGuides, onConfirm }: Pr
             <Button 
               variant="success" 
               disabled={!draftGuides.some(g => g.selected) || isConfirming}
-              onClick={async () => {
-                setIsConfirming(true);
-                try {
-                  await onConfirm(draftGuides.filter(g => g.selected));
-                  setDraftGuides([]); 
-                } catch (err) {
-                  console.error("Confirm error:", err);
-                } finally {
-                  setIsConfirming(false);
-                }
-              }}
+             onClick={async () => {
+              const selectedGuides = draftGuides.filter(g => g.selected);
+              const hasExisting = selectedGuides.some(g => g.existingGuide);
+
+              // Warn before overriding existing DB records
+              if (hasExisting) {
+                  const confirmUpdate = window.confirm("מדריך זה כבר קיים. אם תאשר, הפרטים שחולצו יעדכנו את המדריך הקיים. להמשיך?");
+                  if (!confirmUpdate) return;
+              }
+
+              setIsConfirming(true);
+              try {
+                await onConfirm(selectedGuides);
+                setDraftGuides([]); 
+              } catch (err) {
+                console.error("Confirm error:", err);
+              } finally {
+                setIsConfirming(false);
+              }
+            }}
             >
               {isConfirming ? <Spinner animation="border" size="sm" className="me-2" /> : null}
               אשר והוסף ({draftGuides.filter(g => g.selected).length}) מדריכים

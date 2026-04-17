@@ -5,7 +5,7 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '4mb',
     },
-    serverComponentsExternalPackages: ['officeparser'], 
+    serverComponentsExternalPackages: ['pdf2json'], 
   },
 
   typescript: {

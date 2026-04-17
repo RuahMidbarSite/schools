@@ -56,20 +56,14 @@ async function uploadToDrive(base64Data: string, fileName: string, accessToken: 
       currentParentId = await getOrCreateFolder(drive, folderName, currentParentId);
     }
 
-    // Dynamic mimeType assignment based on file extension
-    let fileMimeType = "application/pdf";
-    if (fileName.toLowerCase().endsWith(".docx")) {
-      fileMimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    }
-
     const response = await drive.files.create({
       requestBody: { 
         name: fileName,
-        mimeType: fileMimeType, // Updated to use dynamic type
+        mimeType: "application/pdf",
         parents: [currentParentId] 
       },
       media: { 
-        mimeType: fileMimeType, // Updated to use dynamic type
+        mimeType: "application/pdf", 
         body: stream 
       },
       fields: "id, webViewLink",
@@ -102,7 +96,7 @@ export async function POST(req: Request) {
     const { cvFileData, cvFileName, accessToken, Guideid, ...guideData } = body;
     let driveLink = null;
 
-    if (cvFileData && cvFileName) {
+    if (cvFileData) {
       driveLink = await uploadToDrive(cvFileData, cvFileName, accessToken, guideData);
     }
 

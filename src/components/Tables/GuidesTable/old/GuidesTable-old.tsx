@@ -353,20 +353,31 @@ const handleSmartConfirm = async (newGuides: any[]) => {
         continue;
       }
 
+      const existing = guide.existingGuide || {};
+      
+      // Merging new AI data with existing DB data. New data takes precedence.
+      const mergedFirstName = (guide.FirstName || existing.FirstName || "").trim();
+      const mergedLastName = (guide.LastName || existing.LastName || "").trim();
+      const mergedCity = guide.City || existing.City || "";
+      const mergedArea = guide.Area || existing.Area || "";
+      const mergedProfessions = guide.Profession || guide.Professions || existing.Professions || "";
+      const mergedRemarks = guide.Notes || guide.Remarks || existing.Remarks || "";
+
       const response = await fetch('/api/direct-save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          FirstName: (guide.FirstName || "").trim(),
-          LastName: (guide.LastName || "").trim(),
+          Guideid: existing.Guideid, // Sending ID to backend so it knows it's an update, not an insert
+          FirstName: mergedFirstName,
+          LastName: mergedLastName,
           CellPhone: cleanPhone,
-          City: guide.City || "",
-          Area: guide.Area || "",
-          Professions: guide.Profession || guide.Professions || "",
-          Remarks: guide.Notes || guide.Remarks || "",
-          Status: "פעיל",
-          ReligiousSector: "יהודי",
-          isAssigned: false,
+          City: mergedCity,
+          Area: mergedArea,
+          Professions: mergedProfessions,
+          Remarks: mergedRemarks,
+          Status: existing.Status || "פעיל",
+          ReligiousSector: existing.ReligiousSector || "יהודי",
+          isAssigned: existing.isAssigned || false,
           cvFileData: guide.cvFileData || null, 
           cvFileName: guide.cvFileName || null,
           accessToken: accessToken
@@ -406,7 +417,7 @@ const handleSmartConfirm = async (newGuides: any[]) => {
     alert(`שגיאות בשמירה:\n${errors.join('\n')}`);
   }
 
-  // ✅ Update storage cache with fresh data from database
+  // update the local cache with the fresh data from the database to ensure consistency, especially for the new IDs of added guides
   try {
     const freshGuides = await getAllGuides();
     if (freshGuides && freshGuides.length > 0) {
@@ -415,7 +426,6 @@ const handleSmartConfirm = async (newGuides: any[]) => {
     }
   } catch (error) {
     console.error("Error updating guide cache:", error);
-    // Continue anyway - grid already displays the new data
   }
 
   setSmartImportOpen(false);
@@ -898,14 +908,13 @@ if (!InTheMiddleOfAddingRows && event.data.Guideid && event.newValue !== event.o
       event.data.Guideid
     ).then(async () => {
       if (typeof window !== "undefined") {
-        // ✅ Fetch fresh data from database after cell edit
+        // Fetch fresh data from database after cell edit
         try {
           const freshGuides = await getAllGuides();
           if (freshGuides && freshGuides.length > 0) {
             updateStorage({ Guides: freshGuides });
             setRowData(freshGuides);
           } else {
-            // Fallback: update with grid data
             const future_data: Guide[] = [];
             gridRef.current.api.forEachNode((node: any) => {
               future_data.push(node.data);
@@ -914,7 +923,6 @@ if (!InTheMiddleOfAddingRows && event.data.Guideid && event.newValue !== event.o
           }
         } catch (error) {
           console.error("Error refreshing guides cache:", error);
-          // Fallback: update with grid data
           const future_data: Guide[] = [];
           gridRef.current.api.forEachNode((node: any) => {
             future_data.push(node.data);

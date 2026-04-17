@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import * as vision from '@google-cloud/vision';
-import PDFParser from 'pdf2json'; 
+import { parseOffice } from 'officeparser';
 import { getAllDistricts } from '@/db/generalrequests';
 
 const prisma = new PrismaClient();
@@ -14,24 +14,38 @@ function getVisionClient() {
                            process.env.GOOGLE_VISION_CREDENTIALS || 
                            process.env.GOOGLE_DRIVE_CREDENTIALS;
 
+    let initialized = false;
+
     if (credentialsStr) {
       try {
-        visionClient = new vision.ImageAnnotatorClient({
-          credentials: JSON.parse(credentialsStr)
-        });
+        let credentials = JSON.parse(credentialsStr);
+        
+        if (credentials.private_key && typeof credentials.private_key === 'string') {
+          credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+        }
+
+        visionClient = new vision.ImageAnnotatorClient({ credentials });
         console.log("✅ Vision Client initialized using JSON string from ENV");
+        initialized = true;
       } catch (e) {
-        console.error("❌ Failed to parse GOOGLE_CREDENTIALS JSON:", e);
+        if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          console.error("❌ Failed to parse GOOGLE_CREDENTIALS JSON:", e.message);
+        }
       }
-    } 
-    
-    if (!visionClient && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      visionClient = new vision.ImageAnnotatorClient();
-      console.log("🏠 Vision Client initialized using local file path");
+    }
+
+    if (!initialized && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      try {
+        visionClient = new vision.ImageAnnotatorClient();
+        console.log("🏠 Vision Client initialized using local file path");
+        initialized = true;
+      } catch (e) {
+        console.error("❌ Failed to initialize Vision Client from local path:", e.message);
+      }
     }
 
     if (!visionClient) {
-      throw new Error("Google Vision credentials not configured - please set GOOGLE_CREDENTIALS (JSON) or GOOGLE_APPLICATION_CREDENTIALS (Path)");
+      throw new Error("Google Vision credentials missing. Set GOOGLE_CREDENTIALS (JSON) or GOOGLE_APPLICATION_CREDENTIALS (Path)");
     }
   }
   return visionClient;
@@ -78,7 +92,7 @@ async function extractTextFromImage(base64Image: string): Promise<string> {
   }
 }
 
-async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise<any> {
+async function analyzeTextWithGroq(text: string, dynamicList: string[], typeOfInput: string): Promise<any> {
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
@@ -86,66 +100,76 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
   }
   const districts = await getAllDistricts();
   const validAreas = districts.map(d => d.AreaName).join(", ");
-  const basePrompt = `
+
+  //base prompt with critical rules and dynamic profession list
+  const baseRules = `
     Analyze the text and extract instructor details.
 
     ### GLOBAL LANGUAGE RULE (CRITICAL):
-    - ALL extracted text fields in the JSON (FirstName, LastName, Notes, City, Area) MUST be in HEBREW.
-    - If the original text contains English (e.g., "Tal", "Tel Aviv", "Yoga"), you MUST TRANSLATE or TRANSLITERATE it into Hebrew.
+    - ALL extracted text fields in the JSON MUST be in HEBREW.
     - NEVER return English characters in any text field. This is a hard constraint.
     
-    0. **CRITICAL FILTERING RULE - Read before anything else**:
-       - You are looking ONLY for people who are OFFERING their services as instructors (job seekers, freelancers presenting themselves).
-       - IGNORE and DO NOT extract any message from an employer, organization, or school that is LOOKING TO HIRE an instructor.
-       - How to tell the difference:
-         * INCLUDE: "אני מדריך...", "מחפש עבודה", "מציע שירותי", "זמין להדרכה", "ניסיון ב...", "דרוש? לא - אני מציע"
-         * EXCLUDE: "דרוש מדריך", "מחפשים מדריך", "נא לפנות אלינו", "משרה פנויה", "אנחנו מגייסים"
-       - If a message is from an employer → return it with an empty guides array: { "guides": [] }
-    
-    1. **Profession Mapping (CRITICAL - STRICT RULES)**:
+    1. **Profession Mapping (CRITICAL - ANTI-HALLUCINATION)**:
        - The COMPLETE allowed list is: [${dynamicList.join(", ")}].
-       - The output for "Profession" field MUST be one or more of these EXACT strings, copied character by character.
-       - FORBIDDEN: ANY word or phrase not copied verbatim from the list above is absolutely prohibited.
-       - FORBIDDEN: Do NOT split, combine, shorten, translate, or rephrase items from the list.
-       - VALIDATION STEP (mandatory): Before returning, check each word in your answer against the list. If even one word does not appear in the list exactly — remove it.
-       - Use your broad general knowledge to find the CLOSEST semantic match from the list. For example: "היפ הופ" → "מחול", "כדורגל" → "ספורט".
-       - If multiple matches found, return all separated by comma (e.g., "שחמט, חשיבה").
-       - If NO match exists in the list, return an empty string "".
+       - Output for "Profession" MUST be one or more of these EXACT strings.
+       - Use semantic matching (e.g., "כלכלה" -> "פיננסי").
+       - CRITICAL: The ACTUAL original job titles used by the person (e.g., 'יוצרת תוכן', 'סטייליסטית אישית') MUST be written in the "Notes" field.
+       - If NO semantic match exists in the allowed list, return "". Do NOT force a match.
     
     2. **Name Splitting**: 
-       - Split full names into "FirstName" (1st word) and "LastName" (rest of the words).
-       - If no full name is found in the message body, look for the sender's name in the WhatsApp header format: "~ name ~" or "~name~" and use it as FirstName.
-       - Clean the name from special characters like "~", "*", spaces.
+       - Split into "FirstName" and "LastName". Clean special characters.
        
-    3. **CellPhone**: Extract digits only. 
-       - STRICT RULE: Remove the leading '0' from Israeli numbers (e.g., return '585333944' instead of '0585333944').
-       - Remove any '+', '972', spaces, or parentheses. 
-       - Return ONLY the clean digits.
+    3. **CellPhone**: Extract digits only. Remove leading '0' (e.g., '546560170').
 
-    4. **Notes (CRITICAL DISPATCH INFO & SUMMARY)**:
-      - PRIORITY 1 (Sub-specialties): Extract specific styles/instruments not in the main profession (e.g., 'Hip-Hop', 'Guitar', 'פילאטיס מכשירים').
-      - PRIORITY 2 (Availability & Schedule): Explicitly note specific days/hours they CAN or CANNOT work, and if they seek full-time/part-time (משרה מלאה/חלקית).
-      - PRIORITY 3 (Target Audience): Note preferences for specific age groups or education stages (e.g., 'יסודי', 'נוער', 'הגיל הרך').
-      - PRIORITY 4 (Logistics & Constraints): Mention any missing equipment, special requirements, or mobility/travel limits.
-      - STRICTLY REMOVE: The City name and the exact main Profession Names (to avoid redundancy).
-      - FORMATTING: Keep it extremely concise, punchy, and highly scannable. Maximum 20-25 words. Use commas or short phrases instead of full sentences.
-      - EXAMPLE OUTPUT: "היפ הופ וברייקדאנס, מעדיף יסודי. פנוי א,ג,ה בבוקר. חסר בידורית. לא עובד עם נוער."
+    4. **Notes (DECISION-READY TAGS - DO NOT INVENT)**:
+      - Create a functional summary to help a manager or AI match this instructor to programs.
+      - INCLUDE (if found): Original job titles, years of experience, specific niches (e.g. דימוי גוף), population experience (e.g. נוער בסיכון), mobility (ניידות), hourly rate, and availability.
+      - DO NOT include the City or the mapped Profession name to avoid redundancy.
+      - CRITICAL: If a detail is NOT mentioned, SKIP IT. Never guess.
+      - FORMATTING: Comma-separated tags, concise, maximum 25 words.
 
-    5. **City**: 
-       - First priority: extract the city where the instructor LIVES if mentioned.
-       - Second priority: if no city of residence is mentioned, use the area or city where they TEACH or WORK (e.g., "אזור רחובות", "בתל אביב").
-       - If multiple areas mentioned, take the first one.
+    5. **Area Mapping**:
+       - Map the City to exactly one Area from: [${validAreas}].
 
-    6. **Area Mapping (NEW - CRITICAL)**:
-       - The ONLY allowed Areas are: [${validAreas}].
-       - If an Area is mentioned, use it.
-       - IMPORTANT: If NO Area is mentioned but a City is found, use your knowledge of Israel to map the City to the most logical Area from the list above.
-       - Example: "תל אביב" -> "מרכז", "חיפה" -> "צפון", "באר שבע" -> "דרום".
-       - Return EXACTLY one name from the list above. If unknown, return ""
+    6. **hourlyRate**: Extract number only if mentioned.
+  `;
 
-    7. **hourlyRate**: If an hourly rate is mentioned, extract it as a number. Remove any currency symbols or text (e.g., "₪", "ש"ח", "לשעה") and return only the digits.
+  // additional rules for when the input is a message
+  const messageRules = `
+    0. **CRITICAL FILTERING RULE**:
+       - Extract ONLY if offering services. Ignore hiring ads.
+       
+    X. **WhatsApp Name Extraction**:
+       - Check for "~ name ~" format if name is not in text.
+       
+    Y. **Notes Weighting (LOGISTICS FOCUS)**:
+       - For messages, PRIORITIZE availability (days/hours), hourly rate, and mobility.
+       - Example: "סטייליסטית אישית, פנויה בראשון ורביעי, 300 שח לשעה, ניידת עם רכב."
+  `;
 
-    Return ONLY a valid JSON object:
+  // additional rules for when the input is a CV or resume
+  const cvRules = `
+    0. **CV/RESUME BYPASS**: 
+       - Formal document. Process fully.
+       
+    X. **Holistic Name Extraction**:
+       - Look at the very top or under 'פרטים אישיים'.
+       
+    Y. **Notes Weighting (PROFESSIONAL FOCUS)**: 
+       - For CVs, PRIORITIZE seniority, specific original titles (e.g., 'מנהלת תוכן'), certifications (e.g., 'תעודת הוראה'), and specific niches.
+       - Example: "כלכלנית וסטייליסטית אישית, ידע בדימוי גוף לילדים ונוער, ניידת, עוסק פטור."
+  `;
+
+ // Combine base rules with conditional rules based on input type
+  let finalPrompt = baseRules;
+  if (typeOfInput === "pdf" || typeOfInput === "docx") {
+    finalPrompt += "\n\n### CV SPECIFIC INSTRUCTIONS:\n" + cvRules;
+  } else {
+    finalPrompt += "\n\n### MESSAGE SPECIFIC INSTRUCTIONS:\n" + messageRules;
+  }
+
+  finalPrompt += `
+    \nReturn ONLY a valid JSON object:
     { "guides": [{ "FirstName": "...", "LastName": "...", "Profession": "...", "Notes": "...", "CellPhone": "...", "City": "..." , "Area": "..." }] }
   `;
 
@@ -159,7 +183,7 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
       model: "llama-3.3-70b-versatile",
       messages: [
         { role: "system", content: "You are a data extraction assistant. Always output valid JSON." },
-        { role: "user", content: basePrompt + "\n\nTEXT TO ANALYZE:\n" + text }
+        { role: "user", content: finalPrompt + "\n\nTEXT TO ANALYZE:\n" + text }
       ],
       response_format: { type: "json_object" },
       temperature: 0.1,
@@ -179,64 +203,99 @@ async function analyzeTextWithGroq(text: string, dynamicList: string[]): Promise
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { rawText, image, isImage, file } = body; 
+    const { rawText, image, isImage, file } = body;
 
-    console.log("📥 Received request:", { 
-      hasRawText: !!rawText, 
-      hasImage: !!image, 
+    console.log("📥 Received request:", {
+      hasRawText: !!rawText,
+      hasImage: !!image,
       hasFile: !!file,
-      isImage 
+      isImage
     });
 
     const dynamicList = await getDynamicProfessions();
     let result;
+    let typeOfInput;
     let textToAnalyze = "";
 
     if (isImage && image) {
       console.log("🖼️ Processing image with Google Vision API...");
+      typeOfInput = "image";
       textToAnalyze = await extractTextFromImage(image);
     } 
     else if (rawText) {
       console.log("📝 Processing text with Groq API...");
+      typeOfInput = "text";
       textToAnalyze = rawText;
     } 
     else if (file) {
-     console.log("📄 Processing PDF file with pdf2json...");
-      const pdfBuffer = Buffer.from(file, 'base64');
-      
-      textToAnalyze = await new Promise((resolve, reject) => {
-        const pdfParser = new PDFParser(null, true);
+      const fileBuffer = Buffer.from(file, 'base64');
+      const fileSignature = fileBuffer.toString('utf8', 0, 4);
+
+      if (fileSignature.startsWith('PK')) {
+        console.log("📂 Processing Word file with officeparser...");
+        const ast = await parseOffice(fileBuffer);
+        typeOfInput="docx";
+        textToAnalyze = ast.toText();
+      } 
+     else if (fileSignature.startsWith('%PDF')) {
+        console.log("📄 Processing PDF file with Google Vision OCR...");
+        typeOfInput = "pdf";
         
-        pdfParser.on("pdfParser_dataError", (errData: any) => reject(new Error(errData.parserError)));
-        pdfParser.on("pdfParser_dataReady", () => {
-          let extractedText = pdfParser.getRawTextContent();
-          
-          // חיתוך הטקסט ל-8000 תווים (בערך 2000-3000 טוקנים)
-          if (extractedText.length > 8000) {
-              console.log("✂️ Text too long, trimming to 8000 characters");
-              extractedText = extractedText.substring(0, 8000);
+        const client = getVisionClient();
+        
+        const request = {
+          requests: [
+            {
+              inputConfig: {
+                content: fileBuffer.toString('base64'),
+                mimeType: 'application/pdf',
+              },
+              features: [{ type: 'DOCUMENT_TEXT_DETECTION' as const }], 
+            },
+          ],
+        };
+
+        const [result] = await client.batchAnnotateFiles(request);
+        
+        const fileResponses = result.responses?.[0]?.responses || [];
+        let combinedText = "";
+        
+        for (const pageResponse of fileResponses) {
+          if (pageResponse.fullTextAnnotation) {
+            combinedText += pageResponse.fullTextAnnotation.text + "\n\n";
           }
-          
-          resolve(extractedText);
-        });
+        }
         
-        pdfParser.parseBuffer(pdfBuffer);
-      });
+        if (!combinedText.trim()) {
+           throw new Error("Google Vision failed to extract text from this PDF.");
+        }
+        
+        textToAnalyze = combinedText;
+        console.log("✅ PDF Text extracted perfectly using Google Vision");
+      }
+      else {
+        throw new Error("Unsupported file type. Please provide a PDF or DOCX file.");
+      }
     } 
     else {
       throw new Error("No input provided (neither text, image nor file)");
     }
 
     if (textToAnalyze) {
+      if (textToAnalyze.length > 8000) {
+        console.log("✂️ Text too long, trimming to 8000 characters");
+        textToAnalyze = textToAnalyze.substring(0, 8000);
+      }
+      
       console.log("🤖 Analyzing text with Groq...");
-      result = await analyzeTextWithGroq(textToAnalyze, dynamicList);
+      result = await analyzeTextWithGroq(textToAnalyze, dynamicList,typeOfInput);
     }
 
     if (!result || !result.guides) {
       console.error("Invalid result structure:", result);
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "Invalid response structure from AI",
-        guides: [] 
+        guides: []
       }, { status: 500 });
     }
 
@@ -244,15 +303,13 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("❌ AI Extraction Error:", error);
-
     const errorMsg = error.message || "";
-    const isRateLimit = errorMsg.toLowerCase().includes("rate limit") || 
-                        errorMsg.includes("429");
+    const isRateLimit = errorMsg.toLowerCase().includes("rate limit") || errorMsg.includes("429");
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: errorMsg,
       guides: []
-    }, { 
+    }, {
       status: isRateLimit ? 429 : 500
     });
   }
