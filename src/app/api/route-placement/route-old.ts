@@ -6,15 +6,7 @@ export async function POST(req: Request) {
     const { program, candidates, aiCount } = body;
     const apiKey = process.env.GROQ_API_KEY;
 
-    if (!apiKey) {
-      console.error("❌ CRITICAL ERROR: GROQ_API_KEY is undefined in Vercel environment variables!");
-      
-      return NextResponse.json({ 
-        error: "Configuration Error: API Key missing",
-        details: "The GROQ_API_KEY environment variable is not set on the server.",
-        solution: "Go to Vercel -> Settings -> Environment Variables, add GROQ_API_KEY, and Redeploy."
-      }, { status: 500 });
-    }
+    if (!apiKey) return NextResponse.json({ error: "API Key missing" }, { status: 500 });
 
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -94,20 +86,7 @@ export async function POST(req: Request) {
     return NextResponse.json(jsonResponse);
 
   } catch (error: any) {
-    console.error("❌ FATAL API ERROR:", error.message || error);
-    
-    if (error.stack) {
-      console.error("📌 Stack Trace:\n", error.stack);
-    }
-
-    if (error.cause) {
-      console.error("🔍 Error Cause:", error.cause);
-    }
-
-    return NextResponse.json({ 
-      error: "Internal Server Error", 
-      details: error.message || "Unknown error occurred",
-      stack: error.stack 
-    }, { status: 500 });
+    console.error("❌ API Route Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
