@@ -6,7 +6,7 @@ import { ColorCandidate, Colors, Guide } from '@prisma/client';
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 
 interface CellWithProgramNumber extends ICellRendererParams<Guide> {
-  currentProgram: { label: '', value: -1 },
+  currentProgram: { label: string, value: number },
   Colors: Colors[],
   AllColorCandidates: ColorCandidate[],
   onColorChange?: (guideId: number, programId: number, newColorHex: string) => void;
@@ -14,40 +14,83 @@ interface CellWithProgramNumber extends ICellRendererParams<Guide> {
 }
 
 const CLEAR_HEX = '#FFFFFF';
-const CLEAR_MEANING = 'לא נבחר תוכנית';
 
 const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, onColorChange, canClear = false, ...props }: CellWithProgramNumber) => {
-  const [Color, setColor] = useState({ background: CLEAR_HEX, meaning: CLEAR_MEANING })
   
-  const ColorOptions: Partial<Colors>[] = useMemo(
-    () => {
-      let sortedColors = Colors ? [...Colors].sort((arg1, arg2) => arg1.Colorid - arg2.Colorid) : [];
+  // 1. הגדרת משמעות הצבע הלבן בהתאם לטבלה (ימין = לא נבחר לתוכנית, שמאל = מועמד)
+  const WHITE_MEANING = canClear ? 'לא נבחר לתוכנית' : 'מועמד';
+
+  const [Color, setColor] = useState({ background: CLEAR_HEX, meaning: WHITE_MEANING })
+  
+  const ColorOptions = useMemo(() => {
+      const options = [];
       
-      if (canClear) {
-          // Strip exact DB hexes for unassigned/white states to avoid duplication
+      // מצב התחלתי (לבן) לשתי הטבלאות
+      options.push({
+          ColorHexCode: CLEAR_HEX,
+          ColorMeaning: WHITE_MEANING
+      });
+
+      if (!canClear) {
+          // --- סבב צבעים מותאם אישית לטבלה השמאלית ---
+
+          // פונקציית עזר למציאת צבע מהמסד (לפי משמעות ישנה או גיבוי של צבע)
+          const findHex = (meanings: string[], fallbacks: string[]) => {
+              const found = Colors?.find(c => meanings.includes(c.ColorMeaning || "") || fallbacks.includes(c.ColorHexCode?.toLowerCase() || ""));
+              return found?.ColorHexCode || fallbacks[0];
+          };
+
+          // לחיצה 1: צבע אפור -> "פניתי" (מחליף את "רלוונטי"/"לפנות")
+          const grayColor = findHex(['רלוונטי', 'לפנות'], ['#d3d3d3', '#cccccc', '#a0aec0', '#e2e8f0']);
+          options.push({ ColorHexCode: grayColor, ColorMeaning: 'פניתי' });
+          
+          // לחיצה 2: צבע ירוק -> "אולי" (מחליף את "בהמתנה")
+          const greenColor = findHex(['בהמתנה'], ['#90ee90', '#4caf50', '#00ff00', '#4ade80']);
+          options.push({ ColorHexCode: greenColor, ColorMeaning: 'אולי' });
+
+         // לחיצה 3: הצבע הקיים (לרוב צהוב/כתום) -> "לפנות"
+          const existingPniti = findHex(['פניתי'], ['#ffe0a7', '#fde047', '#fef08a', '#ffb6c1']);
+          if (existingPniti !== grayColor) {
+              options.push({ ColorHexCode: existingPniti, ColorMeaning: 'לפנות' });
+          } else {
+              options.push({ ColorHexCode: '#ffe0a7', ColorMeaning: 'לפנות' }); // למקרה שזהה לאפור
+          }
+
+          // לחיצה 4: צבע כחול -> "מועמד מוביל"
+          const blueColor = findHex(['מועמד מוביל'], ['#add8e6', '#2196f3', '#0000ff', '#3b82f6', '#bfdbfe']);
+          options.push({ ColorHexCode: blueColor, ColorMeaning: 'מועמד מוביל' });
+
+      } else {
+          // --- סבב צבעים רגיל לטבלה הימנית (מסד נתונים) ---
+          let sortedColors = Colors ? [...Colors].sort((arg1, arg2) => arg1.Colorid - arg2.Colorid) : [];
           sortedColors = sortedColors.filter(c => {
               const hex = c.ColorHexCode ? String(c.ColorHexCode).trim().toLowerCase() : "";
               const meaning = c.ColorMeaning ? String(c.ColorMeaning).trim() : "";
               
               const isWhite = ['#ffffff', '#fff', 'white', '#f5f5f5'].includes(hex);
-              const isUnassigned = ['לא נבחר תוכנית', 'לא נבחר תכנית', 'ללא תיוג'].includes(meaning);
+              const isUnassigned = ['לא נבחר לתוכנית', 'לא נבחר תכנית', 'ללא תיוג'].includes(meaning);
               
               return !(isWhite || isUnassigned);
           });
-
-          const clearOption = { 
-              Colorid: -9999, 
-              ColorHexCode: CLEAR_HEX, 
-              ColorMeaning: CLEAR_MEANING 
-          };
           
-          return [clearOption, ...sortedColors];
+          sortedColors.forEach(c => {
+              options.push({ ColorHexCode: c.ColorHexCode, ColorMeaning: c.ColorMeaning });
+          });
       }
       
-      return sortedColors;
-    },
-    [Colors, canClear]
-  );
+      // סינון כפילויות צבע כדי למנוע צורך בלחיצה כפולה על אותו צבע
+      const uniqueOptions = [];
+      const seen = new Set();
+      for (const opt of options) {
+          const hex = String(opt.ColorHexCode).trim().toLowerCase();
+          if (!seen.has(hex)) {
+              seen.add(hex);
+              uniqueOptions.push(opt);
+          }
+      }
+
+      return uniqueOptions;
+  }, [Colors, canClear, WHITE_MEANING]);
 
   const onClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -56,7 +99,6 @@ const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, onColorChange
 
     const currentBg = String(Color.background).trim().toLowerCase();
     
-    // Normalize 3-digit to 6-digit hex for accurate comparison
     const normalizeHex = (hex: string) => hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex;
 
     const currentIndex = ColorOptions.findIndex(c => {
@@ -64,22 +106,14 @@ const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, onColorChange
         return normalizeHex(String(c.ColorHexCode).trim().toLowerCase()) === normalizeHex(currentBg);
     });
     
+    // מעבר לצבע הבא במערך (או חזרה להתחלה)
     const nextIndex = currentIndex !== -1 ? (currentIndex + 1) % ColorOptions.length : 0;
     const nextColor = ColorOptions[nextIndex];
 
     if (!nextColor || !nextColor.ColorHexCode) return;
 
     const newHex = nextColor.ColorHexCode;
-    let newMeaning = nextColor.ColorMeaning || "";
-
-    const cleanHex = newHex.trim().toLowerCase();
-    
-    // Override DB legacy labels dynamically, including specific DB hex codes
-    if (newMeaning === "לא מעוניין" || ['#ffe0a7', '#d3d3d3', '#cccccc'].includes(cleanHex)) {
-        newMeaning = "לפנות";
-    } else if (['לא נבחר תוכנית', 'לא נבחר תכנית', 'ללא תיוג'].includes(newMeaning) || ['#ffffff', '#fff', 'white', '#f5f5f5'].includes(cleanHex)) {
-        newMeaning = CLEAR_MEANING;
-    }
+    const newMeaning = nextColor.ColorMeaning || "";
 
     setColor({ background: newHex, meaning: newMeaning });
     setColorCandidate(props.data.Guideid, currentProgram.value, newHex);
@@ -98,8 +132,8 @@ const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, onColorChange
     const initColor = () => {
       if (currentProgram && currentProgram.value !== -1) {
         if (props.data && (props.data as any).aiAssignedColor) {
-            setColor({ background: (props.data as any).aiAssignedColor, meaning: CLEAR_MEANING });
-            if (props.setValue) props.setValue(CLEAR_MEANING);
+            setColor({ background: (props.data as any).aiAssignedColor, meaning: WHITE_MEANING });
+            if (props.setValue) props.setValue(WHITE_MEANING);
             return; 
         }
 
@@ -108,29 +142,25 @@ const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, onColorChange
         )
         
         let initialColorHex = CLEAR_HEX; 
-        let initialMeaning = CLEAR_MEANING;
+        let initialMeaning = WHITE_MEANING;
 
         if (ColorCandidate && ColorCandidate.ColorHexCode) {
-            const candidateHex = ColorCandidate.ColorHexCode;
+            initialColorHex = ColorCandidate.ColorHexCode;
             
-            const colorObj = Colors?.find((res) => 
-                res.ColorHexCode && 
-                String(res.ColorHexCode).trim().toLowerCase() === String(candidateHex).trim().toLowerCase()
+            // בדיקה אם הצבע נמצא בסבב המותאם כדי לתת לו את התווית המעודכנת (כמו "אולי" במקום "בהמתנה")
+            const mappedOption = ColorOptions.find(o => 
+                String(o.ColorHexCode).trim().toLowerCase() === String(initialColorHex).trim().toLowerCase()
             );
             
-            initialColorHex = candidateHex;
-            
-            if (colorObj) {
-                const cleanHex = initialColorHex.trim().toLowerCase();
-                
-                // Ensure dynamic override applies on mount
-                if (colorObj.ColorMeaning === "לא מעוניין" || ['#ffe0a7', '#d3d3d3', '#cccccc'].includes(cleanHex)) {
-                    initialMeaning = "לפנות";
-                } else if (['לא נבחר תוכנית', 'לא נבחר תכנית', 'ללא תיוג'].includes(colorObj.ColorMeaning) || ['#ffffff', '#fff', 'white', '#f5f5f5'].includes(cleanHex)) {
-                    initialMeaning = CLEAR_MEANING;
-                } else {
-                    initialMeaning = colorObj.ColorMeaning;
-                }
+            if (mappedOption) {
+                initialMeaning = mappedOption.ColorMeaning;
+            } else {
+                // גיבוי מהמסד הכללי אם הצבע חריג
+                const colorObj = Colors?.find((res) => 
+                    res.ColorHexCode && 
+                    String(res.ColorHexCode).trim().toLowerCase() === String(initialColorHex).trim().toLowerCase()
+                );
+                if (colorObj) initialMeaning = colorObj.ColorMeaning;
             }
         }
         
@@ -142,7 +172,7 @@ const ColorPicker = ({ currentProgram, Colors, AllColorCandidates, onColorChange
       }
     }
     initColor()
-  }, [currentProgram, AllColorCandidates, Colors, props.data]) 
+  }, [currentProgram, AllColorCandidates, Colors, props.data, ColorOptions, WHITE_MEANING]) 
 
   const getPicker = useCallback(() => {
     return (

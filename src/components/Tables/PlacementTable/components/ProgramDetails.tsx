@@ -190,21 +190,55 @@ export const ProgramDetails = ({
          <div className={styles.programInfoBox}>
             <div className={styles.guidesSectionTitle}>מדריכים</div>
             {displayedGuides.length > 0 ? (
-               <div className={styles.assignedGuidesInline}>
+               <div className={styles.assignedGuidesInline} style={{ flexDirection: 'column', gap: '8px' }}>
                   {displayedGuides.map((guide, index) => (
-                     <div key={guide.Guideid || index} className={styles.guideItemInline}>
-                        <span className={styles.guideBadgeInline}>{index + 1}</span>
-                        <span className={styles.guideNameInline}>
-                           {guide.FirstName} {guide.LastName}
-                        </span>
+                     <div key={guide.Guideid || index} className={styles.guideItemInline} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '8px 12px', textAlign: 'right', direction: 'rtl' }}>
+                        
+                        <div style={{ display: 'flex', gap: '15px', flex: 1, alignItems: 'flex-start' }}>
+                           
+                           {/* אזור השם והמספר */}
+                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, marginTop: '2px' }}>
+                              <span className={styles.guideBadgeInline}>{index + 1}</span>
+                              <span className={styles.guideNameInline} style={{ fontWeight: 'bold', fontSize: '1.05rem' }}>
+                                 {guide.FirstName} {guide.LastName}
+                              </span>
+                           </div>
+
+                           {/* אזור שורות הפירוט */}
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, marginTop: '4px' }}>
+                              
+                              {/* שורה 1: טלפון, עיר וכו' */}
+                              <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '12px', flexWrap: 'wrap', fontSize: '0.9rem', color: '#4a5568' }}>
+                                 {guide.CellPhone && <span><strong>טלפון:</strong> <a href={`whatsapp://send/?phone=972${guide.CellPhone}`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', color: '#3182ce' }}>{guide.CellPhone}</a></span>}
+                                 {guide.City && <span><strong>עיר:</strong> {guide.City}</span>}
+                                 {guide.Area && <span><strong>אזור:</strong> {guide.Area}</span>}
+                                 {guide.ReligiousSector && <span><strong>מגזר:</strong> {guide.ReligiousSector}</span>}
+                                 {guide.CV && <span><strong>קו"ח:</strong> <a href={guide.CV} target="_blank" rel="noreferrer" style={{ color: '#3182ce', textDecoration: 'underline' }}>לצפייה</a></span>}
+                              </div>
+
+                              {/* שורה 2: מקצועות, הערות */}
+                              {(guide.Professions || guide.Notes) && (
+                                 <div style={{ display: 'flex', justifyContent: 'flex-start', gap: '15px', flexWrap: 'wrap', fontSize: '0.9rem', color: '#4a5568' }}>
+                                    {guide.Professions && <span><strong>מקצועות:</strong> {guide.Professions}</span>}
+                                    {guide.Notes && <span><strong>הערות:</strong> {guide.Notes}</span>}
+                                 </div>
+                              )}
+                              
+                           </div>
+                        </div>
+
+                        {/* כפתור מחיקה */}
                         {onRemoveGuide && (
                            <button 
                               className={styles.removeGuideButton}
                               onClick={() => handleRemoveClick(guide.Guideid)}
+                              title="הסר מדריך משיבוץ"
+                              style={{ marginTop: '4px', marginRight: '15px', flexShrink: 0 }}
                            >
                               ✖
                            </button>
                         )}
+                        
                      </div>
                   ))}
                </div>

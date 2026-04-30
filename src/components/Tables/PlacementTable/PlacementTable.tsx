@@ -19,7 +19,7 @@ import { Button, Container, Row, Spinner, Col, Alert, Badge, Card } from "react-
 import "bootstrap/dist/css/bootstrap.min.css";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css"; // Theme
-import { getAllCandidates, getAllColorCandidates, getAllColors, removedAssignCandidate, setAssignCandidate, setColorCandidate, getAllDistances,returnAllGuidesBulk } from "@/db/instructorsrequest";
+import { getAllCandidates, getAllColorCandidates, getAllColors, removedAssignCandidate, setAssignCandidate, setColorCandidate, getAllDistances,returnAllGuidesBulk, updateInstructorsColumn } from "@/db/instructorsrequest";
 import {
   getAllAssignedInstructors,
   getAllCities,
@@ -1429,8 +1429,31 @@ const handleReturnAllCandidates = async () => {
     );
   }, [])
 
-  const getInnerGridCol = (side: string) => (
+  // פונקציה ששומרת את השינויים בעמודות הניתנות לעריכה (כמו "הערות")
+  const onCellValueChanged = useCallback(async (event: any) => {
+    const { data, colDef, newValue, oldValue } = event;
+    
+    // נוודא שהערך אכן השתנה ושהעמודה היא "הערות"
+    if (newValue !== oldValue && colDef.field === "Notes") {
+      try {
+         // 1. שמירה במסד הנתונים כדי שההערה לא תימחק ברענון הדף
+         await updateInstructorsColumn("Notes", newValue, data.Guideid);
+         
+         // 2. עדכון הסטייטים המקומיים כדי שהמידע יישמר כשמעבירים בין טבלאות
+         setAllGuides((prev: Guide[] | undefined) => prev?.map(g => g.Guideid === data.Guideid ? { ...g, Notes: newValue } : g));
+         setAllCandidates_Details((prev: Guide[] | undefined) => prev?.map(g => g.Guideid === data.Guideid ? { ...g, Notes: newValue } : g));
+         if (setAllAssignedGuides_Details) {
+            setAllAssignedGuides_Details((prev: Guide[] | undefined) => prev?.map(g => g.Guideid === data.Guideid ? { ...g, Notes: newValue } : g));
+         }
+         
+         console.log("✅ Notes updated successfully for guide:", data.Guideid);
+      } catch (error) {
+         console.error("❌ Error updating Notes:", error);
+      }
+    }
+  }, []);
 
+  const getInnerGridCol = (side: string) => (
     <div className="inner-col">
       <div
         id="grid-2"
@@ -1477,6 +1500,7 @@ const handleReturnAllCandidates = async () => {
           paginationPageSize={25}
           tooltipShowDelay={0}
           tooltipHideDelay={5000}
+          onCellValueChanged={onCellValueChanged}
         />
       </div>
     </div>
