@@ -1416,6 +1416,32 @@ const handleReturnAllCandidates = async () => {
   const onSelectionChanged = useCallback((event: SelectionChangedEvent<Guide>): void => {
     setSelectedRows(event.api.getSelectedRows())
   }, [])
+
+  const openGoogleMapsRoute = useCallback(() => {
+    if (!SelectedRows || SelectedRows.length === 0) {
+      alert("אנא בחר מדריך אחד מהטבלה");
+      return;
+    }
+    if (CurrentProgram.value === -1) {
+      alert("אנא בחר תוכנית כדי לדעת את יעד הנסיעה");
+      return;
+    }
+
+    const selectedGuide = SelectedRows[0];
+    const program = AllPrograms?.find(p => p.Programid === CurrentProgram.value);
+    
+    if (!program?.CityName || !selectedGuide.City) {
+      alert("חסרים נתוני עיר למדריך או לתוכנית");
+      return;
+    }
+
+    const origin = encodeURIComponent(selectedGuide.City);
+    const destination = encodeURIComponent(program.CityName);
+    const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+    
+    window.open(url, '_blank');
+  }, [SelectedRows, CurrentProgram, AllPrograms]);
+
   const isRowSelectable = (node: RowNode<Guide>) => {
     return true
 
@@ -1646,7 +1672,16 @@ if (!isMounted) return null;
         </>
       )}
   </Button>
-
+<Button 
+      variant="outline-secondary" 
+      size="sm"
+      onClick={openGoogleMapsRoute}
+      className="d-flex align-items-center gap-2"
+      title="הצג מסלול בגוגל מפות"
+  >
+      <SiGooglemaps style={{ color: '#4285F4', fontSize: '1.2rem' }} />
+      <span>ניווט</span>
+  </Button>
   <input
     type="text"
     className="form-control"
