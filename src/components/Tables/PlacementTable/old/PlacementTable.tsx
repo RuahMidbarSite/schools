@@ -332,7 +332,7 @@ const [aiActionTarget, setAiActionTarget] = useState("");
     } else {
       setRightApi(params.api);
 
-      getFromStorage().then(({ Professions, Schools, ProgramsStatuses, Programs, AssignedGuides, Candidates, Tablemodel, Colors, ColorCandidates, schoolsContacts, Years, Distances, Guides, Cities, Filters, Areas }: Required<DataType>) => {
+     getFromStorage().then(({ Professions, Schools, ProgramsStatuses, Programs, AssignedGuides, Candidates, Tablemodel, Colors, ColorCandidates, schoolsContacts, Years, Distances, Guides, Cities, Filters, Areas }: Required<DataType>) => {
         
         // 1. טעינה ראשונית מהזיכרון (כדי שהמשתמש לא יחכה)
         if (Professions && Schools && ProgramsStatuses && Programs && AssignedGuides && Candidates && Tablemodel && Colors && ColorCandidates && schoolsContacts && Years && Distances && Guides && Cities && Filters && Areas) {
@@ -370,12 +370,12 @@ const [aiActionTarget, setAiActionTarget] = useState("");
           setRightRowData(uniqueGuides != null ? uniqueGuides : [])
         }
 
-       // 2. 🔥 תמיד למשוך נתונים עדכניים מהשרת (Background Refresh) 🔥
+      // 2. 🔥 תמיד למשוך נתונים עדכניים מהשרת (Background Refresh) 🔥
        Promise.all([getAllProfessions(), getAllGuides(), getPrograms(), getAllCandidates(), getAllAssignedInstructors(), getModelFields("Guide"), getAllColors(), getAllSchools(), getAllContacts(), getAllColorCandidates(), getAllYears(), getAllStatuses("Programs"), getAllDistances(), getAllCities(), getAllDistricts(), getAllProfessionTypes()])
   .then(([professions, guides, programs, candidates, assigned_guides, model, colors, schools, contacts, color_candidates, years, statuses, distances, cities, areas, professionTypes]) => {
             const sortedYears = (years || []).sort((a: any, b: any) => (a.YearName > b.YearName ? -1 : 1));
             setAllYears(sortedYears);
-            
+
             const coldef: ColDef<Guide>[] = GetDefaultDefinitionsRight(model, colors, color_candidates);
             const coldefleft: ColDef<Guide>[] = GetDefaultDefinitionsLeft(model, colors, color_candidates);
             setLeftColDef(coldefleft);
@@ -1122,48 +1122,82 @@ const runConsultationLogic = useCallback(async (finalPlan) => {
 
 // החלף את הפונקציה updateLeftTable (שורה 892-935) בקוד המתוקן הזה:
 
-const updateLeftTable = () => {
+const updateLeftTable = async () => {
   if (AllCandidates && AllCandidates_Details && CurrentProgram && CurrentProgram.value !== -1) {
     
-    // 🔥 תיקון 1: השתמש ב-Set למניעת כפילויות ב-IDs
+    const prog = AllPrograms?.find(p => p.Programid === CurrentProgram.value);
+    const progCityName = prog ? normalizeCityName(prog.CityName || "") : "";
+    const progCityObj = AllCities?.find(c => normalizeCityName(c.CityName) === progCityName);
+
+    // Cache API calls to avoid rate-limits on identical cities
+    const apiCache: Record<string, number> = {};
+
+    const getDistanceForGuide = async (city: string | null | undefined) => {
+      if (!progCityName || !city || city === "לא צוין" || city === "לא ידוע") return 99999;
+      
+      const gCity = normalizeCityName(city);
+      if (gCity === progCityName) return 0;
+      
+      if (progCityObj) {
+        const guideCityObj = AllCities?.find(c => normalizeCityName(c.CityName) === gCity);
+        if (guideCityObj && AllDistances) {
+          const distRecord = AllDistances.find(d => 
+            (d.OriginId === progCityObj.CityCode && d.DestinationId === guideCityObj.CityCode) ||
+            (d.OriginId === guideCityObj.CityCode && d.DestinationId === progCityObj.CityCode)
+          );
+          if (distRecord) return Math.ceil(distRecord.Distance);
+        }
+      }
+
+      // Fallback to external API if not in DB
+      if (apiCache[gCity] !== undefined) return apiCache[gCity];
+
+      const apiDist = await fetchGeoapifyDistance(gCity, progCityName);
+      const finalDist = apiDist !== null ? apiDist : 99999;
+      apiCache[gCity] = finalDist;
+
+      return finalDist;
+    };
+
     const program_guides = AllCandidates.filter((res) => res.Programid === CurrentProgram.value);
     const uniqueIds = [...new Set(program_guides.map((res) => res.Guideid))];
     
-    // 🔥 תיקון 2: סנן כפילויות מ-AllCandidates_Details
     const uniqueCandidatesDetails = AllCandidates_Details.filter((guide, index, self) => 
       index === self.findIndex((t) => t.Guideid === guide.Guideid)
     );
     
-    // 🔥 תיקון 3: **קבל רשימת משובצים לתוכנית הנוכחית**
     const all_assigned_ids = All_Assigned_Guides
       .filter((g) => g.Programid === CurrentProgram.value)
       .map((val) => val.Guideid);
     
-    // 🔥 תיקון 4: **סנן משובצים גם מרשימת המועמדים!**
     const candidateIdsNotAssigned = uniqueIds.filter((id) => !all_assigned_ids.includes(id));
     
-    // רק מועמדים שלא משובצים
     const guides = uniqueCandidatesDetails.filter((res) => candidateIdsNotAssigned.includes(res.Guideid));
     
-    // 🔥 תיקון 5: סנן כפילויות מ-AllGuides לפני שימוש
     const uniqueAllGuides = AllGuides.filter((guide, index, self) => 
       index === self.findIndex((t) => t.Guideid === guide.Guideid)
     );
     
-    // המדריכים שלא מועמדים ולא משובצים - לטבלה הימנית
-    let rest_of_guides = uniqueAllGuides.filter((res) => 
+    const rest_of_guides_raw = uniqueAllGuides.filter((res) => 
       !uniqueIds.includes(res.Guideid) && !all_assigned_ids.includes(res.Guideid)
     );
     
-    // 🔥 תיקון 6: סנן כפילויות מ-guides לפני יצירת uniqueGuides
     const uniqueGuidesBeforeMapping = guides.filter((guide, index, self) => 
       index === self.findIndex((t) => t.Guideid === guide.Guideid)
     );
     
-    const uniqueGuides = uniqueGuidesBeforeMapping.map(guide => ({
-      ...guide,
-      uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}` 
-    }));
+    // Resolve all distances (DB + API) in parallel before rendering
+    const [uniqueGuides, rest_of_guides] = await Promise.all([
+      Promise.all(uniqueGuidesBeforeMapping.map(async (guide) => ({
+        ...guide,
+        uiUniqueId: `${guide.Guideid}_${CurrentProgram.value}`,
+        distance: await getDistanceForGuide(guide.City)
+      }))),
+      Promise.all(rest_of_guides_raw.map(async (guide) => ({
+        ...guide,
+        distance: await getDistanceForGuide(guide.City)
+      })))
+    ]);
 
     setLeftRowData(uniqueGuides);
     setRightRowData(rest_of_guides);

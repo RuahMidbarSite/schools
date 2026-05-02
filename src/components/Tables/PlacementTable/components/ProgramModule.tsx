@@ -10,6 +10,7 @@ import { GridApi } from "ag-grid-community";
 import SendMessagesBox from "@/components/Tables/PlacementTable/components/SendMessages";
 import styles from "./ProgramModule.module.css";
 import { deleteAssignedInstructor } from "@/db/instructorsrequest";
+import { useContactComponent } from "@/util/Google/GoogleContacts/ContactComponent";
 import { Spinner, Alert, Badge, Card, Button } from "react-bootstrap";
 import { FaRobot, FaUserTie, FaCheckCircle } from "react-icons/fa";
 
@@ -74,12 +75,75 @@ export const ProgramModule = ({
 }: ProgramProps) => {
 
    const [ChosenCandidate, setChosenCandidate] = useState<{ guide: Guide }>()
+   const [AuthenticateActivate] = useContactComponent();
+   useEffect(() => {
+   if (typeof window === 'undefined') return;
+
+   const initGapiClient = () => {
+      if ((window as any).gapi) {
+         (window as any).gapi.load('client', async () => {
+            try {
+               await (window as any).gapi.client.init({
+                  apiKey: process.env.NEXT_PUBLIC_API_KEY,
+                  discoveryDocs: ['https://people.googleapis.com/$discovery/rest?version=v1'],
+               });
+               console.log('✅ gapi.client initialized in ProgramModule');
+            } catch (err) {
+               console.error('❌ gapi.client init error:', err);
+            }
+         });
+      }
+   };
+
+   if (!document.querySelector('script[src*="accounts.google.com/gsi/client"]')) {
+      const gsiScript = document.createElement('script');
+      gsiScript.src = 'https://accounts.google.com/gsi/client';
+      gsiScript.async = true;
+      gsiScript.defer = true;
+      document.body.appendChild(gsiScript);
+   }
+
+   if (!document.querySelector('script[src*="apis.google.com/js/api"]')) {
+      const gapiScript = document.createElement('script');
+      gapiScript.src = 'https://apis.google.com/js/api.js';
+      gapiScript.async = true;
+      gapiScript.defer = true;
+      gapiScript.onload = initGapiClient;
+      document.body.appendChild(gapiScript);
+   } else if ((window as any).gapi) {
+      // הסקריפט כבר קיים אבל client אולי לא אותחל
+      initGapiClient();
+   }
+}, []);
    
    // 🔥 State עבור AI - כעת ב-ProgramModule
    const [aiLoading, setAiLoading] = useState(false);
    const [aiResponse, setAiResponse] = useState<AiResponse | null>(null);
    const [aiError, setAiError] = useState<string | null>(null);
    const [showAiModal, setShowAiModal] = useState(false); // 🔥 State למודאל
+const handleAddToGoogleContacts = useCallback((guides: Guide[]) => {
+   if (!guides || guides.length === 0) return;
+
+   const createContact = AuthenticateActivate("create_contact", "contacts");
+   let successCount = 0;
+
+   guides.forEach((guide) => {
+      createContact({
+         data: {
+            name: `${guide.FirstName ?? ''} ${guide.LastName ?? ''}`.trim(),
+            cellPhone: guide.CellPhone ?? '',
+            emailAddress: '',
+         },
+         callbackFunction: ({ resourceName }: { resourceName: string }) => {
+            successCount++;
+            console.log(`✅ נוצר איש קשר: ${guide.FirstName} ${guide.LastName} → ${resourceName}`);
+            if (successCount === guides.length) {
+               alert(`✅ ${successCount} אנשי קשר נוספו בהצלחה לגוגל`);
+            }
+         },
+      });
+   });
+}, [AuthenticateActivate]);
 
    // 🔥 לוגיקת גרירה פשוטה לחלון הצף
    useEffect(() => {
@@ -275,13 +339,14 @@ export const ProgramModule = ({
 
                <div className={styles.programCard}>
                   <ProgramDetails
-                     CurrentProgram={CurrentProgram}
-                     AllPrograms={AllPrograms}
-                     AllSchools={AllSchools}
-                     All_Assigned_Guides_Details={All_Assigned_Guides_Details}
-                     All_Assigned_Guides={All_Assigned_Guides}
-                     onRemoveGuide={handleRemoveGuide}
-                  />
+   CurrentProgram={CurrentProgram}
+   AllPrograms={AllPrograms}
+   AllSchools={AllSchools}
+   All_Assigned_Guides_Details={All_Assigned_Guides_Details}
+   All_Assigned_Guides={All_Assigned_Guides}
+   onRemoveGuide={handleRemoveGuide}
+   onAddToGoogleContacts={handleAddToGoogleContacts}
+/>
                </div>
 
 

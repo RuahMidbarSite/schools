@@ -9,6 +9,7 @@ type ProgramDetailsProps = {
    All_Assigned_Guides_Details: Guide[];
    All_Assigned_Guides: any[];
    onRemoveGuide?: (guideId: number) => void;
+   onAddToGoogleContacts?: (guides: Guide[]) => void;
 }
 
 export const ProgramDetails = ({
@@ -17,7 +18,8 @@ export const ProgramDetails = ({
    AllSchools,
    All_Assigned_Guides_Details,
    All_Assigned_Guides,
-   onRemoveGuide
+   onRemoveGuide,
+   onAddToGoogleContacts
 }: ProgramDetailsProps) => {
    
    const currentProgramData = useMemo(() => {
@@ -188,7 +190,31 @@ export const ProgramDetails = ({
 
          {/* קופסה 2 - מדריכים */}
          <div className={styles.programInfoBox}>
-            <div className={styles.guidesSectionTitle}>מדריכים</div>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+   <div className={styles.guidesSectionTitle}>מדריכים</div>
+   {onAddToGoogleContacts && displayedGuides.length > 0 && (
+      <button
+         onClick={() => onAddToGoogleContacts(displayedGuides)}
+         title="הוסף מדריכים לאנשי קשר גוגל"
+         style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 12px',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            color: '#fff',
+            backgroundColor: '#4285F4',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            direction: 'rtl',
+         }}
+      >
+         <span>📇</span> הוסף לאנשי קשר גוגל
+      </button>
+   )}
+</div>
             {displayedGuides.length > 0 ? (
                <div className={styles.assignedGuidesInline} style={{ flexDirection: 'column', gap: '8px' }}>
                   {displayedGuides.map((guide, index) => (
