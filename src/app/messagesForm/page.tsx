@@ -117,7 +117,7 @@ export default function MessagesPage() {
         console.log("Starting data fetch...");
         
         // שליפת נתונים מהשרת (כדי להבטיח שהשדות יתמלאו)
-        const [
+       const [
             schoolsData, 
             contactsData, 
             modelData, 
@@ -126,7 +126,6 @@ export default function MessagesPage() {
             rolesData,
             stagesData,
             schoolTypesData,
-            schoolStatusesData,
             contactStatusesData,
             patternsData
         ] = await Promise.all([
@@ -138,7 +137,6 @@ export default function MessagesPage() {
           getRoles(),
           getEducationStages(),
           getAllSchoolsTypes(),
-          getAllStatuses("Schools"), // הנחה: יש פונקציה שמקבלת פרמטר או פונקציות נפרדות
           getAllStatuses("Contacts"),
           getMessagePatterns()
         ]);
@@ -152,16 +150,30 @@ export default function MessagesPage() {
         setStages(stagesData.map((s: any) => s.StageName || s));
         setSchoolTypes(schoolTypesData.map((t: any) => t.TypeName || t));
         
-        // טיפול בסטטוסים (ייתכן והמבנה שונה)
-        setSchoolStatuses(schoolStatusesData.map((s: any) => s.StatusName || s.value || s));
-        setContactStatuses(contactStatusesData.map((s: any) => s.StatusName || s.value || s));
+        // חילוץ סטטוסים של בתי ספר ישירות מנתוני בתי הספר (מבטיח התאמה מדויקת לדף בתי ספר)
+        const uniqueSchoolStatuses = Array.from(
+            new Set(schoolsData.map((s: any) => s.Status || s.status || s['סטטוס']).filter(Boolean))
+        ) as string[];
+        setSchoolStatuses(uniqueSchoolStatuses);
+
+       // טיפול בסטטוסים (סטטוס לאחר שליחה) - שילוב של מילון הסטטוסים עם הסטטוסים הקיימים בפועל בשטח
+        const dbContactStatuses = contactStatusesData.map((s: any) => s.StatusName || s.value || s);
+        const dynamicStatuses = [
+            ...schoolsData.map((s: any) => s.Status || s.status || s['סטטוס']),
+            ...contactsData.map((c: any) => c.Status || c.status || c['סטטוס'])
+        ];
+        
+        const combinedContactStatuses = Array.from(
+            new Set([...dbContactStatuses, ...dynamicStatuses].filter(Boolean))
+        ) as string[];
+        
+        setContactStatuses(combinedContactStatuses);
 
         // תבניות הודעה
         setPatterns(patternsData);
         setOptions(patternsData.filter((p:any) => p.MessageContext !== "Placement").map((p:any) => ({ value: p.PatternId, label: p.Caption })));
 
         setAllContactsData(contactsData); // שמירה בצד לשימוש עתידי
-
       // הגדרת עמודות לטבלה עם לוגיקה של צבע לסטטוס
         const dynamicCols = modelData[0].map((field: string, i: number) => {
           const headerName = modelData[1][i];
@@ -216,16 +228,17 @@ export default function MessagesPage() {
 
   // --- 2. סינון חי ---
   useEffect(() => {
-    const filtered = schools.filter(s => 
-      (selectedCities.length === 0 || selectedCities.includes(s.City)) &&
+    const filtered = schools.filter(s => {
+      const schoolStatus = s.Status || s.status || s['סטטוס'];
+      return (selectedCities.length === 0 || selectedCities.includes(s.City)) &&
       (selectedSectors.length === 0 || selectedSectors.includes(s.ReligiousSector)) &&
       (selectedStages.length === 0 || selectedStages.includes(s.EducationStage)) &&
       (selectedTypes.length === 0 || selectedTypes.includes(s.SchoolType)) &&
-      (selectedSchoolStatuses.length === 0 || selectedSchoolStatuses.includes(s.Status))
-    );
+      (selectedSchoolStatuses.length === 0 || selectedSchoolStatuses.includes(schoolStatus));
+    });
     setRowData(schoolAmount > 0 ? filtered.slice(0, schoolAmount) : filtered);
   }, [selectedCities, selectedSectors, selectedStages, selectedTypes, selectedSchoolStatuses, schoolAmount, schools]);
-
+  
   // --- Handlers ---
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
