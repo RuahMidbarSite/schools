@@ -17,18 +17,22 @@ const ToolBar = (
   onDisplayProgramsClicked, 
   LoadingOverlay,
   checkContactsStatus,
-  onDisconnectContacts
+  onDisconnectContacts,
+  schoolStatuses = [],         // הוספנו (עם ערך דיפולט למניעת קריסות)
+  activeStatusFilter = null,   // הוספנו
+  handleStatusFilter = () => {} // הוספנו
 ) => {
   const { theme } = useContext(ThemeContext)
 
   return (
 <div 
-  className="d-flex align-items-center justify-content-between gap-2 px-4 py-3"
+  className="d-flex align-items-start justify-content-between gap-2 px-4 py-2" // שינוי ל-align-items-start
   style={{
-    width: '100vw',
+    width: '100%',
+    minHeight: '80px',
     background: 'transparent'
   }}
->      
+>   
       {/* 👈 צד שמאל - סטטוס Google Contacts */}
       <div className="d-flex align-items-center">
         <div className="bg-blue-100 px-4 py-2 rounded-lg border border-blue-300 shadow-sm">
@@ -121,6 +125,39 @@ const ToolBar = (
         >
           הצג תוכניות
         </Button>
+
+        {/* --- התחלת תוספת כפתורי הסטטוסים --- */}
+        {schoolStatuses.length > 0 && (
+          <div className="d-flex align-items-center flex-grow-1" style={{ minWidth: 0, paddingRight: '15px' }} dir="rtl">
+            <div style={{ width: '1px', height: '40px', backgroundColor: '#cbd5e1', marginLeft: '12px', flexShrink: 0 }}></div>
+            
+            <div style={{ 
+              display: 'flex', 
+              flexWrap: 'wrap', 
+              gap: '6px', 
+              justifyContent: 'flex-start', // בזכות dir="rtl" זה נצמד בדיוק לימין
+              paddingTop: '4px',
+              paddingBottom: '4px'
+            }}>
+              {schoolStatuses.map((status: any) => (
+                <button
+                  key={status.StatusId}
+                  onClick={() => handleStatusFilter(status.StatusName)}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${
+                    activeStatusFilter === status.StatusName
+                      ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                  style={{ whiteSpace: 'nowrap', height: '28px' }} // גובה כפתור קבוע ללא חיתוכים
+                >
+                  {status.StatusName}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* --- סוף תוספת כפתורי הסטטוסים --- */}
+
       </div>
     </div>
   )

@@ -16,9 +16,23 @@ const useGridEvents = (gridRef, InTheMiddleOfAddingRows, checkedAmount, setAmoun
         return;
       }
       if (!InTheMiddleOfAddingRows) {
+        let finalValue = event.newValue;
+
+        // טיפול בהוספת תווית השנה בפורמט דו-ספרתי לעמודת ההערות
+        if (event.column.getColId() === "Remarks" && finalValue) {
+          const currentYear = String(new Date().getFullYear()).slice(-2);
+          const yearTag = `[${currentYear}]`;
+          
+          if (!String(finalValue).includes(yearTag)) {
+            finalValue = `${yearTag} ${finalValue}`;
+            event.data.Remarks = finalValue;
+            event.api.refreshCells({ rowNodes: [event.node], columns: ["Remarks"] });
+          }
+        }
+
         updateSchoolsColumn(
           event.column.getColId(),
-          event.newValue,
+          finalValue,
           event.data.Schoolid
         );
 

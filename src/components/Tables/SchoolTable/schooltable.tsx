@@ -37,6 +37,7 @@ import { useContactComponent } from "@/util/Google/GoogleContacts/ContactCompone
 import { getCacheVersion, getFromStorage, updateStorage } from "@/components/Tables/SchoolTable/Storage/SchoolDataStorage";
 import { updateStorage as updateSmallContactsStorage } from "@/components/Tables/SmallContactsTable/Storage/SmallContactsDataStorage";
 import { deleteContactsRows } from "@/db/contactsRequests";
+import { getAllStatuses } from "@/db/generalrequests"; // ייבוא הפונקציה למשיכת הסטטוסים
 
 export default function SchoolsTable() {
   const { theme } = useContext(ThemeContext);
@@ -60,6 +61,35 @@ export default function SchoolsTable() {
   const [AllPrograms, setAllPrograms] = useState<Program[]>([])
   const maxIndex = useRef(0)
   const [cacheVersion, setCacheVersion] = useState<number>(0)
+
+  // --- התחלת תוספת לסינון סטטוסים ---
+  const [schoolStatuses, setSchoolStatuses] = useState<{ StatusId: number, StatusName: string }[]>([]);
+  const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
+
+  // משיכת רשימת הסטטוסים בטעינה
+  useEffect(() => {
+    getAllStatuses("Schools").then((statuses: any) => {
+      setSchoolStatuses(statuses);
+    });
+  }, []);
+
+  // פונקציית הסינון שמופעלת בלחיצה
+  const handleStatusFilter = useCallback((statusName: string) => {
+    if (gridRef.current && gridRef.current.api) {
+      if (activeStatusFilter === statusName) {
+        gridRef.current.api.setColumnFilterModel('Status', null); // ביטול סינון אם לוחצים שוב
+        setActiveStatusFilter(null);
+      } else {
+        gridRef.current.api.setColumnFilterModel('Status', {
+          filterType: 'set',
+          values: [statusName]
+        });
+        setActiveStatusFilter(statusName);
+      }
+      gridRef.current.api.onFilterChanged();
+    }
+  }, [activeStatusFilter]);
+  // --- סוף תוספת לסינון סטטוסים ---
 
   const { updateColStateFromCache, updateColState } = useColumnEffects(gridRef, colState, setColState)
   useExternalEffect(updateColStateFromCache, [colDefinition])
@@ -224,10 +254,16 @@ style={{
   background: theme === "dark-theme" 
     ? 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)'
     : 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)',
-  minHeight: '64px',
+  minHeight: '100px', // גובה מינימלי קבוע שימנע חיתוך של 2 שורות
+  height: 'auto',
+  paddingTop: '10px',
+  paddingBottom: '10px',
   width: '100%',
+  display: 'flex',
+  alignItems: 'center',
   borderBottom: '1px solid rgba(203, 213, 225, 0.3)',
-  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)'
+  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
+  zIndex: 10 // מבטיח שהסרגל יהיה מעל הטבלה
 }}
 >
   <LoadingOverlay />
@@ -243,7 +279,10 @@ style={{
     onDisplayProgramsClicked, 
     LoadingOverlay, 
     checkContactsStatus, 
-    onDisconnectContacts
+    onDisconnectContacts,
+    schoolStatuses,       // הוספנו
+    activeStatusFilter,   // הוספנו
+    handleStatusFilter    // הוספנו
   )}
 </nav>
       <Suspense>

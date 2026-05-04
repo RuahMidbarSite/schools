@@ -78,7 +78,7 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
           return {
             field: value,
             headerName: model[1][index],
-            width: 80,
+            width: 120, // הורחב פי 1.5 מ-80 ל-120
             editable: true,
             cellEditor: CustomSelectCellEditor,
             cellEditorParams: {
@@ -181,15 +181,51 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
             filter: "CustomFilter",
           }
         }
-        if (value === "Remarks") {
+     if (value === "Remarks") {
           return {
             field: value,
-            headerName: model[1][index],
-            width: 200,
+            headerName: "הערות",
+            width: 250,
             editable: true,
-            cellEditor: "agTextCellEditor",
+            cellEditor: "agTextCellEditor", // נשאר עורך רגיל של שורה אחת
             filter: "CustomFilter",
-            hide: true,
+            tooltipValueGetter: (params: any) => params.value, // נשאר הטולטיפ שביקשת
+            cellRenderer: (params: any) => {
+              if (!params.value) return "";
+              
+              // זיהוי תבנית של שנתון דו-ספרתי בתוך סוגריים מרובעים (כמו [26]) בתחילת הטקסט
+              const match = String(params.value).match(/^\[(\d{2})\]\s*(.*)$/);
+              if (match) {
+                const year = match[1];
+                const text = match[2];
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", height: "100%", width: "100%" }}>
+                    <span style={{
+                      backgroundColor: "#e2e8f0", 
+                      color: "#334155", 
+                      padding: "2px 6px", 
+                      borderRadius: "6px", 
+                      fontSize: "0.8rem",
+                      fontWeight: "600",
+                      border: "1px solid #cbd5e1",
+                      lineHeight: "1",
+                      flexShrink: 0 // מונע מהבאדג' להתכווץ כשהטקסט ארוך
+                    }}>
+                      {year}
+                    </span>
+                    <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", display: "block" }}>
+                      {text}
+                    </span>
+                  </div>
+                );
+              }
+              // אם אין תווית שנתון, מציג את הטקסט רגיל אבל דואג שהשלוש נקודות יעבדו
+              return (
+                <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", display: "block", width: "100%" }}>
+                  {params.value}
+                </span>
+              );
+            }
           }
         }
 
