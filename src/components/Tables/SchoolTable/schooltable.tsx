@@ -55,7 +55,7 @@ export default function SchoolsTable() {
   const [columnWindowOpen, setColumnWindowOpen] = useState(false);
   const openedProgramWindow = useRef<boolean>(false)
   const [isLoading, setLoading] = useState(false);
-  const isEditable = useCallback((params: any) => !params.node.expanded, []);
+  const isEditable = useCallback((params: any) => true, []);
   const [AllContacts, setAllContacts] = useState<SchoolsContact[]>([])
   const [AllPrograms, setAllPrograms] = useState<Program[]>([])
   const maxIndex = useRef(0)

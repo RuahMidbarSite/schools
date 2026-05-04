@@ -53,8 +53,11 @@ const RepresentiveComponent = forwardRef<RepresentiveRef, CustomRep>(({ setConta
     if (contact) {
       const contact_name = create_name(contact)
       setContactName(contact_name)
-      const formatted_cellPhone = contact.Cellphone.replace('+972', '').replace(/[-\s]/g, '');
-      const link = `whatsapp://send/?phone=972${formatted_cellPhone}`;
+      
+      // הוספנו בדיקה: רק אם יש טלפון נפעיל את ה-replace, אחרת נחזיר מחרוזת ריקה
+      const formatted_cellPhone = contact.Cellphone ? contact.Cellphone.replace('+972', '').replace(/[-\s]/g, '') : '';
+      const link = formatted_cellPhone ? `whatsapp://send/?phone=972${formatted_cellPhone}` : undefined;
+      
       setLink(link)
       setCurrentContact(contact)
       
