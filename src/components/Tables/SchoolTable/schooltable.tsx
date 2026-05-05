@@ -91,6 +91,20 @@ export default function SchoolsTable() {
   }, [activeStatusFilter]);
   // --- סוף תוספת לסינון סטטוסים ---
 
+  // חישוב כמות הרשומות לכל סטטוס מתוך rowData
+  const statusCounts = useMemo(() => {
+    const counts: { [key: string]: number } = {};
+    if (rowData && Array.isArray(rowData)) {
+      rowData.forEach((row: any) => {
+        const status = row.Status;
+        if (status) {
+          counts[status] = (counts[status] || 0) + 1;
+        }
+      });
+    }
+    return counts;
+  }, [rowData]);
+
   const { updateColStateFromCache, updateColState } = useColumnEffects(gridRef, colState, setColState)
   useExternalEffect(updateColStateFromCache, [colDefinition])
   useExternalEffect(updateColState, [colState])
@@ -280,9 +294,10 @@ style={{
     LoadingOverlay, 
     checkContactsStatus, 
     onDisconnectContacts,
-    schoolStatuses,       // הוספנו
+   schoolStatuses,       // הוספנו
     activeStatusFilter,   // הוספנו
-    handleStatusFilter    // הוספנו
+    handleStatusFilter,   // הוספנו
+    statusCounts          // הוספנו - ספירת הרשומות לכל סטטוס
   )}
 </nav>
       <Suspense>

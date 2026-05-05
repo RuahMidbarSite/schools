@@ -6,20 +6,30 @@ export const CustomFilter = forwardRef((props: any, ref) => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectAllChecked, setSelectAllChecked] = useState(false);
 
+  const [valueCounts, setValueCounts] = useState<{ [key: string]: number }>({});
+
   const getUniqueValuesFromGridData = useCallback((props: any) => {
     const uniqueValues = new Set<string>();
+    const counts: { [key: string]: number } = {};
+
     props.api.forEachNode((node: any) => {
-      const formattedValue = formatValue({ data: node.data }, props);
+      let formattedValue = formatValue({ data: node.data }, props);
 
       // Convert true/false to the desired strings
       if (formattedValue === true) {
-        uniqueValues.add("נציג");
+        formattedValue = "נציג";
       } else if (formattedValue === false) {
-        uniqueValues.add("לא נציג");
-      } else {
-        uniqueValues.add(formattedValue);
+        formattedValue = "לא נציג";
+      }
+      
+      if (formattedValue !== null && formattedValue !== undefined) {
+          const stringValue = String(formattedValue);
+          uniqueValues.add(stringValue);
+          counts[stringValue] = (counts[stringValue] || 0) + 1;
       }
     });
+    
+    setValueCounts(counts);
     return Array.from(uniqueValues);
   }, []);
 
@@ -166,15 +176,20 @@ export const CustomFilter = forwardRef((props: any, ref) => {
 
       {filteredValues.map((value) => (
         <div key={value} className="flex items-center mb-1">
-          <label className="flex items-center space-x-2 text-white text-lg">
-            <input
-              type="checkbox"
-              value={value}
-              onChange={onValueChange}
-              checked={selectedValues.includes(String(value))}
-              className="form-checkbox h-6 w-6 text-blue-600 ml-1"
-            />
-            <span>{value}</span>
+          <label className="flex items-center space-x-2 text-white text-lg w-full justify-between pr-1">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                value={value}
+                onChange={onValueChange}
+                checked={selectedValues.includes(String(value))}
+                className="form-checkbox h-6 w-6 text-blue-600 ml-1"
+              />
+              <span>{value}</span>
+            </div>
+            <span className="text-gray-400 text-sm font-semibold pl-2">
+              ({valueCounts[String(value)] || 0})
+            </span>
           </label>
         </div>
       ))}

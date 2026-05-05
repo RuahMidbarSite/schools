@@ -20,7 +20,8 @@ const ToolBar = (
   onDisconnectContacts,
   schoolStatuses = [],         // הוספנו (עם ערך דיפולט למניעת קריסות)
   activeStatusFilter = null,   // הוספנו
-  handleStatusFilter = () => {} // הוספנו
+  handleStatusFilter = () => {}, // הוספנו
+  statusCounts = {}            // הוספנו - אובייקט ספירת הסטטוסים
 ) => {
   const { theme } = useContext(ThemeContext)
 
@@ -131,28 +132,52 @@ const ToolBar = (
           <div className="d-flex align-items-center flex-grow-1" style={{ minWidth: 0, paddingRight: '15px' }} dir="rtl">
             <div style={{ width: '1px', height: '40px', backgroundColor: '#cbd5e1', marginLeft: '12px', flexShrink: 0 }}></div>
             
-            <div style={{ 
-              display: 'flex', 
-              flexWrap: 'wrap', 
-              gap: '6px', 
-              justifyContent: 'flex-start', // בזכות dir="rtl" זה נצמד בדיוק לימין
-              paddingTop: '4px',
-              paddingBottom: '4px'
-            }}>
-              {schoolStatuses.map((status: any) => (
-                <button
-                  key={status.StatusId}
-                  onClick={() => handleStatusFilter(status.StatusName)}
-                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${
-                    activeStatusFilter === status.StatusName
-                      ? 'bg-teal-600 text-white border-teal-600 shadow-md'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
-                  style={{ whiteSpace: 'nowrap', height: '28px' }} // גובה כפתור קבוע ללא חיתוכים
-                >
-                  {status.StatusName}
-                </button>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* שורה ראשונה - ספירה מעל הכפתור */}
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start' }}>
+                {schoolStatuses.slice(0, Math.ceil(schoolStatuses.length / 2)).map((status: any) => (
+                  <div key={status.StatusId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff', lineHeight: '1', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}>
+                      {statusCounts[status.StatusName] || 0}
+                    </span>
+                    <button
+                      onClick={() => handleStatusFilter(status.StatusName)}
+                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${
+                        activeStatusFilter === status.StatusName
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      style={{ whiteSpace: 'nowrap', height: '28px' }}
+                    >
+                      {status.StatusName}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* שורה שנייה - ספירה מתחת לכפתור */}
+              {schoolStatuses.length > 1 && (
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start' }}>
+                  {schoolStatuses.slice(Math.ceil(schoolStatuses.length / 2)).map((status: any) => (
+                    <div key={status.StatusId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                      <button
+                        onClick={() => handleStatusFilter(status.StatusName)}
+                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${
+                          activeStatusFilter === status.StatusName
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                        style={{ whiteSpace: 'nowrap', height: '28px' }}
+                      >
+                        {status.StatusName}
+                      </button>
+                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff', lineHeight: '1', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}>
+                        {statusCounts[status.StatusName] || 0}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
