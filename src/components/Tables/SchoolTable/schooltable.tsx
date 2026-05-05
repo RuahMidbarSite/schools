@@ -37,7 +37,7 @@ import { useContactComponent } from "@/util/Google/GoogleContacts/ContactCompone
 import { getCacheVersion, getFromStorage, updateStorage } from "@/components/Tables/SchoolTable/Storage/SchoolDataStorage";
 import { updateStorage as updateSmallContactsStorage } from "@/components/Tables/SmallContactsTable/Storage/SmallContactsDataStorage";
 import { deleteContactsRows } from "@/db/contactsRequests";
-import { getAllStatuses } from "@/db/generalrequests"; // ייבוא הפונקציה למשיכת הסטטוסים
+import { getAllStatuses, updateSchoolStatus } from "@/db/generalrequests"; // ייבוא הפונקציות ממסד הנתונים
 
 export default function SchoolsTable() {
   const { theme } = useContext(ThemeContext);
@@ -90,6 +90,43 @@ export default function SchoolsTable() {
     }
   }, [activeStatusFilter]);
   // --- סוף תוספת לסינון סטטוסים ---
+
+  // --- הוספת פונקציה לעדכון סטטוס גורף ---
+  const handleBatchStatusUpdate = useCallback(async (newStatusName: string) => {
+    if (!gridRef.current?.api) return;
+    const selectedRows = gridRef.current.api.getSelectedRows();
+    if (selectedRows.length === 0) return;
+
+    if (window.confirm(`האם אתה בטוח שברצונך לעדכן סטטוס ל-${newStatusName} עבור ${selectedRows.length} רשומות?`)) {
+      setLoading(true);
+      try {
+        const schoolIds = selectedRows.map(r => r.Schoolid);
+        
+        // קריאה לשרת לעדכון הסטטוסים במסד הנתונים
+        await updateSchoolStatus(newStatusName, schoolIds);
+        
+        // עדכון ב-Storage המקומי
+        const currentStorage = await getFromStorage();
+        if (currentStorage && currentStorage.Schools) {
+          const updatedStorageSchools = currentStorage.Schools.map((school: any) => 
+            schoolIds.includes(school.Schoolid) ? { ...school, Status: newStatusName } : school
+          );
+          await updateStorage({ Schools: updatedStorageSchools });
+        }
+
+        // עדכון מקומי בגריד לתצוגה מיידית
+        const updatedRows = selectedRows.map(row => ({ ...row, Status: newStatusName }));
+        gridRef.current.api.applyTransaction({ update: updatedRows });
+        
+        gridRef.current.api.deselectAll();
+      } catch (error) {
+        console.error("Failed to update batch statuses:", error);
+        alert("חלה שגיאה בעדכון הסטטוסים. נסה שוב.");
+      } finally {
+        setLoading(false);
+      }
+    }
+  }, []);
 
   // חישוב כמות הרשומות לכל סטטוס מתוך rowData
   const statusCounts = useMemo(() => {
@@ -281,7 +318,7 @@ style={{
 }}
 >
   <LoadingOverlay />
-  {ToolBar(
+ {ToolBar(
     onClearFilterButtonClick, 
     setColumnWindowOpen, 
     onAddRowToolBarClick, 
@@ -297,7 +334,8 @@ style={{
    schoolStatuses,       // הוספנו
     activeStatusFilter,   // הוספנו
     handleStatusFilter,   // הוספנו
-    statusCounts          // הוספנו - ספירת הרשומות לכל סטטוס
+    statusCounts,         // הוספנו - ספירת הרשומות לכל סטטוס
+    handleBatchStatusUpdate // תוספת: עדכון גורף
   )}
 </nav>
       <Suspense>

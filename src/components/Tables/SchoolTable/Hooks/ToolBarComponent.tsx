@@ -21,7 +21,8 @@ const ToolBar = (
   schoolStatuses = [],         // הוספנו (עם ערך דיפולט למניעת קריסות)
   activeStatusFilter = null,   // הוספנו
   handleStatusFilter = () => {}, // הוספנו
-  statusCounts = {}            // הוספנו - אובייקט ספירת הסטטוסים
+  statusCounts = {},           // הוספנו - אובייקט ספירת הסטטוסים
+  handleBatchStatusUpdate = (status) => {} // תוספת: פונקציית עדכון גורף
 ) => {
   const { theme } = useContext(ThemeContext)
 
@@ -34,8 +35,8 @@ const ToolBar = (
     background: 'transparent'
   }}
 >   
-      {/* 👈 צד שמאל - סטטוס Google Contacts */}
-      <div className="d-flex align-items-center">
+      {/* 👈 צד שמאל - סטטוס Google Contacts וכפתור תוכניות */}
+      <div className="d-flex flex-column align-items-center gap-2">
         <div className="bg-blue-100 px-4 py-2 rounded-lg border border-blue-300 shadow-sm">
           <GoogleDriveAuthStatus
             type="Contacts"
@@ -43,6 +44,13 @@ const ToolBar = (
             onDisconnect={onDisconnectContacts}
           />
         </div>
+        <Button
+          className="hover:bg-blue-700 bg-blue-600 rounded d-flex align-items-center justify-content-center px-3 border-0 shadow-sm text-white text-sm"
+          onClick={onDisplayProgramsClicked}
+          style={{ height: '32px', width: '100%', whiteSpace: 'nowrap' }} 
+        >
+          הצג תוכניות
+        </Button>
       </div>
 
       {/* 👉 צד ימין - כל הכפתורים */}
@@ -110,6 +118,29 @@ const ToolBar = (
           מחק {checkedAmount} שורות
         </button>
 
+        {/* תוספת: תפריט בחירת סטטוס להחלפה גורפת - מופיע רק כשיש שורות מסומנות */}
+        {checkedAmount > 0 && (
+          <select
+            onChange={(e) => {
+              if (e.target.value) {
+                handleBatchStatusUpdate(e.target.value);
+                e.target.value = ""; // איפוס הבחירה לאחר מכן כדי לאפשר בחירה חוזרת
+              }
+            }}
+            className={theme === "dark-theme" 
+              ? "bg-teal-700 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-600" 
+              : "bg-teal-600 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-700"}
+            style={{ direction: 'rtl' }}
+          >
+            <option value="">שנה סטטוס ל-{checkedAmount} רשומות...</option>
+            {schoolStatuses.map((status) => (
+              <option key={status.StatusId} value={status.StatusName}>
+                {status.StatusName}
+              </option>
+            ))}
+          </select>
+        )}
+
         <input
           className={theme === "dark-theme" ? "text-right bg-gray-900 text-white border-solid w-[200px] h-[35px] p-2 rounded" :
             "text-right bg-white text-gray-500 border-solid w-[200px] h-[35px] p-2 rounded"}
@@ -118,15 +149,6 @@ const ToolBar = (
           placeholder="חיפוש"
           onInput={onFilterTextBoxChanged}
         />
-
-        <Button
-          className="hover:bg-[#253d37] rounded mr-3 d-flex align-items-center justify-content-center px-3 border-0 shadow-none"
-          onClick={onDisplayProgramsClicked}
-          style={{ height: '37px', whiteSpace: 'nowrap' }} 
-        >
-          הצג תוכניות
-        </Button>
-
         {/* --- התחלת תוספת כפתורי הסטטוסים --- */}
         {schoolStatuses.length > 0 && (
           <div className="d-flex align-items-center flex-grow-1" style={{ minWidth: 0, paddingRight: '15px' }} dir="rtl">
