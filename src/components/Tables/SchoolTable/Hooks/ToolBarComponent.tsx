@@ -131,8 +131,9 @@ const ToolBar = (
               ? "bg-teal-700 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-600" 
               : "bg-teal-600 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-700"}
             style={{ direction: 'rtl' }}
+            defaultValue=""
           >
-            <option value="">שנה סטטוס ל-{checkedAmount} רשומות...</option>
+            <option value="" hidden>שנה סטטוס ל-{checkedAmount} רשומות</option>
             {schoolStatuses.map((status) => (
               <option key={status.StatusId} value={status.StatusName}>
                 {status.StatusName}
