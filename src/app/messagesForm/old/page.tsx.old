@@ -348,24 +348,13 @@ export default function MessagesPage() {
         console.log(`📤 שולח ל: ${contact.FirstName} (${contact.Cellphone})`);
 
         try {
-            // חילוץ פרטי בית הספר כדי להעביר ל-Chatwoot
-            const school = rowData.find(s => String(s.Schoolid || s.SchoolId) === String(contact.Schoolid || contact.SchoolId));
-            
-            const contactData = {
-                ContactName: `${contact.FirstName || ""} ${contact.LastName || ""}`.trim(),
-                RoleName: contact.Role || contact.RoleName || "",
-                SchoolName: school ? (school.SchoolName || school.Name || "") : "",
-                CityName: contact.City || (school ? school.City : "") || ""
-            };
-
             const result = await sendMessageViaWhatsApp(
                 msg1Final, 
                 msg2Final, 
                 addedFile, 
                 contact.Cellphone,
                 "972",
-                selectedOption?.value,
-                contactData // <-- העברת הנתונים לפונקציה
+                selectedOption?.value 
             );
             
             if (result.success) {

@@ -11,13 +11,7 @@ export async function sendMessageViaWhatsApp(
   file: File | null,
   phoneNumber: string,
   countryCode: string = "972",
-  patternId?: number,
-  contactData?: {
-    ContactName?: string;
-    RoleName?: string;
-    SchoolName?: string;
-    CityName?: string;
-  }
+  patternId?: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
     let fullPhoneNumber = phoneNumber.replace(/\D/g, '');
@@ -37,12 +31,6 @@ export async function sendMessageViaWhatsApp(
     }
     
     if (patternId) formData.append("PatternID", patternId.toString());
-
-    // --- קוד חדש: הוספת נתוני איש הקשר ל-Chatwoot ---
-    if (contactData?.ContactName) formData.append("ContactName", contactData.ContactName);
-    if (contactData?.RoleName) formData.append("RoleName", contactData.RoleName);
-    if (contactData?.SchoolName) formData.append("SchoolName", contactData.SchoolName);
-    if (contactData?.CityName) formData.append("CityName", contactData.CityName);
 
     const response = await fetch(`${WHATSAPP_SERVER_URL}/SendMessage`, {
       method: "POST",

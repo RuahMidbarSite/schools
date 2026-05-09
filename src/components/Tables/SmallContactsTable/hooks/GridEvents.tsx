@@ -159,6 +159,8 @@ const useGridEvents = (gridRef: MutableRefObject<AgGridReact<any>>, InTheMiddleO
       // with updated schoolsContacts.
 
       setAllSchoolContacts.current = updated_contacts
+      console.log("✅ setAllSchoolContacts.current updated:", updated_contacts.find(c => c.IsRepresentive));
+
       updateStorage({ schoolsContacts: updated_contacts.sort((arg1, arg2) => arg1.Schoolid - arg2.Schoolid) })
     }, [InTheMiddleOfAddingRows, rowData, setAllSchoolContacts, AllContacts, SchoolApi, setRowData]
   );

@@ -63,9 +63,13 @@ const RepresentiveComponent = forwardRef<RepresentiveRef, CustomRep>(({ setConta
       
         const schoolNode: IRowNode<School> = api.getRowNode(props.data.Schoolid.toString()) 
         props.setValue(contact_name)
-       if(schoolNode) { 
+        console.log("🟦 [ContactsRepComponent] Attempting to update Master Grid UI for SchoolID:", props.data.Schoolid);
+        if(schoolNode) { 
+              console.log("🟦 [ContactsRepComponent] Master node found! Setting value to:", contact_name);
               schoolNode.setDataValue("Representive", contact_name)
-       schoolNode.setDataValue("RepresentiveID", contact.Contactid)
+              schoolNode.setDataValue("RepresentiveID", contact.Contactid)
+        } else {
+              console.log("🟦 [ContactsRepComponent] Master node NOT found!");
         }
      
 

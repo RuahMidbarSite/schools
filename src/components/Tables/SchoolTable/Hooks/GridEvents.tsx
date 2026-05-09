@@ -12,6 +12,12 @@ const useGridEvents = (gridRef, InTheMiddleOfAddingRows, checkedAmount, setAmoun
 
   const onCellValueChanged = useCallback(
     (event: CellValueChangedEvent<School>) => {
+      console.log("💥 [GridEvents] Master onCellValueChanged fired!", {
+        field: event.column?.getColId(),
+        old: event.oldValue,
+        new: event.newValue
+      });
+
       if (event.oldValue === event.newValue) {
         return;
       }
