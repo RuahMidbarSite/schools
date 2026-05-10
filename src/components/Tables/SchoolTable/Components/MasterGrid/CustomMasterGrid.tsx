@@ -11,8 +11,6 @@ import { CustomSelect } from "@/components/Tables/GeneralFiles/Select/CustomSele
 import CustomFilter from "@/components/Tables/GeneralFiles/Filters/CustomFilter";
 import RepresentiveComponent, { RepresentiveRef } from "@/components/Tables/GeneralFiles/GoogleContacts/ContactsRepComponent";
 import { updateSchoolsColumn } from "@/db/schoolrequests";
-// הוספנו ייבוא ישיר של מאגר אנשי הקשר
-import { getFromStorage as getSmallContactsStorage } from "@/components/Tables/SmallContactsTable/Storage/SmallContactsDataStorage";
 
 interface MasterGridRendererProps extends CustomCellRendererProps<School> {
   UpdateContactComponent: any;
@@ -24,69 +22,16 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
   const { theme } = useContext(ThemeContext);
   
   const schoolApi = useRef<GridApi>(null);
+  const InnerSchoolApi = useRef<GridApi>(null);
   const AllContacts = useRef<SchoolsContact[]>([]);
   
-  const [row, setRow] = useState([{ ...props.data }]);
-
-  // מנגנון ה"כוח הזרוע": מתעלם מהזיכרון הישן ומושך את הנציג האמיתי היישר מאנשי הקשר בכל פתיחה
-  useEffect(() => {
-    let isMounted = true;
-
-    const syncLiveRepresentative = async () => {
-      try {
-        const liveNode = props.api.getRowNode(props.node.id!);
-        const schoolData = liveNode ? { ...liveNode.data } : { ...props.data };
-
-        // שליפה ישירה של אנשי הקשר כדי לגלות מי הנציג כרגע (עוקף את צילום המסך של AG-Grid)
-        const smallData = await getSmallContactsStorage();
-        if (smallData && smallData.schoolsContacts) {
-          const myContacts = smallData.schoolsContacts.filter((c: any) => c.Schoolid === props.data.Schoolid || c.SchoolId === props.data.Schoolid);
-          const rep = myContacts.find((c: any) => c.IsRepresentive === true);
-          const repName = rep ? `${rep.FirstName || ''} ${rep.Role || ''}`.trim() : "";
-
-          // דורס את הנתון הישן עם שם הנציג המעודכן
-          schoolData.Representive = repName;
-
-          if (isMounted) {
-            setRow([schoolData]);
-            if (schoolApi.current) {
-              schoolApi.current.applyTransaction({ update: [schoolData] });
-            }
-          }
-
-          // מסנכרן בכוח גם את הזיכרון של הטבלה הראשית כדי לוודא שאין פערים
-          if (liveNode && liveNode.data.Representive !== repName) {
-            liveNode.setDataValue('Representive', repName);
-            updateSchoolsColumn("Representive", repName, props.data.Schoolid).catch(console.error);
-          }
-        }
-      } catch (e) {
-        console.error("Error syncing representative:", e);
-      }
-    };
-
-    // מפעיל את הסנכרון ברגע שהשורה נפתחת
-    syncLiveRepresentative();
-
-    // מאזין לשינויים: אם תסמן נציג אחר כשהשורה פתוחה, התצוגה למעלה תתעדכן אוטומטית!
-    const handleStorageUpdate = (e: any) => {
-      if (e.detail?.keys?.includes("schoolsContacts") || e.detail?.keys?.includes("ALL")) {
-        syncLiveRepresentative();
-      }
-    };
-
-    window.addEventListener("storageUpdated", handleStorageUpdate);
-
-    return () => {
-      isMounted = false;
-      window.removeEventListener("storageUpdated", handleStorageUpdate);
-    };
-  }, [props.api, props.node.id, props.data]);
-
+  const row = useMemo(() => [props.data], [props.data]);
+  
   const [expanded, setExpanded] = useState(props.node.expanded);
 
   const coldefs = useMemo(() => {
     return props.api.getColumnDefs().map((column) => {
+      
       if (column["field"] === "Schoolid") {
         return { 
             ...column, 
@@ -115,11 +60,15 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
 
   useEffect(() => {
     return () => {
+      console.log("🔴 [CustomMasterGrid] Unmounting (Closing sub-table). Current contacts:", AllContacts.current);
       if (AllContacts.current) {
-          UpdateContactComponent(AllContacts.current, props.node);
+          console.log("🔴 [CustomMasterGrid] Calling UpdateContactComponent...");
+          UpdateContactComponent(AllContacts.current);
+      } else {
+          console.log("🔴 [CustomMasterGrid] AllContacts.current is empty!");
       }
     };
-  }, [UpdateContactComponent, props.node]);
+  }, [UpdateContactComponent]);
 
   const components = useMemo(
     () => ({
@@ -148,9 +97,11 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
       <div
         id={"gridmaster-".concat(String(props.data.Schoolid))}
         className={theme === "dark-theme" ? "ag-theme-quartz-dark" : "ag-theme-quartz overflow-visible"}
+        // 👇 שינוי: גובה קבוע של 60px (42 לשורה + 18 לגלילה)
         style={{ width: "100%", height: "60px" }}
       >
         <AgGridReact
+          // 👇 מחקנו את domLayout="autoHeight" שגרם לרווח הענק
           rowData={row}
           columnDefs={coldefs}
           headerHeight={0}
@@ -162,6 +113,7 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
           onGridReady={(params) => schoolApi.current = params.api}
           onCellValueChanged={onCellValueChanged}
           getRowId={getRowId}
+          // 👇 מוודא שהפס גלילה יופיע רק כשבאמת צריך
           scrollbarWidth={8} 
         />
 
@@ -181,3 +133,4 @@ export const CustomMasterGrid = ({ UpdateContactComponent, GoogleFunctions, dele
       </div>
     </div>
   );
+};

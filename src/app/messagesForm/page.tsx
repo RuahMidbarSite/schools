@@ -332,6 +332,17 @@ export default function MessagesPage() {
     shouldStopRef.current = false;
     setSendingStats({ success: 0, missing: missingPhoneCount, error: 0 });
     
+    // --> קריאה לשרת להגדרת חסימת האבטחה לפי כמות אנשי הקשר בפועל
+    try {
+        await fetch('http://localhost:3994/StartBatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: contactsToSend.length })
+        });
+    } catch (e) {
+        console.error("Failed to set security limit on server", e);
+    }
+    
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
     // 2. לולאת השליחה

@@ -1,16 +1,6 @@
 import express, { Express, Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { Client, MessageMedia } from "whatsapp-web.js";
-import {
-  GetClientOrInitialize,
-  Initialize,
-  isReady,
-  hasStoredSession,
-  resetClient,
-  getConnectionStatus,
-  getLastQrCode,
-} from "./WhatsApp";
 import multer from "multer";
 import path from "path";
 import mime from "mime";
@@ -33,20 +23,20 @@ const allowedOrigins = [
   /\.vercel\.app$/                        
 ];
 
-// 2. הגדרת CORS משופרת התומכת ב-ngrok
+// 2. הגדרת CORS
 app.use(cors({
   origin: true,
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PUT', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
   optionsSuccessStatus: 200
 }));
 
-// 3. headers ידניים למניעת חסימות
+// 3. headers ידניים
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PUT, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
@@ -68,17 +58,10 @@ const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDirectory),
   filename: (req, file, cb) => {
     const PatternID = req.params.id;
-    
-    // ניסיון לתיקון קידוד עברית (למניעת ג'יבריש)
     let originalName = file.originalname;
     try {
-        // המרה מ-Latin1 ל-UTF8 פותרת לרוב בעיות עברית ב-Multer
         originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    } catch (e) {
-        // אם ההמרה נכשלת, נשאר עם השם המקורי
-    }
-
-    // בניית שם הקובץ: file-15-שם_מקורי.pdf
+    } catch (e) {}
     cb(null, `file-${PatternID}-${originalName}`);
   },
 });
@@ -102,11 +85,9 @@ const createMulterFileObject = (filePath: string) => {
   };
 };
 
-// ✅ Status endpoint
+// ✅ Status endpoint - בודק רק מפתחות מטא
 app.get("/status", async (req: Request, res: Response) => {
-  // ב-API הרשמי, אם יש לנו טוקן ב-ENV, אנחנו נחשבים מחוברים
   const isMetaConnected = !!process.env.META_ACCESS_TOKEN && !!process.env.META_PHONE_ID;
-  
   return res.status(200).json({ 
     connected: isMetaConnected,
     isReady: isMetaConnected,
@@ -115,7 +96,7 @@ app.get("/status", async (req: Request, res: Response) => {
   });
 });
 
-// --- קוד חדש: מאפשר לאפליקציה למשוך את קובץ התבנית מהשרת המקומי ---
+// ✅ משיכת קובץ תבנית
 app.get("/GetPatternFile/:id", (req: Request, res: Response) => {
   const patternId = req.params.id;
   const directoryPath = path.join(__dirname, "uploads");
@@ -125,12 +106,10 @@ app.get("/GetPatternFile/:id", (req: Request, res: Response) => {
         return res.status(404).send("Uploads directory not found");
     }
     const files = fs.readdirSync(directoryPath);
-    // מחפש קובץ שמתחיל במזהה התבנית
     const fileName = files.find(f => f.startsWith(`file-${patternId}`));
 
     if (fileName) {
       const filePath = path.join(directoryPath, fileName);
-      // שליחת הקובץ להורדה עם שמו המקורי
       res.download(filePath, fileName.split('-').slice(2).join('-') || fileName);
     } else {
       res.status(404).send("File not found");
@@ -140,110 +119,40 @@ app.get("/GetPatternFile/:id", (req: Request, res: Response) => {
     res.status(500).send("Error accessing files");
   }
 });
-// --- סוף קוד חדש ---
 
-// 🆕 GetQR endpoint - משופר להחזיר QR מהזיכרון
-app.get("/GetQR", async (req: Request, res: Response) => {
-  console.log("\n=== 📱 /GetQR ===");
-  try {
-    // 1️⃣ בדוק אם כבר מחובר
-    if (await isReady()) {
-      return res.status(200).json({ result: 'ready', message: 'Already connected' });
-    }
+// --- מערכת הגנה דינמית מפני לולאות ---
+let dynamicMessageCounter = 0;
+let currentSessionLimit = 0;
 
-    // 2️⃣ קבל QR מהזיכרון
-    const latestQr = getLastQrCode();
-
-    // תמיכה בפורמט תמונה
-    if (req.query.format === 'image' && latestQr) {
-      const img = Buffer.from(latestQr.split(',')[1], 'base64');
-      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': img.length });
-      return res.end(img);
-    }
-
-    // 3️⃣ החזר QR או הודעת המתנה
-    if (latestQr) {
-      return res.status(200).json({ result: 'qr', data: latestQr });
-    }
-
-    return res.status(404).json({ result: 'waiting', message: 'QR not ready yet' });
-  } catch (err) {
-    return res.status(500).json({ status: "Error", message: String(err) });
-  }
+app.post("/StartBatch", (req: Request, res: Response) => {
+    const { limit } = req.body;
+    currentSessionLimit = limit || 0;
+    dynamicMessageCounter = 0; // איפוס המונה בכל תחילת שליחה
+    console.log(`\n🛡️ SECURITY: New batch started. Limit set to ${currentSessionLimit} messages.`);
+    res.status(200).json({ status: "Success", limit: currentSessionLimit });
 });
 
-// 🔥 Initialize endpoint - הגנה מפני אתחולים כפולים
-app.get("/Initialize", async (req: Request, res: Response) => {
-  console.log("\n=== 🚀 /Initialize ===");
-  try {
-    // 1️⃣ בדוק אם כבר מחובר
-    const alreadyConnected = await isReady();
-    if (alreadyConnected) {
-      console.log("✅ Already connected - returning ready");
-      return res.status(200).json({ result: 'ready' });
-    }
-
-    // 2️⃣ בדוק אם יש QR מוכן
-    const latestQr = getLastQrCode();
-    if (latestQr) {
-      console.log("✨ Returning existing QR from memory to avoid loop");
-      return res.status(200).json({ result: 'qr', data: latestQr });
-    }
-
-    // 3️⃣ התחל אתחול חדש
-    console.log("🛠️ Starting fresh initialization...");
-    const qrPromise = Initialize();
-    const timeoutPromise = new Promise<{ result: 'timeout' }>((resolve) => 
-      setTimeout(() => resolve({ result: 'timeout' as const }), 8000)
-    );
-
-    const result = await Promise.race([qrPromise, timeoutPromise]);
-    
-    if (result.result === 'timeout') {
-      return res.status(202).json({ result: 'connecting', message: 'Initializing in background...' });
-    }
-    
-    return res.status(200).json(result.result === 'qr' ? { result: 'qr', data: result.qr } : result);
-  } catch (err) {
-    return res.status(500).json({ status: "Error", message: String(err) });
-  }
-});
-
-// ✅ ResetSession
-app.post("/ResetSession", async (req: Request, res: Response) => {
-  console.log("\n=== 🗑️ /ResetSession ===");
-  try {
-    await resetClient();
-    return res.status(200).json({ status: "Success", message: "Session deleted." });
-  } catch (err) {
-    return res.status(500).json({ status: "Error", message: String(err) });
-  }
-});
-
-// ✅ SendMessage endpoint - מטא API + Chatwoot
+// ✅ SendMessage endpoint - מטא API 
 app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request, res: Response) => {
-    console.log("\n=== 📨 /SendMessage (Meta API & Chatwoot) ===");
-    console.log("⏰ Time:", new Date().toISOString());
+    console.log("\n=== 📨 /SendMessage (Meta API) ===");
+    
+    // בדיקת חסימת האבטחה הדינמית
+    if (currentSessionLimit > 0 && dynamicMessageCounter >= currentSessionLimit) {
+        console.error(`⛔ STOP: Dynamic limit reached (${currentSessionLimit}). Blocking further messages.`);
+        return res.status(429).json({ error: "Dynamic limit exceeded for safety" });
+    }
+    dynamicMessageCounter++;
     
     try {
-        const { META_PHONE_ID, META_ACCESS_TOKEN, CHATWOOT_BASE_URL, CHATWOOT_API_TOKEN, CHATWOOT_ACCOUNT_ID } = process.env;
+        const { META_PHONE_ID, META_ACCESS_TOKEN } = process.env;
         const requestBody = req.body;
         
-        // ניקוי המספר לפורמט בינלאומי (ללא 0 בהתחלה, עם 972)
         let rawPhone = requestBody.PhoneNumber.replace('@c.us', '').replace(/[\s-]/g, '');
         if (rawPhone.startsWith('0')) rawPhone = '972' + rawPhone.substring(1);
         const waId = rawPhone;
 
         console.log(`📞 Target number: ${waId}`);
 
-        // ==========================================
-        // 1. יצירת איש קשר ב-Chatwoot בוטלה
-        // המערכת מסתמכת על ייבוא אנשי קשר ידני מראש (CSV)
-        // ==========================================
-
-        // ==========================================
-        // 2. פונקציית עזר לשליחת טקסט למטא
-        // ==========================================
         const sendMetaText = async (text: string) => {
             const url = `https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`;
             await axios.post(url, {
@@ -257,9 +166,6 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             });
         };
 
-        // ==========================================
-        // 3. שליחת ההודעות בפועל
-        // ==========================================
         let messageCount = 0;
 
         if (requestBody.Message_1) {
@@ -272,7 +178,6 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
         let fileToUpload: Express.Multer.File | any = req.file;
         
         if (requestBody.PatternID && !req.file) {
-            console.log("🔍 Looking for pattern file:", requestBody.PatternID);
             const files = fs.readdirSync(uploadDirectory);
             const found_file = files.find((val) => val.startsWith(`file-${requestBody.PatternID}`));
             if (found_file) {
@@ -295,8 +200,6 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             });
             
             const mediaId = uploadRes.data.id;
-            console.log(`✅ Media uploaded successfully! Media ID: ${mediaId}`);
-
             console.log("📤 Sending media message...");
             await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
                 messaging_product: "whatsapp",
@@ -318,20 +221,11 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
         }
         
         console.log(`✅ Total messages sent via Meta API: ${messageCount}`);
-        
-        return res.status(200).json({ 
-            status: "Success",
-            sentTo: waId,
-            messageCount: messageCount
-        });
+        return res.status(200).json({ status: "Success", sentTo: waId, messageCount: messageCount });
         
     } catch (err: any) {
         console.error("❌ Error in /SendMessage:", err.response?.data || err.message);
-        return res.status(500).json({ 
-            status: "Error", 
-            message: "Failed to send message via Meta API",
-            error: err.response?.data || String(err)
-        });
+        return res.status(500).json({ status: "Error", message: "Failed to send message via Meta API", error: err.response?.data || String(err) });
     }
 });
 
@@ -350,44 +244,8 @@ app.delete("/DeletePatternFile/:PatternID", (req, res) => {
     return res.status(404).json({ status: "Error" });
 });
 
-// --- הוסף את הפונקציה הזו לקראת סוף הקובץ ---
-const startRealTimeListeners = async () => {
-  console.log("🎧 Attaching real-time listeners...");
-  try {
-    // משיג את הלקוח הקיים או יוצר חדש
-    const client = await GetClientOrInitialize();
-
-    // 1. מאזין לשינויי מצב (כמו חיבור/ניתוק אינטרנט זמני)
-    client.on('change_state', (state) => {
-      console.log('🔄 WhatsApp State Changed:', state);
-    });
-
-    // 2. מאזין לניתוק יזום (Log out מהטלפון) - זה התיקון הקריטי!
-    client.on('disconnected', async (reason) => {
-      console.log('❌ WhatsApp Disconnected!', reason);
-      console.log('🧹 Resetting client session to update status...');
-      
-      // איפוס הלקוח יגרום ל-Status להחזיר false בפעם הבאה
-      try {
-        await resetClient(); 
-        console.log('✅ Client reset successfully.');
-      } catch (err) {
-        console.error('⚠️ Error resetting client:', err);
-      }
-    });
-
-    console.log("✅ Real-time listeners attached successfully.");
-  } catch (err) {
-    console.error("❌ Failed to attach listeners:", err);
-  }
-};
-
-// --- עדכן את ה-app.listen בסוף הקובץ כך שיקרא לפונקציה ---
 app.listen(port, '0.0.0.0', () => {
-  console.log(`\n🚀 WhatsApp Server is LIVE on port: ${port}`);
-  console.log(`🌐 Access via ngrok for Vercel`);
+  console.log(`\n🚀 Meta WhatsApp Server is LIVE on port: ${port}`);
+  console.log(`✅ Clean Architecture - No QR Codes required`);
   console.log(`⏰ Startup time: ${new Date().toISOString()}\n`);
-
-  // 🔥 הפעלת המאזינים עם עליית השרת
-  startRealTimeListeners();
 });
