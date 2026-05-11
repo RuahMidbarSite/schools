@@ -168,14 +168,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
 
         let messageCount = 0;
 
-        if (requestBody.Message_1) {
-            console.log("💬 Sending Message_1...");
-            await sendMetaText(requestBody.Message_1);
-            messageCount++;
-            await new Promise(r => setTimeout(r, 1000));
-        }
-
-        let fileToUpload: Express.Multer.File | any = req.file;
+       let fileToUpload: Express.Multer.File | any = req.file;
         
         if (requestBody.PatternID && !req.file) {
             const files = fs.readdirSync(uploadDirectory);
@@ -200,20 +193,68 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             });
             
             const mediaId = uploadRes.data.id;
-            console.log("📤 Sending media message...");
-            await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
-                messaging_product: "whatsapp",
-                to: waId,
-                type: "document",
-                document: { id: mediaId, filename: fileToUpload.originalname }
-            }, {
-                headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }
-            });
+            console.log(`📤 Sending message. Mode: ${requestBody.TemplateName ? 'Template' : 'Free Text'}`);
+
+            if (requestBody.TemplateName) {
+                // שליחה באמצעות תבנית מאושרת ממטא (עבור הודעות ראשונות למנהלים)
+                await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
+                    messaging_product: "whatsapp",
+                    to: waId,
+                    type: "template",
+                    template: {
+                        name: requestBody.TemplateName,
+                        language: { code: "he" },
+                        components: [
+                            {
+                                type: "header",
+                                parameters: [
+                                    { 
+                                        type: "document", 
+                                        document: { 
+                                            id: mediaId, 
+                                            filename: requestBody.FileName || "תשפז תוכניות לבתי ספר.pdf" 
+                                        } 
+                                    }
+                                ]
+                            },
+                            {
+                                type: "body",
+                                parameters: [
+                                    { 
+                                        type: "text", 
+                                        text: requestBody.ContactName || "מנהל/ת" 
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }, {
+                    headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }
+                });
+            } else {
+                // שליחה כהודעה חופשית (עבור מנהלים שכבר בשיחה איתך)
+                await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
+                    messaging_product: "whatsapp",
+                    to: waId,
+                    type: "document",
+                    document: { 
+                        id: mediaId, 
+                        caption: requestBody.Message_1 || "", 
+                        filename: requestBody.FileName || "תשפז תוכניות לבתי ספר.pdf" 
+                    }
+                }, {
+                    headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }
+                });
+            }
             
             messageCount++;
             await new Promise(r => setTimeout(r, 1000));
+        } else if (requestBody.Message_1) {
+            console.log("💬 Sending Message_1...");
+            await sendMetaText(requestBody.Message_1);
+            messageCount++;
+            await new Promise(r => setTimeout(r, 1000));
         }
-
         if (requestBody.Message_2) {
             console.log("💬 Sending Message_2...");
             await sendMetaText(requestBody.Message_2);
