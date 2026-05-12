@@ -369,6 +369,9 @@ export default function MessagesPage() {
                 CityName: contact.City || (school ? school.City : "") || ""
             };
 
+            // מפעיל את תבנית מטא ברגע שנבחרה כל תבנית מהרשימה
+            const metaTemplateName = selectedOption ? "message_1_next_year" : undefined;
+
             const result = await sendMessageViaWhatsApp(
                 msg1Final, 
                 msg2Final, 
@@ -376,7 +379,8 @@ export default function MessagesPage() {
                 contact.Cellphone,
                 "972",
                 selectedOption?.value,
-                contactData // <-- העברת הנתונים לפונקציה
+                contactData,
+                metaTemplateName
             );
             
             if (result.success) {

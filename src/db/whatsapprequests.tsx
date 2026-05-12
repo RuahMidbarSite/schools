@@ -17,7 +17,8 @@ export async function sendMessageViaWhatsApp(
     RoleName?: string;
     SchoolName?: string;
     CityName?: string;
-  }
+  },
+  templateName?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     let fullPhoneNumber = phoneNumber.replace(/\D/g, '');
@@ -34,9 +35,16 @@ export async function sendMessageViaWhatsApp(
     if (file && file.size > 0) {
       formData.append("FileNameBase64", toBase64(file.name));
       formData.append("file", file); 
+      formData.append("FileName", file.name);
     }
     
-    if (patternId) formData.append("PatternID", patternId.toString());
+    if (patternId) {
+      formData.append("PatternID", patternId.toString());
+    }
+    
+    if (templateName) {
+      formData.append("TemplateName", templateName);
+    }
 
     // --- קוד חדש: הוספת נתוני איש הקשר ל-Chatwoot ---
     if (contactData?.ContactName) formData.append("ContactName", contactData.ContactName);

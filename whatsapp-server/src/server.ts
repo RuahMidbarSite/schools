@@ -183,7 +183,12 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             console.log("📎 Uploading media to Meta...");
             const form = new FormData();
             form.append('messaging_product', 'whatsapp');
-            form.append('file', fileToUpload.buffer, { filename: fileToUpload.originalname });
+            // הוספת סוג וגודל קובץ מפורשים מקצרת משמעותית את זמן יצירת התצוגה המקדימה במטא
+            form.append('file', fileToUpload.buffer, { 
+                filename: fileToUpload.originalname || "document.pdf",
+                contentType: fileToUpload.mimetype || 'application/pdf',
+                knownLength: fileToUpload.size
+            });
             
             const uploadRes = await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/media`, form, {
                 headers: { 
