@@ -168,7 +168,9 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
 
         let messageCount = 0;
 
-       let fileToUpload: Express.Multer.File | any = req.file;
+        // 1. טיפול בקובץ - העלאה למטא (משותף לתבניות והודעות חופשיות)
+        let fileToUpload: Express.Multer.File | any = req.file;
+        let mediaId: string | null = null;
         
         if (requestBody.PatternID && !req.file) {
             const files = fs.readdirSync(uploadDirectory);
@@ -183,7 +185,6 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             console.log("📎 Uploading media to Meta...");
             const form = new FormData();
             form.append('messaging_product', 'whatsapp');
-            // הוספת סוג וגודל קובץ מפורשים מקצרת משמעותית את זמן יצירת התצוגה המקדימה במטא
             form.append('file', fileToUpload.buffer, { 
                 filename: fileToUpload.originalname || "document.pdf",
                 contentType: fileToUpload.mimetype || 'application/pdf',
@@ -196,74 +197,93 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                     ...form.getHeaders()
                 }
             });
-            
-            const mediaId = uploadRes.data.id;
-            console.log(`📤 Sending message. Mode: ${requestBody.TemplateName ? 'Template' : 'Free Text'}`);
+            mediaId = uploadRes.data.id;
+        }
 
-            if (requestBody.TemplateName) {
-                // שליחה באמצעות תבנית מאושרת ממטא (עבור הודעות ראשונות למנהלים)
+        console.log(`📤 Sending messages. Mode: ${requestBody.TemplateName ? 'Multi-Template' : 'Free Text'}`);
+
+       if (requestBody.TemplateName) {
+            // ==========================================
+            // מסלול תבניות למנהלים חדשים (3 בועות נפרדות)
+            // ==========================================
+            
+            // תבנית 1: פתיח
+            console.log("💬 Sending msg1_intro...");
+            await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
+                messaging_product: "whatsapp",
+                to: waId,
+                type: "template",
+                template: {
+                    name: "msg1_intro",
+                    language: { code: "he" },
+                    components: [{
+                        type: "body",
+                        parameters: [{ type: "text", text: requestBody.ContactName || "מנהל/ת" }]
+                    }]
+                }
+            }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
+            messageCount++;
+            await new Promise(r => setTimeout(r, 1000));
+
+            // תבנית 2: קובץ
+            if (mediaId) {
+                console.log("📎 Sending msg1_file...");
                 await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
                     messaging_product: "whatsapp",
                     to: waId,
                     type: "template",
                     template: {
-                        name: requestBody.TemplateName,
+                        name: "msg1_file",
                         language: { code: "he" },
-                        components: [
-                            {
-                                type: "header",
-                                parameters: [
-                                    { 
-                                        type: "document", 
-                                        document: { 
-                                            id: mediaId, 
-                                            filename: requestBody.FileName || "תשפז תוכניות לבתי ספר.pdf" 
-                                        } 
-                                    }
-                                ]
-                            },
-                            {
-                                type: "body",
-                                parameters: [
-                                    { 
-                                        type: "text", 
-                                        text: requestBody.ContactName || "מנהל/ת" 
-                                    }
-                                ]
-                            }
-                        ]
+                        components: [{
+                            type: "header",
+                            parameters: [{ type: "document", document: { id: mediaId, filename: requestBody.FileName || "מסמך.pdf" } }]
+                        }]
                     }
-                }, {
-                    headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }
-                });
-            } else {
-                // שליחה כהודעה חופשית (עבור מנהלים שכבר בשיחה איתך)
+                }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
+                messageCount++;
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
+            // תבנית 3: הודעת סיום עם כפתור
+            console.log("💬 Sending msg1_outro...");
+            await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
+                messaging_product: "whatsapp",
+                to: waId,
+                type: "template",
+                template: {
+                    name: "msg1_outro",
+                    language: { code: "he" }
+                }
+            }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
+            messageCount++;
+
+        } else {
+            // ==========================================
+            // מסלול הודעות חופשיות (למנהלים שכבר בשיחה איתך)
+            // ==========================================
+            if (requestBody.Message_1) {
+                console.log("💬 Sending Message_1...");
+                await sendMetaText(requestBody.Message_1);
+                messageCount++;
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            if (mediaId) {
+                console.log("📎 Sending document...");
                 await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
                     messaging_product: "whatsapp",
                     to: waId,
                     type: "document",
-                    document: { 
-                        id: mediaId, 
-                        caption: requestBody.Message_1 || "", 
-                        filename: requestBody.FileName || "תשפז תוכניות לבתי ספר.pdf" 
-                    }
-                }, {
-                    headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' }
-                });
+                    document: { id: mediaId, filename: requestBody.FileName || "מסמך.pdf" }
+                }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
+                messageCount++;
+                await new Promise(r => setTimeout(r, 1000));
             }
-            
-            messageCount++;
-            await new Promise(r => setTimeout(r, 1000));
-        } else if (requestBody.Message_1) {
-            console.log("💬 Sending Message_1...");
-            await sendMetaText(requestBody.Message_1);
-            messageCount++;
-            await new Promise(r => setTimeout(r, 1000));
-        }
-        if (requestBody.Message_2) {
-            console.log("💬 Sending Message_2...");
-            await sendMetaText(requestBody.Message_2);
-            messageCount++;
+            if (requestBody.Message_2) {
+                console.log("💬 Sending Message_2...");
+                await sendMetaText(requestBody.Message_2);
+                messageCount++;
+            }
         }
         
         console.log(`✅ Total messages sent via Meta API: ${messageCount}`);

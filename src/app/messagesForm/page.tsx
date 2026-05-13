@@ -369,8 +369,8 @@ export default function MessagesPage() {
                 CityName: contact.City || (school ? school.City : "") || ""
             };
 
-            // מפעיל את תבנית מטא ברגע שנבחרה כל תבנית מהרשימה
-            const metaTemplateName = selectedOption ? "message_1_next_year" : undefined;
+           // מפעיל את המסלול החדש של 3 התבניות במטא
+            const metaTemplateName = selectedOption ? "multi_template_flow" : undefined;
 
             const result = await sendMessageViaWhatsApp(
                 msg1Final, 
