@@ -7,9 +7,9 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)', 
   '/sign-up(.*)', 
   '/api/ai-match(.*)', 
-  // נשאיר רק את זה פתוח ליתר ביטחון, אבל נסגור את שאר ה-API
   '/api/google(.*)',
-  '/api/drive(.*)' 
+  '/api/drive(.*)',
+  '/whatsapp(.*)' // <--- הוספת השורה הזו פותחת רק את נתיב הווצאפ לכולם
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
