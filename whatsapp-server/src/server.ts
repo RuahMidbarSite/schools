@@ -322,6 +322,21 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                     language: { code: "he" }
                 }
             }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
+            // סנכרון ההודעה ל-Chatwoot כדי שתראה אותה שם
+            try {
+                // מציאת ה-Conversation ID ב-Chatwoot (לפי מספר הטלפון)
+                const chatwootConversationId = await getChatwootConversationId(waId); 
+                
+                if (chatwootConversationId) {
+                    await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
+                        content: "שלחתי הודעת סיום (talk_to_me_direct)",
+                        message_type: "outgoing", // זה גורם להודעה להופיע ככחולה/נציג
+                        private: true // הודעה פנימית לעיונך בלבד בתוך הצ'אט
+                    }, { headers: { 'api_access_token': CHATWOOT_TOKEN } });
+                }
+            } catch (err) {
+                console.error("❌ Failed to sync message to Chatwoot:", err.message);
+            }
             messageCount++;
 
         } else {
