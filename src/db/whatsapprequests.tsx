@@ -5,6 +5,21 @@ const WHATSAPP_SERVER_URL = process.env.NEXT_PUBLIC_WHATSAPP_SERVER || "http://1
 // פונקציית עזר להמרת שם קובץ ל-Base64 (תומכת בעברית בדפדפן)
 const toBase64 = (str: string) => btoa(unescape(encodeURIComponent(str)));
 
+export async function syncContactsWithChatwoot(contacts: any[]) {
+  try {
+    const response = await fetch(`${WHATSAPP_SERVER_URL}/SyncChatwoot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contacts })
+    });
+    const data = await response.json();
+    return data.status === "Success";
+  } catch (error) {
+    console.error("❌ השגיאה בסנכרון צ'אטווט:", error);
+    return false;
+  }
+}
+
 export async function sendMessageViaWhatsApp(
   message1: string,
   message2: string,

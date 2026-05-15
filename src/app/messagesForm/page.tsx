@@ -25,7 +25,7 @@ import {
 
 import { getAllSchools } from "@/db/schoolrequests";
 import { getAllContacts, selectContacts } from "@/db/contactsRequests";
-import { savePatternFile, deletePatternFile, sendMessageViaWhatsApp } from "@/db/whatsapprequests";
+import { savePatternFile, deletePatternFile, sendMessageViaWhatsApp, syncContactsWithChatwoot } from "@/db/whatsapprequests";
 
 import { getFromStorage, updateStorage } from "@/components/Tables/Messages/Storage/MessagesDataStorage";
 import { AgGridReact } from "ag-grid-react";
@@ -84,6 +84,7 @@ export default function MessagesPage() {
   const [delayHistory, setDelayHistory] = useState<any[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [estimatedFinish, setEstimatedFinish] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Filter Selections
   const [selectedCities, setSelectedCities] = useState([]);
@@ -343,6 +344,35 @@ export default function MessagesPage() {
         console.error("Failed to set security limit on server", e);
     }
     
+    setIsSyncing(true);
+    
+  // הכנת מערך אנשי הקשר לסנכרון מול צ'אטווט
+    const chatwootPayload = contactsToSend.map((contact: any) => {
+        const school = rowData.find(s => String(s.Schoolid || s.SchoolId) === String(contact.Schoolid || contact.SchoolId));
+        
+        const fullName = `${contact.FirstName || ""} ${contact.LastName || ""}`.trim();
+        const role = contact.Role || contact.RoleName || "";
+        const eduStage = school ? (school.Stage || school.EducationStage || "") : ""; // שים לב: ודא שזה שם השדה המדויק שלך לשלב חינוך
+        const schoolName = school ? (school.SchoolName || school.Name || "") : "";
+        const city = contact.City || (school ? school.City : "") || "";
+        
+        // בניית התבנית הארוכה: מחברים את כולם עם רווח בלבד
+        const combinedName = [fullName, role, eduStage, schoolName, city].filter(Boolean).join(" ");
+
+        return {
+            phone: contact.Cellphone,
+            name: combinedName || contact.Cellphone, // השם הארוך נשלח בתור השם הראשי
+            role: role,
+            school: schoolName,
+            city: city
+        };
+    });
+
+    // סנכרון מקדים מול צ'אטווט
+    await syncContactsWithChatwoot(chatwootPayload);
+    
+    setIsSyncing(false);
+
     const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
     // 2. לולאת השליחה
@@ -626,7 +656,7 @@ export default function MessagesPage() {
                     onClick={handleSendMessages} 
                     disabled={isSending}
                 >
-                    {isSending ? "שולח..." : (isConnected ? "📤 שלח הודעות" : "❌ וואטסאפ מנותק")}
+                   {isSyncing ? "⏳ מסנכרן אנשי קשר..." : (isSending ? "שולח..." : (isConnected ? "📤 שלח הודעות" : "❌ וואטסאפ מנותק"))}
                 </Button>
                 {isSending && <Button variant="danger" onClick={() => shouldStopRef.current = true}>עצור</Button>}
                 <Button variant="info" className="text-white border-0">🧪 טסט</Button>

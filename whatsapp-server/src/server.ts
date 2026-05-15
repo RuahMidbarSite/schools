@@ -132,6 +132,66 @@ app.post("/StartBatch", (req: Request, res: Response) => {
     res.status(200).json({ status: "Success", limit: currentSessionLimit });
 });
 
+// ✅ SyncChatwoot endpoint - סנכרון מקדים של אנשי קשר מול צ'אטווט
+app.post("/SyncChatwoot", async (req: Request, res: Response) => {
+    console.log("\n=== 🔄 /SyncChatwoot (Batch Sync) ===");
+    const { contacts } = req.body;
+    const { CHATWOOT_API_TOKEN, CHATWOOT_ACCOUNT_ID, CHATWOOT_BASE_URL } = process.env;
+
+    if (!CHATWOOT_API_TOKEN || !CHATWOOT_ACCOUNT_ID || !CHATWOOT_BASE_URL) {
+        console.log("⚠️ Chatwoot credentials missing in .env. Skipping sync.");
+        return res.status(200).json({ status: "Skipped", message: "No Chatwoot config" });
+    }
+
+    try {
+        // שימוש ב-Promise.all לסנכרון מקבילי ומהיר של כולם יחד
+        await Promise.all(contacts.map(async (contact: any) => {
+            try {
+                // ניקוי המספר מכל סימן לחיפוש אמין ומניעת כפילויות
+                let rawPhone = contact.phone.replace('@c.us', '').replace(/\D/g, '');
+                if (rawPhone.startsWith('0')) rawPhone = '972' + rawPhone.substring(1);
+                
+                const searchPhone = rawPhone; 
+                const createPhone = `+${rawPhone}`; 
+
+                const searchRes = await axios.get(`${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/search?q=${encodeURIComponent(searchPhone)}`, {
+                    headers: { 'api_access_token': CHATWOOT_API_TOKEN }
+                });
+
+                // בדיקה אם קיים איש קשר עם המספר הזה (מתעלמים מסימנים בתוצאות שחוזרות)
+                const isExisting = searchRes.data.payload.some((c: any) => 
+                    c.phone_number && c.phone_number.replace(/\D/g, '').includes(searchPhone)
+                );
+
+                if (!isExisting) {
+                    // יוצרים איש קשר חדש רק אם הוא באמת לא קיים במערכת
+                    await axios.post(`${CHATWOOT_BASE_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts`, {
+                        name: contact.name || createPhone,
+                        phone_number: createPhone,
+                        custom_attributes: {
+                            role: contact.role || "",
+                            school: contact.school || "",
+                            city: contact.city || ""
+                        }
+                    }, {
+                        headers: { 'api_access_token': CHATWOOT_API_TOKEN }
+                    });
+                } else {
+                    console.log(`ℹ️ Contact ${searchPhone} already exists in Chatwoot. Skipping.`);
+                }
+            } catch (err: any) {
+                console.error(`❌ Failed to sync contact ${contact.phone}:`, err.response?.data || err.message);
+            }
+        }));
+        
+        console.log(`✅ Synced ${contacts.length} contacts with Chatwoot successfully.`);
+        res.status(200).json({ status: "Success" });
+    } catch (error: any) {
+        console.error("❌ Critical error in Chatwoot sync:", error);
+        res.status(500).json({ status: "Error", message: "Sync failed" });
+    }
+});
+
 // ✅ SendMessage endpoint - מטא API 
 app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request, res: Response) => {
     console.log("\n=== 📨 /SendMessage (Meta API) ===");
@@ -233,11 +293,17 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                     to: waId,
                     type: "template",
                     template: {
-                        name: "msg1_file",
+                        name: "school_file_new",
                         language: { code: "he" },
                         components: [{
                             type: "header",
-                            parameters: [{ type: "document", document: { id: mediaId, filename: requestBody.FileName || "מסמך.pdf" } }]
+                            parameters: [{ 
+                                type: "document", 
+                                document: { 
+                                    id: mediaId, 
+                                    filename: "תשפז תוכניות לבתי ספר.pdf" 
+                                } 
+                            }]
                         }]
                     }
                 }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
@@ -245,14 +311,14 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 await new Promise(r => setTimeout(r, 1000));
             }
 
-            // תבנית 3: הודעת סיום עם כפתור
-            console.log("💬 Sending msg1_outro...");
+            // תבנית 3: הודעת סיום עם כפתור (מעבר לווצאפ פרטי)
+            console.log("💬 Sending talk_to_me_direct...");
             await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
                 messaging_product: "whatsapp",
                 to: waId,
                 type: "template",
                 template: {
-                    name: "msg1_outro",
+                    name: "talk_to_me_direct",
                     language: { code: "he" }
                 }
             }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
@@ -269,12 +335,25 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 await new Promise(r => setTimeout(r, 1000));
             }
             if (mediaId) {
-                console.log("📎 Sending document...");
+                console.log("📎 Sending document (school_file_new)...");
                 await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
                     messaging_product: "whatsapp",
                     to: waId,
-                    type: "document",
-                    document: { id: mediaId, filename: requestBody.FileName || "מסמך.pdf" }
+                    type: "template",
+                    template: {
+                        name: "school_file_new",
+                        language: { code: "he" },
+                        components: [{
+                            type: "header",
+                            parameters: [{ 
+                                type: "document", 
+                                document: { 
+                                    id: mediaId, 
+                                    filename: "תשפז תוכניות לבתי ספר.pdf" 
+                                } 
+                            }]
+                        }]
+                    }
                 }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
                 messageCount++;
                 await new Promise(r => setTimeout(r, 1000));
