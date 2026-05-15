@@ -11,6 +11,12 @@ import FormData from "form-data";
 
 dotenv.config();
 
+const META_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
+const META_PHONE_ID = process.env.META_PHONE_ID;
+const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN; 
+const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID;
+const CHATWOOT_API_URL = process.env.CHATWOOT_BASE_URL;
+
 const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3994;
 
@@ -22,6 +28,30 @@ const allowedOrigins = [
   'https://schools-rho-ashen.vercel.app', 
   /\.vercel\.app$/                        
 ];
+
+async function getChatwootConversationId(phone: string): Promise<number | null> {
+    try {
+        if (!CHATWOOT_API_URL || !CHATWOOT_API_TOKEN || !CHATWOOT_ACCOUNT_ID) {
+            return null;
+        }
+
+        const contactRes = await axios.get(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/search?q=${phone}`, {
+            headers: { 'api_access_token': CHATWOOT_API_TOKEN }
+        });
+
+        const contactId = contactRes.data.payload[0]?.id;
+        if (!contactId) return null;
+
+        const convRes = await axios.get(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/${contactId}/conversations`, {
+            headers: { 'api_access_token': CHATWOOT_API_TOKEN }
+        });
+
+        return convRes.data.payload[0]?.id || null;
+    } catch (err: any) {
+        console.error("Error fetching Chatwoot ID:", err.message);
+        return null;
+    }
+}
 
 // 2. הגדרת CORS
 app.use(cors({
@@ -322,21 +352,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                     language: { code: "he" }
                 }
             }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
-            // סנכרון ההודעה ל-Chatwoot כדי שתראה אותה שם
-            try {
-                // מציאת ה-Conversation ID ב-Chatwoot (לפי מספר הטלפון)
-                const chatwootConversationId = await getChatwootConversationId(waId); 
-                
-                if (chatwootConversationId) {
-                    await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-                        content: "שלחתי הודעת סיום (talk_to_me_direct)",
-                        message_type: "outgoing", // זה גורם להודעה להופיע ככחולה/נציג
-                        private: true // הודעה פנימית לעיונך בלבד בתוך הצ'אט
-                    }, { headers: { 'api_access_token': CHATWOOT_TOKEN } });
-                }
-            } catch (err) {
-                console.error("❌ Failed to sync message to Chatwoot:", err.message);
-            }
+            
             messageCount++;
 
         } else {
@@ -381,6 +397,21 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
         }
         
         console.log(`✅ Total messages sent via Meta API: ${messageCount}`);
+
+        // סנכרון ל-Chatwoot כהודעה שנקראה (outgoing)
+        try {
+            const chatwootConversationId = await getChatwootConversationId(waId);
+            if (chatwootConversationId) {
+               await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
+                    content: "נשלחה הודעת תבנית: talk_to_me_direct",
+                    message_type: "outgoing",
+                    private: false
+                }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
+            }
+        } catch (err: any) {
+            console.error("❌ Chatwoot Sync Failed:", err.message);
+        }
+
         return res.status(200).json({ status: "Success", sentTo: waId, messageCount: messageCount });
         
     } catch (err: any) {
