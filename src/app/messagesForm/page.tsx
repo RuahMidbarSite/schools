@@ -392,12 +392,13 @@ export default function MessagesPage() {
             // חילוץ פרטי בית הספר כדי להעביר ל-Chatwoot
             const school = rowData.find(s => String(s.Schoolid || s.SchoolId) === String(contact.Schoolid || contact.SchoolId));
             
-            const contactData = {
-                ContactName: `${contact.FirstName || ""} ${contact.LastName || ""}`.trim(),
-                RoleName: contact.Role || contact.RoleName || "",
-                SchoolName: school ? (school.SchoolName || school.Name || "") : "",
-                CityName: contact.City || (school ? school.City : "") || ""
-            };
+           const contactData = {
+    // שליחת השם הפרטי בלבד ללא חיבור שם המשפחה או תפקיד
+    ContactName: contact.FirstName || "", 
+    RoleName: contact.Role || contact.RoleName || "",
+    SchoolName: school ? (school.SchoolName || school.Name || "") : "",
+    CityName: contact.City || (school ? school.City : "") || ""
+};
 
            // מפעיל את המסלול החדש של 3 התבניות במטא
             const metaTemplateName = selectedOption ? "multi_template_flow" : undefined;

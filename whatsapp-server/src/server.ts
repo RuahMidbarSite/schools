@@ -348,7 +348,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 to: waId,
                 type: "template",
                 template: {
-                    name: "talk_to_me_direct",
+                    name: "closing_message",
                     language: { code: "he" }
                 }
             }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
@@ -403,10 +403,10 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             const chatwootConversationId = await getChatwootConversationId(waId);
             if (chatwootConversationId) {
                await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-                    content: "נשלחה הודעת תבנית: talk_to_me_direct",
-                    message_type: "outgoing",
-                    private: false
-                }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
+    content: `מערכת: נשלחה תבנית ${requestBody.TemplateName || ''}`,
+    message_type: "outgoing",
+    private: true // הופך את זה להערה פנימית בתוך צ'אטווט שלא יוצאת לוואטסאפ
+}, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
             }
         } catch (err: any) {
             console.error("❌ Chatwoot Sync Failed:", err.message);
