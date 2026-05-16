@@ -341,14 +341,14 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 await new Promise(r => setTimeout(r, 1000));
             }
 
-            // תבנית 3: הודעת סיום עם כפתור (מעבר לווצאפ פרטי)
-            console.log("💬 Sending talk_to_me_direct...");
+           // תבנית 3: הודעת סיום עם כפתור (מעבר לווצאפ פרטי)
+            console.log("💬 Sending closing_msg_v3...");
             await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
                 messaging_product: "whatsapp",
                 to: waId,
                 type: "template",
                 template: {
-                    name: "closing_message",
+                    name: "closing_msg_v4",
                     language: { code: "he" }
                 }
             }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
@@ -398,18 +398,41 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
         
         console.log(`✅ Total messages sent via Meta API: ${messageCount}`);
 
-        // סנכרון ל-Chatwoot כהודעה שנקראה (outgoing)
+       // סנכרון לצ'אטווט - תיעוד שליחת התבנית (בדיקה חכמה ורישום קבוע)
         try {
-            const chatwootConversationId = await getChatwootConversationId(waId);
+            let chatwootConversationId = await getChatwootConversationId(waId);
+            
+            // אם החיפוש הרגיל נכשל, ננסה לאתר את השיחה דרך איש הקשר
+            if (!chatwootConversationId) {
+                console.log(`ℹ️ Trying backup sync for ${waId}...`);
+                const contactResponse = await axios.get(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/search?q=${waId}`, {
+                    headers: { 'api_access_token': CHATWOOT_API_TOKEN }
+                });
+                const contactId = contactResponse.data?.payload?.[0]?.id;
+
+                if (contactId) {
+                    // ננסה לפתוח/לאתר את השיחה בצורה יזומה
+                    const convResponse = await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations`, {
+                        source_id: `wa-${waId}`,
+                        contact_id: contactId,
+                        status: "open"
+                    }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
+                    
+                    chatwootConversationId = convResponse.data?.id;
+                }
+            }
+
+            // כעת נתעד את שליחת סדרת התבניות
             if (chatwootConversationId) {
-               await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-    content: `מערכת: נשלחה תבנית ${requestBody.TemplateName || ''}`,
-    message_type: "outgoing",
-    private: true // הופך את זה להערה פנימית בתוך צ'אטווט שלא יוצאת לוואטסאפ
-}, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
+                await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
+                    content: `מערכת: נשלחו תבניות בהצלחה (כולל closing_msg_v3)`,
+                    message_type: "outgoing",
+                    private: true 
+                }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
+                console.log(`✅ Message logged successfully in Chatwoot conversation ${chatwootConversationId}`);
             }
         } catch (err: any) {
-            console.error("❌ Chatwoot Sync Failed:", err.message);
+            console.error("❌ Chatwoot Sync Failed:", err.response?.data || err.message);
         }
 
         return res.status(200).json({ status: "Success", sentTo: waId, messageCount: messageCount });

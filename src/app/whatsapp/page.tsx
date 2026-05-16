@@ -3,21 +3,13 @@
 import { useEffect } from 'react';
 
 const WhatsAppRedirect = () => {
-  const whatsappUrl = "https://wa.me/972526554868";
+  // שימוש בפרוטוקול עמוק ישיר של אפליקציית וואטסאפ
+  const whatsappUrl = "whatsapp://send?phone=972526554868";
 
   useEffect(() => {
-    // ניסיון ראשון: הפניה אוטומטית מהירה
-    // replace עדיף על href כי הוא לא משאיר את העמוד הנוכחי בהיסטוריה
+    // הפניה מיידית ויחידה באמצעות הפרוטוקול הישיר
     window.location.replace(whatsappUrl);
-
-    // ניסיון שני: גיבוי למקרה שהראשון נחסם על ידי הדפדפן
-    const timeout = setTimeout(() => {
-      window.location.href = whatsappUrl;
-    }, 500);
-
-    return () => clearTimeout(timeout);
   }, []);
-
   return (
     <div style={{ 
       display: 'flex', 

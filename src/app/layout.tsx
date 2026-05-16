@@ -16,8 +16,8 @@ import { heIL } from '@clerk/localizations'
 
 const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
-  title: 'Ruahmidbar App',
-  description: 'This is the web application for ruahmidbar',
+  title: '\u200B',       // תו שקוף כדי שגם הכותרת תהיה ריקה
+  description: '\u200B', // תו שקוף כדי שהתיאור יהיה ריק
 
 
 }
