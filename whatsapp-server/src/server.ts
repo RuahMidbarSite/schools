@@ -16,6 +16,7 @@ const META_PHONE_ID = process.env.META_PHONE_ID;
 const CHATWOOT_API_TOKEN = process.env.CHATWOOT_API_TOKEN; 
 const CHATWOOT_ACCOUNT_ID = process.env.CHATWOOT_ACCOUNT_ID;
 const CHATWOOT_API_URL = process.env.CHATWOOT_BASE_URL;
+const CHATWOOT_INBOX_ID = process.env.CHATWOOT_INBOX_ID;
 
 const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3994;
@@ -402,18 +403,53 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
         try {
             let chatwootConversationId = await getChatwootConversationId(waId);
             
-            // אם החיפוש הרגיל נכשל, ננסה לאתר את השיחה דרך איש הקשר
+            // אם החיפוש הרגיל נכשל (נמען חדש), ניצור איש קשר ושיחה בצורה יזומה
             if (!chatwootConversationId) {
-                console.log(`ℹ️ Trying backup sync for ${waId}...`);
-                const contactResponse = await axios.get(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/search?q=${waId}`, {
-                    headers: { 'api_access_token': CHATWOOT_API_TOKEN }
-                });
-                const contactId = contactResponse.data?.payload?.[0]?.id;
+                console.log(`ℹ️ Target ${waId} not found in Chatwoot. Creating new contact...`);
+                
+                // שליפת המידע המורחב שהגיע מה-body של ה-Request
+                const contactName = requestBody.ContactName || "מנהל/ת";
+                const roleName = requestBody.RoleName || "";
+                const schoolName = requestBody.SchoolName || "";
+                const cityName = requestBody.CityName || "";
+                
+                // בניית השם המשולב כפי שאתה אוהב
+                const combinedName = [contactName, roleName, schoolName, cityName].filter(Boolean).join(" ");
 
+                let contactId: number | null = null;
+
+                try {
+                    // 1. יצירת איש קשר חדש בצ'אטווט
+                    const newContactRes = await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts`, {
+                        name: combinedName || `+${waId}`,
+                        phone_number: `+${waId}`,
+                        custom_attributes: {
+                            role: roleName,
+                            school: schoolName,
+                            city: cityName
+                        }
+                    }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
+
+                    contactId = newContactRes.data?.payload?.contact?.id || newContactRes.data?.payload?.id;
+                } catch (cErr: any) {
+                    // גיבוי: אם הוא כבר היה קיים איכשהו ברקע, ננסה לשלוף את ה-ID שלו
+                    const searchRes = await axios.get(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/contacts/search?q=${waId}`, {
+                        headers: { 'api_access_token': CHATWOOT_API_TOKEN }
+                    });
+                    contactId = searchRes.data?.payload?.[0]?.id;
+                }
+
+                // 2. פתיחת שיחה חדשה עבור איש הקשר שנוצר/נמצא
                 if (contactId) {
-                    // ננסה לפתוח/לאתר את השיחה בצורה יזומה
+                    if (!CHATWOOT_INBOX_ID) {
+                        throw new Error("CHATWOOT_INBOX_ID is undefined. Please check your .env file!");
+                    }
+
+                    console.log(`ℹ️ Debug: Creating conversation. InboxID: ${CHATWOOT_INBOX_ID}, ContactID: ${contactId}, SourceID: ${waId}`);
+                    
                     const convResponse = await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations`, {
-                        source_id: `wa-${waId}`,
+                        inbox_id: Number(CHATWOOT_INBOX_ID),
+                        source_id: waId, // תיקון: מספר טלפון נקי (רק ספרות) כדי לעבור את ה-Regex של אינבוקס וואטסאפ
                         contact_id: contactId,
                         status: "open"
                     }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
