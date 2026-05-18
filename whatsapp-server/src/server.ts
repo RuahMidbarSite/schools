@@ -293,69 +293,41 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
 
         console.log(`📤 Sending messages. Mode: ${requestBody.TemplateName ? 'Multi-Template' : 'Free Text'}`);
 
-       if (requestBody.TemplateName) {
-            // ==========================================
-            // מסלול תבניות למנהלים חדשים (3 בועות נפרדות)
-            // ==========================================
+      if (requestBody.TemplateName) {
+            console.log("💬 Sending short_msg (Combined Template)...");
             
-            // תבנית 1: פתיח
-            console.log("💬 Sending msg1_intro...");
-            await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
-                messaging_product: "whatsapp",
-                to: waId,
-                type: "template",
-                template: {
-                    name: "msg1_intro",
-                    language: { code: "he" },
-                    components: [{
-                        type: "body",
-                        parameters: [{ type: "text", text: requestBody.ContactName || "מנהל/ת" }]
-                    }]
-                }
-            }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
-            messageCount++;
-            await new Promise(r => setTimeout(r, 1000));
-
-            // תבנית 2: קובץ
+            const templateComponents: any[] = [];
+            
             if (mediaId) {
-                console.log("📎 Sending msg1_file...");
-                await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
-                    messaging_product: "whatsapp",
-                    to: waId,
-                    type: "template",
-                    template: {
-                        name: "school_file_new",
-                        language: { code: "he" },
-                        components: [{
-                            type: "header",
-                            parameters: [{ 
-                                type: "document", 
-                                document: { 
-                                    id: mediaId, 
-                                    filename: "תשפז תוכניות לבתי ספר.pdf" 
-                                } 
-                            }]
-                        }]
-                    }
-                }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
-                messageCount++;
-                await new Promise(r => setTimeout(r, 1000));
+                templateComponents.push({
+                    type: "header",
+                    parameters: [{ 
+                        type: "document", 
+                        document: { 
+                            id: mediaId, 
+                            filename: "תשפז תוכניות לבתי ספר.pdf" 
+                        } 
+                    }]
+                });
             }
 
-           // תבנית 3: הודעת סיום עם כפתור (מעבר לווצאפ פרטי)
-            console.log("💬 Sending closing_msg_v3...");
+            templateComponents.push({
+                type: "body",
+                parameters: [{ type: "text", text: requestBody.ContactName || "מנהל/ת" }]
+            });
+
             await axios.post(`https://graph.facebook.com/v20.0/${META_PHONE_ID}/messages`, {
                 messaging_product: "whatsapp",
                 to: waId,
                 type: "template",
                 template: {
-                    name: "closing_msg_v4",
-                    language: { code: "he" }
+                    name: "short_message4",
+                    language: { code: "he" },
+                    components: templateComponents
                 }
             }, { headers: { 'Authorization': `Bearer ${META_ACCESS_TOKEN}`, 'Content-Type': 'application/json' } });
             
             messageCount++;
-
         } else {
             // ==========================================
             // מסלול הודעות חופשיות (למנהלים שכבר בשיחה איתך)
@@ -461,7 +433,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             // כעת נתעד את שליחת סדרת התבניות
             if (chatwootConversationId) {
                 await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-                    content: `מערכת: נשלחו תבניות בהצלחה (כולל closing_msg_v3)`,
+                    content: `מערכת: נשלחה תבנית בהצלחה (short_message4)`,
                     message_type: "outgoing",
                     private: true 
                 }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
