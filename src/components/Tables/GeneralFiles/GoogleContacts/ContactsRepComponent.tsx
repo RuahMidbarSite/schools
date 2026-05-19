@@ -4,7 +4,7 @@ import { updateSchoolsColumn } from "@/db/schoolrequests";
 import { School, SchoolsContact } from "@prisma/client";
 import { CellValueChangedEvent, ICellRendererParams, IRowNode } from "ag-grid-community";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { updateStorage } from "../../SchoolTable/Storage/SchoolDataStorage";
+import { updateStorage, getFromStorage } from "../../SchoolTable/Storage/SchoolDataStorage";
 
 
 interface CustomRep extends ICellRendererParams<School> {
@@ -125,14 +125,19 @@ const RepresentiveComponent = forwardRef<RepresentiveRef, CustomRep>(({ setConta
 
   // this on load
   useEffect(() => {
-    if (AllContacts && ContactName === null && AllContacts.length > 0) {
-      const contact = AllContacts.find((res) => res.IsRepresentive === true && res.Schoolid === props.data.Schoolid)
-      Event_UpdateContact(contact)
+    const fetchLatestAndSet = async () => {
+      const storage = await getFromStorage();
+      const latestContacts = storage.schoolsContacts || AllContacts;
+      const contact = latestContacts.find((res: SchoolsContact) => res.IsRepresentive === true && res.Schoolid === props.data.Schoolid);
+      
+      if (contact) {
+        Event_UpdateContact(contact);
+      }
+    };
 
+    if (ContactName === null) {
+      fetchLatestAndSet();
     }
-
-
-
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

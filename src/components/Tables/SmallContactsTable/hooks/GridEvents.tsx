@@ -47,8 +47,8 @@ const useGridEvents = (gridRef: MutableRefObject<AgGridReact<any>>, InTheMiddleO
       let contacts_mini = rowData
 
       if (event.colDef.field === "IsRepresentive") {
-        // the small contacts we create is always only the first row.
-        const firstRowNode = SchoolApi.current.getDisplayedRowAtIndex(0);
+     // התיקון: איתור השורה המדויקת של בית הספר לפי ID במקום לפי השורה הראשונה
+        const firstRowNode = SchoolApi.current.getRowNode(event.data.Schoolid.toString());
         if (firstRowNode) {
           const params = { columns: ['Representive'], rowNodes: [firstRowNode] };
           const instances = SchoolApi.current.getCellRendererInstances(params);
@@ -126,7 +126,7 @@ const useGridEvents = (gridRef: MutableRefObject<AgGridReact<any>>, InTheMiddleO
 
       }
       else if (event.colDef.field === "FirstName" && event.data.IsRepresentive === true || event.colDef.field === "Role" && event.data.IsRepresentive === true) {
-        const firstRowNode = SchoolApi.current.getDisplayedRowAtIndex(0);
+        const firstRowNode = SchoolApi.current.getRowNode(event.data.Schoolid.toString());
         if (firstRowNode) {
           const params = { columns: ['Representive'], rowNodes: [firstRowNode] };
           const instances = SchoolApi.current.getCellRendererInstances(params);
