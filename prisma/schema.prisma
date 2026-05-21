@@ -142,6 +142,7 @@ model School {
   Remarks                 String?          @default("")
    @@index([Schoolid])
    MainPhone              String?          @default("")
+   Email                  String?          @default("")
 }
 
 model Assigned_Guide {

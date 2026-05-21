@@ -283,6 +283,18 @@ if (value === "MainPhone") {
             }
           };
         }
+        if (value === "Email") {
+          return {
+            field: value,
+            headerName: model[1][index] || "דוא\"ל",
+            width: 220,
+            editable: true,
+            singleClickEdit: true,
+            cellEditor: "agTextCellEditor",
+            filter: "CustomFilter",
+            cellStyle: { direction: "ltr", textAlign: "left", paddingLeft: "15px" }
+          };
+        }
         return {
           field: value,
           headerName: model[1][index],
