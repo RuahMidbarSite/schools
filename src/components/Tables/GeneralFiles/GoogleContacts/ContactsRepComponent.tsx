@@ -78,18 +78,44 @@ const RepresentiveComponent = forwardRef<RepresentiveRef, CustomRep>(({ setConta
 
 
   }, [create_name, props,api])
-  // Method to update the value
+ // Method to update the value
   const updateValue = (Contact: SchoolsContact) => {
-
+    console.log(`🟡 [updateValue] Activated for SchoolID: ${props.data.Schoolid}`);
+    
     if (Contact) {
+      console.log(`🟡 [updateValue] Selected new contact: ${Contact.FirstName} ${Contact.LastName}`);
       Event_UpdateContact(Contact)
+      const name = create_name(Contact);
+      
+      console.log(`🟡 [updateValue] Sending to DB -> Name: ${name}, ID: ${Contact.Contactid}`);
+      
+      updateSchoolsColumn("Representive", name, props.data.Schoolid)
+        .then(res => console.log("🟢 [updateValue] DB Name Update Success:", res))
+        .catch(err => console.error("🔴 [updateValue] DB Name Update Failed:", err));
+        
+      updateSchoolsColumn("RepresentiveID", Contact.Contactid, props.data.Schoolid)
+        .then(res => console.log("🟢 [updateValue] DB ID Update Success:", res))
+        .catch(err => console.error("🔴 [updateValue] DB ID Update Failed:", err));
     } else {
+      console.log("🟡 [updateValue] Contact removed. Deleting from DB.");
       setContactName(null)
       setLink(null)
       setCurrentContact(null)
+      
+      updateSchoolsColumn("Representive", "", props.data.Schoolid)
+        .then(res => console.log("🟢 [updateValue] DB Name Removal Success:", res))
+        .catch(err => console.error("🔴 [updateValue] DB Name Removal Failed:", err));
+        
+      updateSchoolsColumn("RepresentiveID", -1, props.data.Schoolid)
+        .then(res => console.log("🟢 [updateValue] DB ID Removal Success:", res))
+        .catch(err => console.error("🔴 [updateValue] DB ID Removal Failed:", err));
+      
+      const schoolNode: IRowNode<School> = api.getRowNode(props.data.Schoolid.toString());
+      if (schoolNode) {
+        schoolNode.setDataValue("Representive", "");
+        schoolNode.setDataValue("RepresentiveID", -1);
+      }
     }
-
-
   };
 
   // Refresh method

@@ -149,9 +149,10 @@ export default function SchoolsTable() {
   const { valueFormatterDate } = useCustomDateComponents()
   const { validateFields, ErrorModule } = useErrorValidationComponents(setOpen, setDialogType, setDialogMessage, open, dialogType, dialogMessage)
   const { WindowManager } = useColumnComponent(columnWindowOpen, setColumnWindowOpen, colDefinition, gridRef, colState, setColState)
-  const { onClearFilterButtonClick, onAddRowToolBarClick, onFilterTextBoxChanged, onSaveChangeButtonClick, onCancelChangeButtonClick, onSaveDeletions, onDisplayProgramsClicked } = useToolBarFunctions(gridRef, rowCount, dataRowCount, validateFields, setDialogType, setDialogMessage, setOpen, SetInTheMiddleOfAddingRows,
+  const { onClearFilterButtonClick, onAddRowToolBarClick, onFilterTextBoxChanged, onSaveChangeButtonClick, onCancelChangeButtonClick, onSaveDeletions, onDisplayProgramsClicked, onExportToCsvClick } = useToolBarFunctions(gridRef, rowCount, dataRowCount, validateFields, setDialogType, setDialogMessage, setOpen, SetInTheMiddleOfAddingRows,
     setAmount, openedProgramWindow, setLoading, setRowData, AllContacts, setAllContacts, AllPrograms, setAllPrograms, maxIndex)
   const { onGridReady } = useGridFunctions(CustomDateCellEditor, valueFormatterDate, setColDefs, setRowData, rowCount, dataRowCount, setAllContacts, setAllPrograms, maxIndex)
+  
   const { onCellValueChanged, onCellEditingStarted, onRowSelected, onSelectionChange, isRowSelectable } = useGridEvents(gridRef, InTheMiddleOfAddingRows, checkedAmount, setAmount)
 
   const refreshDataFromStorage = useCallback(async (changedKeys: string[] = []) => {
@@ -335,7 +336,8 @@ style={{
     activeStatusFilter,   // הוספנו
     handleStatusFilter,   // הוספנו
     statusCounts,         // הוספנו - ספירת הרשומות לכל סטטוס
-    handleBatchStatusUpdate // תוספת: עדכון גורף
+    handleBatchStatusUpdate, // תוספת: עדכון גורף
+    onExportToCsvClick    // תוספת: ייצוא
   )}
 </nav>
       <Suspense>

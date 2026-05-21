@@ -4,7 +4,7 @@ import { Program, School, SchoolsContact } from "@prisma/client";
 import { useCallback } from "react";
 import { DataType, getFromStorageWithKey, updateStorage } from "../Storage/SchoolDataStorage";
 
-const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, setDialogType, setDialogMessage, setOpen, SetInTheMiddleOfAddingRows, setAmount, openedProgramWindow, setLoading, setRowData, AllContacts, setAllContacts, AllPrograms, setAllPrograms, maxIndex): { onFilterTextBoxChanged: any, onSaveChangeButtonClick: any, onCancelChangeButtonClick: any, onSaveDeletions: any, onClearFilterButtonClick: any, onAddRowToolBarClick: any, onDisplayProgramsClicked: any } => {
+const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, setDialogType, setDialogMessage, setOpen, SetInTheMiddleOfAddingRows, setAmount, openedProgramWindow, setLoading, setRowData, AllContacts, setAllContacts, AllPrograms, setAllPrograms, maxIndex): { onFilterTextBoxChanged: any, onSaveChangeButtonClick: any, onCancelChangeButtonClick: any, onSaveDeletions: any, onClearFilterButtonClick: any, onAddRowToolBarClick: any, onDisplayProgramsClicked: any, onExportToCsvClick: any } => {
 
   const onFilterTextBoxChanged = useCallback(() => {
     gridRef.current?.api.setGridOption(
@@ -271,15 +271,23 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
         ids: schoolIds,
       }));
       let new_window = window.open(`/ProgramPopUp?ids=${ids}`, '_blank', 'width=800,height=600')
-      if (gridRef) { gridRef.current.api.deselectAll() }
-      if (new_window === null) {
-        // pop-blocked
-      }
-      return
-    })
-  }, [gridRef]);
+    if (gridRef) { gridRef.current.api.deselectAll() }
+    if (new_window === null) {
+      // pop-blocked
+    }
+    return
+  })
+}, [gridRef]);
 
-  return { onFilterTextBoxChanged, onSaveChangeButtonClick, onCancelChangeButtonClick, onSaveDeletions, onClearFilterButtonClick, onAddRowToolBarClick, onDisplayProgramsClicked }
+const onExportToCsvClick = useCallback(() => {
+  if (gridRef.current && gridRef.current.api) {
+    gridRef.current.api.exportDataAsCsv({
+      fileName: 'schools_export.csv',
+    });
+  }
+}, [gridRef]);
+
+return { onFilterTextBoxChanged, onSaveChangeButtonClick, onCancelChangeButtonClick, onSaveDeletions, onClearFilterButtonClick, onAddRowToolBarClick, onDisplayProgramsClicked, onExportToCsvClick }
 }
 
 export default useToolBarFunctions

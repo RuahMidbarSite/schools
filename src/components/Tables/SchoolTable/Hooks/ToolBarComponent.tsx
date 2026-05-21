@@ -22,7 +22,8 @@ const ToolBar = (
   activeStatusFilter = null,   // הוספנו
   handleStatusFilter = () => {}, // הוספנו
   statusCounts = {},           // הוספנו - אובייקט ספירת הסטטוסים
-  handleBatchStatusUpdate = (status) => {} // תוספת: פונקציית עדכון גורף
+  handleBatchStatusUpdate = (status) => {}, // תוספת: פונקציית עדכון גורף
+  onExportToCsvClick // תוספת: פונקציית ייצוא
 ) => {
   const { theme } = useContext(ThemeContext)
 
@@ -59,19 +60,27 @@ const ToolBar = (
         <Redirect type={"Contacts"} ScopeType={"Contacts"} />
         
         <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute">בטל סינון</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded p-1"
-            onClick={onClearFilterButtonClick}
-          >
-            <FcCancel className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
+      placement={"top"}
+      overlay={<Tooltip className="absolute">בטל סינון</Tooltip>}
+    >
+      <button
+        className="hover:bg-[#253d37] rounded p-1"
+        onClick={onClearFilterButtonClick}
+      >
+        <FcCancel className="w-[37px] h-[37px]" />
+      </button>
+    </OverlayTrigger>
 
-        <OverlayTrigger
-          placement={"top"}
+    <button
+      onClick={onExportToCsvClick}
+      className="hover:bg-green-600 bg-green-700 rounded px-3 py-1 text-white border-solid text-sm flex items-center justify-center shadow-sm"
+      style={{ height: '37px' }}
+    >
+     CSV
+    </button>
+
+    <OverlayTrigger
+      placement={"top"}
           overlay={<Tooltip className="absolute" id="tooltip-bottom">ניהול עמודות</Tooltip>}
         >
           <button
@@ -155,52 +164,25 @@ const ToolBar = (
           <div className="d-flex align-items-center flex-grow-1" style={{ minWidth: 0, paddingRight: '15px' }} dir="rtl">
             <div style={{ width: '1px', height: '40px', backgroundColor: '#cbd5e1', marginLeft: '12px', flexShrink: 0 }}></div>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* שורה ראשונה - ספירה מעל הכפתור */}
-              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start' }}>
-                {schoolStatuses.slice(0, Math.ceil(schoolStatuses.length / 2)).map((status: any) => (
-                  <div key={status.StatusId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff', lineHeight: '1', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}>
-                      {statusCounts[status.StatusName] || 0}
-                    </span>
-                    <button
-                      onClick={() => handleStatusFilter(status.StatusName)}
-                      className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${
-                        activeStatusFilter === status.StatusName
-                          ? 'bg-teal-600 text-white border-teal-600 shadow-md'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                      style={{ whiteSpace: 'nowrap', height: '28px' }}
-                    >
-                      {status.StatusName}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* שורה שנייה - ספירה מתחת לכפתור */}
-              {schoolStatuses.length > 1 && (
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start' }}>
-                  {schoolStatuses.slice(Math.ceil(schoolStatuses.length / 2)).map((status: any) => (
-                    <div key={status.StatusId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                      <button
-                        onClick={() => handleStatusFilter(status.StatusName)}
-                        className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${
-                          activeStatusFilter === status.StatusName
-                            ? 'bg-teal-600 text-white border-teal-600 shadow-md'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                        }`}
-                        style={{ whiteSpace: 'nowrap', height: '28px' }}
-                      >
-                        {status.StatusName}
-                      </button>
-                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff', lineHeight: '1', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}>
-                        {statusCounts[status.StatusName] || 0}
-                      </span>
-                    </div>
-                  ))}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 6px', justifyContent: 'flex-start', flex: 1 }}>
+              {schoolStatuses.map((status: any) => (
+                <div key={status.StatusId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff', lineHeight: '1', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}>
+                    {statusCounts[status.StatusName] || 0}
+                  </span>
+                  <button
+                    onClick={() => handleStatusFilter(status.StatusName)}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${
+                      activeStatusFilter === status.StatusName
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                    style={{ whiteSpace: 'nowrap', height: '28px' }}
+                  >
+                    {status.StatusName}
+                  </button>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         )}

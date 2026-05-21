@@ -228,7 +228,61 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
             }
           }
         }
+if (value === "MainPhone") {
+          return {
+            field: value,
+            headerName: "טלפון ביה\"ס",
+            width: 145,
+            editable: true,
+            singleClickEdit: true,
+            cellEditor: "agTextCellEditor",
+            filter: "CustomFilter",
+            cellRenderer: (params: any) => {
+              if (!params.value) return <span></span>;
+              
+              const cleanPhone = String(params.value).replace(/[^\d+]/g, '');
+              
+              return (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", height: "100%", padding: "0 6px" }}>
+                  
+                  <a
+                    href={`tel:${cleanPhone}`}
+                    style={{
+                      background: "#e0f2fe",
+                      border: "1px solid #bae6fd",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      padding: "2px 6px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: "26px",
+                      textDecoration: "none"
+                    }}
+                    ref={(el) => {
+                      if (el) {
+                        // חסימה נייטיבית חזקה ברמת הדפדפן שעוצרת את ag-Grid מלהתערב
+                        el.onmousedown = (e) => e.stopPropagation();
+                        el.onclick = (e) => {
+                          e.stopPropagation();
+                          e.preventDefault(); // עוצר את פתיחת הקישור הרגילה כדי שהדפדפן לא יחסום בשקט
+                          window.open(`tel:${cleanPhone}`, "_self"); // פתיחה ישירה וחזקה של החייגן
+                        };
+                      }
+                    }}
+                    title="חייג לבית הספר"
+                  >
+                    <span style={{ fontSize: "13px" }}>📞</span>
+                  </a>
 
+                  <span style={{ direction: "ltr", fontWeight: "500", color: "#334155" }}>
+                    {params.value}
+                  </span>
+                </div>
+              );
+            }
+          };
+        }
         return {
           field: value,
           headerName: model[1][index],

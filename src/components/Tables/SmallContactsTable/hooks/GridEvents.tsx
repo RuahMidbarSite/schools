@@ -4,6 +4,7 @@ import { CellEditingStartedEvent, CellValueChangedEvent, GetRowIdParams, IRowNod
 import { AgGridReact } from "ag-grid-react";
 import { Dispatch, MutableRefObject, SetStateAction, useCallback } from "react";
 import { updateStorage } from "../Storage/SmallContactsDataStorage";
+import { updateStorage as updateMasterStorage } from "../../SchoolTable/Storage/SchoolDataStorage";
 import { RepresentiveRef } from "../../GeneralFiles/GoogleContacts/ContactsRepComponent";
 
 
@@ -161,7 +162,9 @@ const useGridEvents = (gridRef: MutableRefObject<AgGridReact<any>>, InTheMiddleO
       setAllSchoolContacts.current = updated_contacts
       console.log("✅ setAllSchoolContacts.current updated:", updated_contacts.find(c => c.IsRepresentive));
 
-      updateStorage({ schoolsContacts: updated_contacts.sort((arg1, arg2) => arg1.Schoolid - arg2.Schoolid) })
+      const sortedContacts = updated_contacts.sort((a, b) => a.Schoolid - b.Schoolid);
+      updateStorage({ schoolsContacts: sortedContacts });
+      updateMasterStorage({ schoolsContacts: sortedContacts });
     }, [InTheMiddleOfAddingRows, rowData, setAllSchoolContacts, AllContacts, SchoolApi, setRowData]
   );
 

@@ -139,8 +139,9 @@ model School {
   Date                     DateTime?
   RepresentiveID Int?
   //Program                  Program[]
-  Remarks                 String?         @default("")
+  Remarks                 String?          @default("")
    @@index([Schoolid])
+   MainPhone              String?          @default("")
 }
 
 model Assigned_Guide {

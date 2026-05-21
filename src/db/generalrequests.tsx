@@ -34,7 +34,7 @@ const TableTranslation: { [index: string]: any } =
     "פרטים"
   ],
 
-  School: [
+ School: [
     "מזהה",
     "שם בית ספר",
     "שלב חינוך",
@@ -45,8 +45,9 @@ const TableTranslation: { [index: string]: any } =
     "נציג",
     "סטטוס",
     "תאריך",
-
-
+    "מזהה נציג",
+    "הערות",
+    "טלפון ביה\"ס"
   ],
   Guide: [
     "מספר מדריך",
