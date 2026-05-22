@@ -248,7 +248,28 @@ export default function SchoolsTable() {
 
   const getRowId = useCallback((params: GetRowIdParams<School>) => String(params.data.Schoolid), []);
   
-  const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
+ const onCellKeyDown = useCallback((event: CellKeyDownEvent) => {
+    console.log("onCellKeyDown Triggered - Key pressed:", event.event.key);
+    
+    if (event.event.key === 'Delete' || event.event.key === 'Backspace') {
+      const target = event.event.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      const isDeleteKey = event.event.key === 'Delete';
+      
+      console.log("Target TagName:", target.tagName);
+      console.log("Is Input/Textarea?", isInput);
+      console.log("Is Delete key?", isDeleteKey);
+      
+      // מאפשרים איפוס תא אם לחצו על Delete (תמיד), או אם לחצו על Backspace אבל מחוץ לתיבת טקסט
+      if (isDeleteKey || !isInput) {
+        console.log("Condition met. Stopping edit mode and setting null...");
+        event.api.stopEditing(true); 
+        event.node.setDataValue(event.column.getColId(), null);
+        console.log("Value cleared successfully.");
+      } else {
+        console.log("Skipping deletion because user is typing inside an input and pressed Backspace.");
+      }
+    }
      // קוד קיים
   }, []);
 
