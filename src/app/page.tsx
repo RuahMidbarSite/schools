@@ -10,23 +10,27 @@ export default function Home() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
 
-  // ברגע שקלרק סיים לטעון, בודקים לאן לנתב את המשתמש
+  // ברגע שקלרק סיים לטעון, בודקים לאן לנתב את המשתמש ומדפיסים ללוג לצורך ניתוח ה-404
   useEffect(() => {
     if (isLoaded && user) {
       const role = user.publicMetadata?.role;
       const isAdmin = checkIsAdmin(user);
       
+      console.log("=== אבחון ניתוב מערכת ===");
+      console.log("האם מנהל (isAdmin):", isAdmin);
+      console.log("תפקיד המשתמש מקלרק (role):", role);
+      
       if (!isAdmin) {
         if (role === 'assistant') {
-           // ניתוב לדף בתי הספר עבור העוזרת
-           router.push('/Schools'); 
+          console.log("מנסה לנתב עוזרת לנתיב: /schoolsPage");
+          router.push('/schoolsPage'); 
         } else {
-           // ניתוב לדף המדריכים עבור משתמש רגיל (מדריך)
-           router.push('/guidesPayments');
+          console.log("מנסה לנתב משתמש רגיל לנתיב: /guidesPayments");
+          router.push('/guidesPayments');
         }
       }
     }
-  }, [isLoaded, user, router]);
+  }, [isLoaded, user, router]); 
 
   // מונע "הבהוב": כל עוד קלרק לא סיים לטעון, או שמדובר במשתמש שעומד לעבור דף - אל תצייר כלום
   if (!isLoaded || (user && !checkIsAdmin(user))) {
