@@ -10,18 +10,25 @@ export default function Home() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
 
-  // ברגע שקלרק סיים לטעון, בודקים אם צריך לזרוק את המשתמש לדף הדיווח
+  // ברגע שקלרק סיים לטעון, בודקים לאן לנתב את המשתמש
   useEffect(() => {
     if (isLoaded && user) {
+      const role = user.publicMetadata?.role;
       const isAdmin = checkIsAdmin(user);
+      
       if (!isAdmin) {
-        // אם זה לא מנהל, מעבירים מיד לדף דיווחי מדריכים
-        router.push('/guidesPayments');
+        if (role === 'assistant') {
+           // ניתוב לדף בתי הספר עבור העוזרת
+           router.push('/Schools'); 
+        } else {
+           // ניתוב לדף המדריכים עבור משתמש רגיל (מדריך)
+           router.push('/guidesPayments');
+        }
       }
     }
   }, [isLoaded, user, router]);
 
-  // מונע "הבהוב": כל עוד קלרק לא סיים לטעון, או שמדובר במדריך שעומד לעבור דף - אל תצייר כלום
+  // מונע "הבהוב": כל עוד קלרק לא סיים לטעון, או שמדובר במשתמש שעומד לעבור דף - אל תצייר כלום
   if (!isLoaded || (user && !checkIsAdmin(user))) {
     return <div className={theme === "dark-theme" ? "bg-[#1f2936] h-screen w-screen" : "bg-white h-screen w-screen"} />;
   }

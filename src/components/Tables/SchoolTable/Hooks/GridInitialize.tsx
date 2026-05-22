@@ -26,6 +26,7 @@ import {
   GridReadyEvent,
 
 } from "ag-grid-community";
+import { useUser } from "@clerk/nextjs";
 
 import { getAllCities, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getEducationStages, getModelFields, getSchoolTypes } from "@/db/generalrequests";
 import {
@@ -41,7 +42,8 @@ import { getPrograms } from "@/db/programsRequests";
 
 const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, setRowData, rowCount, dataRowCount, setAllContacts, setAllPrograms, maxIndex): { GetDefaultDefinitions: any, onGridReady: any } => {
 
-  const { UpdateColumnsAfterCache } = useUpdateCacheColumn()
+  const { UpdateColumnsAfterCache } = useUpdateCacheColumn();
+  const { user } = useUser();
 
   const GetDefaultDefinitions = useCallback(
     ([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes]: [ReligionSector[], Cities[], any, EducationStage[], StatusSchools[], SchoolsContact[], SchoolTypes[]]) => {
@@ -305,14 +307,25 @@ if (value === "MainPhone") {
         };
       });
 
-      return colDe;
+      // בדיקה האם מדובר בעוזרת ואם כן, חסימת עמודות שלא ברשימה המורשית
+      const finalColDefs = colDe.map((col: any) => {
+        if (user?.publicMetadata?.role === 'assistant') {
+          const allowedCols = (user.publicMetadata.allowedColumns as string[]) || [];
+          if (col.editable && col.field && !allowedCols.includes(col.field)) {
+            return { ...col, editable: false };
+          }
+        }
+        return col;
+      });
+
+      return finalColDefs;
     },
-    [CustomDateCellEditor, valueFormatterDate]
+    [CustomDateCellEditor, valueFormatterDate, user]
   );
 
   const getAllData = useCallback(() => {
-    return Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getModelFields("School"), getEducationStages(), getAllStatuses("Schools"), getAllContacts(), getAllSchoolsTypes(), getPrograms()])
-  }, [])
+    return Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getModelFields("School"), getEducationStages(), getAllStatuses("Schools"), getAllContacts(), getAllSchoolsTypes(), getPrograms()]);
+  }, []);
 
   // 🔧 תיקון: תמיד שלוף מבסיס הנתונים במקום מ-Storage
   const onGridReady = async (event: GridReadyEvent) => {
@@ -328,9 +341,9 @@ if (value === "MainPhone") {
 
         setColDefs(colDef);
         setRowData(schools);
-        setAllContacts(contacts)
-        setAllPrograms(programs)
-        maxIndex.current = schools.length > 0 ? Math.max(...schools?.map((val) => val.Schoolid)):0
+        setAllContacts(contacts);
+        setAllPrograms(programs);
+        maxIndex.current = schools.length > 0 ? Math.max(...schools?.map((val) => val.Schoolid)) : 0;
         
         // עדכן את ה-Storage עם הנתונים העדכניים מבסיס הנתונים
         updateStorage({ 
@@ -343,12 +356,12 @@ if (value === "MainPhone") {
           schoolsContacts: contacts, 
           Tablemodel: model, 
           Programs: programs 
-        }).then((res) => console.log('✅ Storage updated with fresh data from database'))
+        }).then((res) => console.log('✅ Storage updated with fresh data from database'));
       }
     );
   };
 
-  return { GetDefaultDefinitions: GetDefaultDefinitions, onGridReady: onGridReady }
-}
+  return { GetDefaultDefinitions: GetDefaultDefinitions, onGridReady: onGridReady };
+};
 
-export default useGridFunctions
+export default useGridFunctions;

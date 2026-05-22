@@ -1,4 +1,5 @@
 "use server";
+import { currentUser } from "@clerk/nextjs/server";
 import prisma from "@/db/prisma";
 import {
   School,
@@ -75,10 +76,28 @@ export const getSchools = async (): Promise<any> => {
 
 export const getAllSchools = async (): Promise<School[]> => {
   "use server"
-  const schools: Promise<School[]> = prisma.school.findMany({
+  
+  const user = await currentUser();
+  const role = user?.publicMetadata?.role;
+  const allowedStatuses = user?.publicMetadata?.allowedStatuses as string[] || [];
+
+  let whereClause = {};
+  
+  // אם המשתמש מוגדר כעוזרת (assistant) ויש לו רשימת סטטוסים מורשים - נסנן את השליפה
+  if (role === 'assistant' && allowedStatuses.length > 0) {
+    whereClause = {
+      Status: {
+        in: allowedStatuses
+      }
+    };
+  }
+
+  const schools = await prisma.school.findMany({
+    where: whereClause,
     orderBy: { Schoolid: "asc" },
   });
-  return schools
+  
+  return schools;
 }
 
 export const updateSchoolsColumn = async (
