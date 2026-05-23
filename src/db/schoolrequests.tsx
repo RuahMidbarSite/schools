@@ -167,23 +167,30 @@ export const deleteSchoolRows = async (
   return [result, result_2];
 };
 export const updateSchoolRowsCascading = async (
-  deleted_ids: number[],
-  Indexes_Not_Touched: number[],
-  AllPrograms: Program[],
-  AllContacts: SchoolsContact[]
+  deleted_ids: number[]
 ): Promise<null> => {
+  if (deleted_ids.length === 0) return null;
 
- 
+  // אנחנו מבצעים את המחיקה ישירות מול מסד הנתונים בעזרת ה-Transaction הפנימי (tx),
+  // ללא תלות בנתונים שמגיעים מהלקוח, וללא קריאה לפונקציות חיצוניות ששוברות את הרצף.
+  return prisma.$transaction(async (tx) => {
+    // 1. מחיקת אנשי הקשר המקושרים לבית הספר
+    await tx.schoolsContact.deleteMany({
+      where: { Schoolid: { in: deleted_ids } }
+    });
 
-  return prisma.$transaction(async (prisma) => {
+    // 2. מחיקת התוכניות המקושרות לבית הספר
+    await tx.program.deleteMany({
+      where: { Schoolid: { in: deleted_ids } }
+    });
 
-    await deleteContactsBySchoolID(deleted_ids, AllContacts)
-    await deleteProgramsBySchoolIDCascading(deleted_ids, AllPrograms)
-    await updateSchoolRows(deleted_ids, Indexes_Not_Touched)
-    return null
+    // 3. מחיקת בתי הספר עצמם
+    await tx.school.deleteMany({
+      where: { Schoolid: { in: deleted_ids } }
+    });
 
-
-  }, { timeout: 50000, maxWait: 50000, })
+    return null;
+  }, { timeout: 15000, maxWait: 15000 });
 };
 
 export const updateSchoolRows = async (

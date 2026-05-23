@@ -166,7 +166,8 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
       }
 
       // עדכון רשימות מקושרות
-      const remaining_contacts = (AllContacts as SchoolsContact[]).filter((contact) => !ids.includes(contact.Contactid))
+      // תוקן הבאג: סינון לפי Schoolid במקום Contactid
+      const remaining_contacts = (AllContacts as SchoolsContact[]).filter((contact) => !ids.includes(contact.Schoolid))
       const remaining_programs = (AllPrograms as Program[]).filter((program) => !ids.includes(program.Schoolid))
 
       setAllContacts(remaining_contacts)
@@ -185,7 +186,8 @@ const useToolBarFunctions = (gridRef, rowCount, dataRowCount, validateFields, se
       const start = performance.now();
       
       try {
-        await updateSchoolRowsCascading(ids, id_range, AllPrograms, AllContacts);
+        // הקריאה לשרת עודכנה כדי לשלוח רק את ה-IDs, המחיקה המקושרת מתבצעת כולה בשרת
+        await updateSchoolRowsCascading(ids);
         
         const end = performance.now();
         console.log(`✅ Execution time updating schools: ${end - start} milliseconds`);
