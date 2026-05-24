@@ -46,11 +46,19 @@ export const CustomSelect = React.forwardRef((props: CellSelect, ref: any) => {
       height: "100%",
       width: "100%",
     }),
-    singleValue: (provided) => ({
+    singleValue: (provided: any) => ({
       ...provided,
       color: currentTheme.controlTextColor,
     }),
-    option: (provided, state) => ({
+    multiValue: (provided: any) => ({
+      ...provided,
+      backgroundColor: theme === "dark-theme" ? "#374151" : "#e2e8f0",
+    }),
+    multiValueLabel: (provided: any) => ({
+      ...provided,
+      color: currentTheme.controlTextColor,
+    }),
+    option: (provided: any, state: any) => ({
       ...provided,
       backgroundColor: state.isFocused ? "#e0e0e0" : currentTheme.optionBackground,
       color: state.isSelected ? "#000" : currentTheme.optionTextColor,
@@ -92,74 +100,96 @@ export const CustomSelect = React.forwardRef((props: CellSelect, ref: any) => {
   };
 
 
+  const isMultiSelect = (props.colDef?.field as string) === "Years";
+
   const onMenuOpen = () => {
-    const optionElement = document.querySelector(
-      `[value="${CurrentlySelected}"]`
-    );
-    if (optionElement) {
-      optionElement.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!isMultiSelect) {
+      const optionElement = document.querySelector(
+        `[value="${CurrentlySelected}"]`
+      );
+      if (optionElement) {
+        optionElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     }
   };
 
   function getDefault(): any {
-    if ((props.colDef!.field as string) === "City") {
+    if ((props.colDef?.field as string) === "City") {
       return props.data.City;
     }
-    if ((props.colDef!.field as string) === "Representive") {
+    if ((props.colDef?.field as string) === "Representive") {
       return props.data.Representive;
     }
-    if ((props.colDef!.field as string) === "CityName") {
+    if ((props.colDef?.field as string) === "CityName") {
       return props.data.CityName;
     }
-    return ""
+    if ((props.colDef?.field as string) === "Years") {
+      return props.data.Years || [];
+    }
+    return "";
   }
 
   const onChange = (
-    newValue: OnChangeValue<any, false>,
+    newValue: OnChangeValue<any, boolean>,
     actionMeta: ActionMeta<any>
   ) => {
-   
-   props.node.setDataValue(props.colDef.field as string, newValue.value);
-    
-
+    if (isMultiSelect) {
+      const selectedValues = newValue ? (newValue as any[]).map(item => item.value).sort() : [];
+      props.node.setDataValue(props.colDef!.field as string, selectedValues);
+      UpdateSelect(selectedValues);
+    } else {
+      props.node.setDataValue(props.colDef!.field as string, (newValue as any).value);
+      UpdateSelect((newValue as any).value);
+    }
   };
 
   const getOptions = () => {
-    if ((props.colDef!.field as string) === "City" || (props.colDef!.field as string) === "CityName") {
-      return props.selectData;
+    if ((props.colDef?.field as string) === "City" || (props.colDef?.field as string) === "CityName") {
+      return props.selectData || [];
     }
-    if ((props.colDef!.field as string) === "Representive") {
-      const contacts: SchoolsContact[] = props.selectData;
-
+    if (isMultiSelect) {
+      return props.selectData || []; 
+    }
+    if ((props.colDef?.field as string) === "Representive") {
+      const contacts: SchoolsContact[] = props.selectData || [];
       const filtered_contacts = contacts?.filter(
         (val) => val.Schoolid === props.data.Schoolid
       );
-
-      const options = filtered_contacts.map((val) => ({
+      const options = filtered_contacts?.map((val) => ({
         value: val.FirstName!.concat(" ", val.LastName!),
         label: val.FirstName!.concat(" ", val.LastName!),
-      }));
+      })) || [];
       return options;
     }
+    return [];
   };
+
+  const getSelectValue = () => {
+    const defaultVal = getDefault();
+    const options = getOptions() || [];
+    
+    if (isMultiSelect) {
+      return options.filter((option: any) => (defaultVal as string[]).includes(option.value));
+    }
+    return options.find((option: any) => option.value === defaultVal) || null;
+  };
+
   return (
-    // default value is bypass to a bug that does not take the initial default value and scroll into it.
-    <div className="overflow-y-visible ">
+    <div className="overflow-y-visible h-full w-full">
       <Select
-        className="basic-single"
+        className="basic-single h-full"
         classNamePrefix="select"
         isRtl={true}
-        placeholder={getDefault()}
-        defaultValue={getOptions().find(
-          (option: any) => option.value === getDefault()
-        )}
+        isMulti={isMultiSelect}
+        placeholder={isMultiSelect ? "בחר שנים..." : getDefault()}
+        value={getSelectValue()}
         menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
         options={getOptions()}
         styles={customStyles}
         onMenuOpen={onMenuOpen}
         controlShouldRenderValue={true}
         isSearchable={true}
-        menuPlacement={"top"}
+        menuPlacement={"auto"}
         onChange={onChange}
       />
     </div>

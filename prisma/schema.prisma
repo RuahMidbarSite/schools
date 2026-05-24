@@ -129,6 +129,7 @@ model School {
   Objectid String @id @default(auto()) @map("_id") @db.ObjectId
   Schoolid                 Int            
   SchoolName               String?
+  Years                    String[]         @default([])
   EducationStage           String?          @default("יסודי")
   ReligiousSector          String?          @default("יהודי")
   SchoolType               String?

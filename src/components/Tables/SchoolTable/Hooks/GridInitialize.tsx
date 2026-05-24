@@ -1,6 +1,6 @@
 "use client";
 import { StatusBadgeRenderer } from "../../GeneralFiles/Renderers/StatusBadgeRenderer"; // שים לב לנתיב
-import { School, ReligionSector, Cities, SchoolsContact, EducationStage, SchoolTypes, StatusSchools } from "@prisma/client";
+import { School, ReligionSector, Cities, SchoolsContact, EducationStage, SchoolTypes, StatusSchools, Years } from "@prisma/client";
 import {
   useState,
   useRef,
@@ -28,7 +28,7 @@ import {
 } from "ag-grid-community";
 import { useUser } from "@clerk/nextjs";
 
-import { getAllCities, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getEducationStages, getModelFields, getSchoolTypes } from "@/db/generalrequests";
+import { getAllCities, getAllReligionSectors, getAllSchoolsTypes, getAllStatuses, getEducationStages, getModelFields, getSchoolTypes, getAllYears } from "@/db/generalrequests";
 import {
   columnsDefinition,
   schoolsData,
@@ -46,9 +46,37 @@ const useGridFunctions = (CustomDateCellEditor, valueFormatterDate, setColDefs, 
   const { user } = useUser();
 
   const GetDefaultDefinitions = useCallback(
-    ([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes]: [ReligionSector[], Cities[], any, EducationStage[], StatusSchools[], SchoolsContact[], SchoolTypes[]]) => {
+    ([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes, years]: [ReligionSector[], Cities[], any, EducationStage[], StatusSchools[], SchoolsContact[], SchoolTypes[], Years[]]) => {
 
       var colDe: columnsDefinition = model[0]?.map((value: any, index: any) => {
+        if (value === "Years") {
+          return {
+            field: value,
+            headerName: model[1]?.[index] || "שנים",
+            width: 180,
+            editable: true,
+            cellEditor: "CustomSelect",
+            cellEditorParams: {
+              selectData: years.map((val) => ({ value: val.YearName, label: val.YearName })),
+            },
+            filter: "CustomFilter",
+            cellRenderer: (params: any) => {
+              if (!params.value || !Array.isArray(params.value)) return "";
+              
+              const sortedYears = [...params.value].sort();
+              
+              return (
+                <div style={{ display: "flex", gap: "4px", overflow: "hidden", alignItems: "center", height: "100%", flexWrap: "wrap" }}>
+                  {sortedYears.map((year: string, i: number) => (
+                    <span key={i} style={{ backgroundColor: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px 6px", fontSize: "0.75rem", color: "#334155" }}>
+                      {year}
+                    </span>
+                  ))}
+                </div>
+              );
+            }
+          };
+        }
         if (value === "ReligiousSector") {
           return {
             field: value,
@@ -324,7 +352,7 @@ if (value === "MainPhone") {
   );
 
   const getAllData = useCallback(() => {
-    return Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getModelFields("School"), getEducationStages(), getAllStatuses("Schools"), getAllContacts(), getAllSchoolsTypes(), getPrograms()]);
+    return Promise.all([getAllSchools(), getAllReligionSectors(), getAllCities(), getModelFields("School"), getEducationStages(), getAllStatuses("Schools"), getAllContacts(), getAllSchoolsTypes(), getPrograms(), getAllYears()]);
   }, []);
 
   // 🔧 תיקון: תמיד שלוף מבסיס הנתונים במקום מ-Storage
@@ -332,12 +360,12 @@ if (value === "MainPhone") {
     console.log("📊 GridInitialize: Fetching fresh data from database...");
     
     getAllData().then(
-      ([schools, religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes, programs]) => {
+      ([schools, religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes, programs, years]) => {
         console.log(`✅ Loaded ${schools.length} schools from database`);
         
         rowCount.current = schools.length;
         dataRowCount.current = schools.length;
-        var colDef = GetDefaultDefinitions([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes]);
+        var colDef = GetDefaultDefinitions([religion_sectors, cities, model, edustages, statuses, contacts, schoolTypes, years as Years[]]);
 
         setColDefs(colDef);
         setRowData(schools);
@@ -355,7 +383,8 @@ if (value === "MainPhone") {
           SchoolTypes: schoolTypes, 
           schoolsContacts: contacts, 
           Tablemodel: model, 
-          Programs: programs 
+          Programs: programs,
+          Years: years
         }).then((res) => console.log('✅ Storage updated with fresh data from database'));
       }
     );

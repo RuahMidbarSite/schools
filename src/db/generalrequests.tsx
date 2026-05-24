@@ -37,6 +37,7 @@ const TableTranslation: { [index: string]: any } =
 School: [
     "מזהה",
     "שם בית ספר",
+    "שנים",
     "שלב חינוך",
     "מגזר",
     "סוג",
