@@ -170,7 +170,7 @@ export const CustomDateCellEditor = (props: ICellEditorParams<any>) => {
                 showYearDropdown
                 dropdownMode="select"
                 portalId="root-portal"
-                popperPlacement="top-start"
+                popperPlacement="auto"
                 menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
             >
                 <div className="flex justify-center p-2 border-t border-slate-600 bg-[#12242E]">
