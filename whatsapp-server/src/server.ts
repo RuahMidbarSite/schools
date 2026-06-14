@@ -293,11 +293,12 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
 
         console.log(`📤 Sending messages. Mode: ${requestBody.TemplateName ? 'Multi-Template' : 'Free Text'}`);
 
-      if (requestBody.TemplateName) {
-            console.log("💬 Sending short_msg (Combined Template)...");
+     if (requestBody.TemplateName) {
+            console.log("💬 Sending short_message8 (Text-only Template)...");
             
             const templateComponents: any[] = [];
             
+            /* // הקוד להוספת מסמך לתבנית - בהערה למקרה שיידרש בעתיד לתבניות אחרות
             if (mediaId) {
                 templateComponents.push({
                     type: "header",
@@ -310,6 +311,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                     }]
                 });
             }
+            */
 
             templateComponents.push({
                 type: "body",
@@ -321,7 +323,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 to: waId,
                 type: "template",
                 template: {
-                    name: "short_message5",
+                    name: "short_message8",
                     language: { code: "he" },
                     components: templateComponents
                 }
@@ -433,7 +435,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             // כעת נתעד את שליחת סדרת התבניות
             if (chatwootConversationId) {
                 await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-                    content: `מערכת: נשלחה תבנית בהצלחה (short_message5)`,
+                    content: `מערכת: נשלחה תבנית בהצלחה (short_message8)`,
                     message_type: "outgoing",
                     private: true 
                 }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
