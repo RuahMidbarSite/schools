@@ -58,7 +58,7 @@ async function getChatwootConversationId(phone: string): Promise<number | null> 
 app.use(cors({
   origin: true,
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS', 'PUT', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning'],
   credentials: true,
   optionsSuccessStatus: 200
 }));
@@ -67,7 +67,7 @@ app.use(cors({
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS, PUT, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning');
   res.header('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
@@ -321,7 +321,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 to: waId,
                 type: "template",
                 template: {
-                    name: "short_message4",
+                    name: "short_message5",
                     language: { code: "he" },
                     components: templateComponents
                 }
@@ -433,7 +433,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             // כעת נתעד את שליחת סדרת התבניות
             if (chatwootConversationId) {
                 await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-                    content: `מערכת: נשלחה תבנית בהצלחה (short_message4)`,
+                    content: `מערכת: נשלחה תבנית בהצלחה (short_message5)`,
                     message_type: "outgoing",
                     private: true 
                 }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });
