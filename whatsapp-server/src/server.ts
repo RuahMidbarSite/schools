@@ -293,12 +293,12 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
 
         console.log(`📤 Sending messages. Mode: ${requestBody.TemplateName ? 'Multi-Template' : 'Free Text'}`);
 
-     if (requestBody.TemplateName) {
-            console.log("💬 Sending short_message8 (Text-only Template)...");
+    if (requestBody.TemplateName) {
+            console.log(`💬 Sending ${requestBody.TemplateName} (Template with Document)...`);
             
             const templateComponents: any[] = [];
             
-            /* // הקוד להוספת מסמך לתבנית - בהערה למקרה שיידרש בעתיד לתבניות אחרות
+            // הקוד להוספת מסמך לתבנית - הופעל מחדש כי התבנית במטא דורשת מסמך
             if (mediaId) {
                 templateComponents.push({
                     type: "header",
@@ -311,7 +311,6 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                     }]
                 });
             }
-            */
 
             templateComponents.push({
                 type: "body",
@@ -323,7 +322,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 to: waId,
                 type: "template",
                 template: {
-                    name: "short_message8",
+                    name: "short_message4", // הוחזר לשם הקשיח הקיים במטא כדי לעקוף את השם השגוי
                     language: { code: "he" },
                     components: templateComponents
                 }
@@ -435,7 +434,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
             // כעת נתעד את שליחת סדרת התבניות
             if (chatwootConversationId) {
                 await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-                    content: `מערכת: נשלחה תבנית בהצלחה (short_message8)`,
+                    content: `מערכת: נשלחה תבנית בהצלחה (short_message4)`,
                     message_type: "outgoing",
                     private: true 
                 }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });

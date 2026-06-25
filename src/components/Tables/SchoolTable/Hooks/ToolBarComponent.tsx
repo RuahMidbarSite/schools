@@ -38,7 +38,15 @@ const ToolBar = (
 >   
       {/* 👈 צד שמאל - סטטוס Google Contacts וכפתור תוכניות */}
       <div className="d-flex flex-column align-items-center gap-2">
-        <div className="bg-blue-100 px-4 py-2 rounded-lg border border-blue-300 shadow-sm">
+        <div 
+          className="bg-blue-100 rounded-lg border border-blue-300 shadow-sm d-flex align-items-center justify-content-center" 
+          style={{ 
+            width: '120px', 
+            height: '30px',
+            overflow: 'hidden',
+            padding: '0 2px'
+          }}
+        >
           <GoogleDriveAuthStatus
             type="Contacts"
             checkAuthStatus={checkContactsStatus}
@@ -55,121 +63,125 @@ const ToolBar = (
       </div>
 
       {/* 👉 צד ימין - כל הכפתורים */}
-      <div className="d-flex align-items-center flex-row-reverse gap-2">
-        <LoadingOverlay />
-        <Redirect type={"Contacts"} ScopeType={"Contacts"} />
-        
-        <OverlayTrigger
-      placement={"top"}
-      overlay={<Tooltip className="absolute">בטל סינון</Tooltip>}
-    >
-      <button
-        className="hover:bg-[#253d37] rounded p-1"
-        onClick={onClearFilterButtonClick}
-      >
-        <FcCancel className="w-[37px] h-[37px]" />
-      </button>
-    </OverlayTrigger>
+      <div className="d-flex align-items-start flex-row-reverse gap-3 w-100">
+        <div className="d-flex flex-column align-items-end gap-2" style={{ flexShrink: 0 }}>
+          <div className="d-flex align-items-center flex-row-reverse gap-2">
+            <LoadingOverlay />
+            <Redirect type={"Contacts"} ScopeType={"Contacts"} />
+            
+            <OverlayTrigger
+              placement={"top"}
+              overlay={<Tooltip className="absolute">בטל סינון</Tooltip>}
+            >
+              <button
+                className="hover:bg-[#253d37] rounded p-1"
+                onClick={onClearFilterButtonClick}
+              >
+                <FcCancel className="w-[37px] h-[37px]" />
+              </button>
+            </OverlayTrigger>
 
-    <button
-      onClick={onExportToCsvClick}
-      className="hover:bg-green-600 bg-green-700 rounded px-3 py-1 text-white border-solid text-sm flex items-center justify-center shadow-sm"
-      style={{ height: '37px' }}
-    >
-     CSV
-    </button>
+            <button
+              onClick={onExportToCsvClick}
+              className="hover:bg-green-600 bg-green-700 rounded px-3 py-1 text-white border-solid text-sm flex items-center justify-center shadow-sm"
+              style={{ height: '37px' }}
+            >
+             CSV
+            </button>
 
-    <OverlayTrigger
-      placement={"top"}
-          overlay={<Tooltip className="absolute" id="tooltip-bottom">ניהול עמודות</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded p-1"
-            onClick={() => setColumnWindowOpen(true)}
-          >
-            <FcAddColumn className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
-        
-        <OverlayTrigger
-          placement={"top"}
-          overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}
-        >
-          <button
-            className="hover:bg-[#253d37] rounded p-1"
-            onClick={onAddRowToolBarClick}
-          >
-            <FcAddRow className="w-[37px] h-[37px]" />
-          </button>
-        </OverlayTrigger>
+            <OverlayTrigger
+              placement={"top"}
+              overlay={<Tooltip className="absolute" id="tooltip-bottom">ניהול עמודות</Tooltip>}
+            >
+              <button
+                className="hover:bg-[#253d37] rounded p-1"
+                onClick={() => setColumnWindowOpen(true)}
+              >
+                <FcAddColumn className="w-[37px] h-[37px]" />
+              </button>
+            </OverlayTrigger>
+            
+            <OverlayTrigger
+              placement={"top"}
+              overlay={<Tooltip className="absolute" id="tooltip-bottom">הוסף שורה</Tooltip>}
+            >
+              <button
+                className="hover:bg-[#253d37] rounded p-1"
+                onClick={onAddRowToolBarClick}
+              >
+                <FcAddRow className="w-[37px] h-[37px]" />
+              </button>
+            </OverlayTrigger>
 
-        <button
-          id="cancelchangesbutton-school"
-          onClick={onCancelChangeButtonClick}
-          className="hover:bg-slate-500 bg-slate-600 rounded px-3 py-1 text-white border-solid hidden text-sm"
-        >
-          בטל שינויים
-        </button>
+            <button
+              id="cancelchangesbutton-school"
+              onClick={onCancelChangeButtonClick}
+              className="hover:bg-slate-500 bg-slate-600 rounded px-3 py-1 text-white border-solid hidden text-sm"
+            >
+              בטל שינויים
+            </button>
 
-        <button
-          id="savechangesbutton-school"
-          onClick={onSaveChangeButtonClick}
-          className="hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white border-solid hidden text-sm"
-        >
-          שמור שינויים{" "}
-        </button>
+            <button
+              id="savechangesbutton-school"
+              onClick={onSaveChangeButtonClick}
+              className="hover:bg-rose-700 bg-rose-800 rounded px-3 py-1 text-white border-solid hidden text-sm"
+            >
+              שמור שינויים{" "}
+            </button>
 
-        <button
-          id="savedeletions"
-          onClick={onSaveDeletions}
-          className="hover:bg-green-700 bg-green-800 rounded px-3 py-1 text-white border-solid hidden text-sm"
-        >
-          מחק {checkedAmount} שורות
-        </button>
+            <button
+              id="savedeletions"
+              onClick={onSaveDeletions}
+              className="hover:bg-green-700 bg-green-800 rounded px-3 py-1 text-white border-solid hidden text-sm"
+            >
+              מחק {checkedAmount} שורות
+            </button>
 
-        {/* תוספת: תפריט בחירת סטטוס להחלפה גורפת - מופיע רק כשיש שורות מסומנות */}
-        {checkedAmount > 0 && (
-          <select
-            onChange={(e) => {
-              if (e.target.value) {
-                handleBatchStatusUpdate(e.target.value);
-                e.target.value = ""; // איפוס הבחירה לאחר מכן כדי לאפשר בחירה חוזרת
-              }
-            }}
-            className={theme === "dark-theme" 
-              ? "bg-teal-700 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-600" 
-              : "bg-teal-600 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-700"}
-            style={{ direction: 'rtl' }}
-            defaultValue=""
-          >
-            <option value="" hidden>שנה סטטוס ל-{checkedAmount} רשומות</option>
-            {schoolStatuses.map((status) => (
-              <option key={status.StatusId} value={status.StatusName}>
-                {status.StatusName}
-              </option>
-            ))}
-          </select>
-        )}
+            {/* תוספת: תפריט בחירת סטטוס להחלפה גורפת - מופיע רק כשיש שורות מסומנות */}
+            {checkedAmount > 0 && (
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleBatchStatusUpdate(e.target.value);
+                    e.target.value = ""; // איפוס הבחירה לאחר מכן כדי לאפשר בחירה חוזרת
+                  }
+                }}
+                className={theme === "dark-theme" 
+                  ? "bg-teal-700 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-600" 
+                  : "bg-teal-600 text-white border-solid h-[35px] px-2 rounded text-sm cursor-pointer outline-none font-semibold shadow-sm transition-all hover:bg-teal-700"}
+                style={{ direction: 'rtl' }}
+                defaultValue=""
+              >
+                <option value="" hidden>שנה סטטוס ל-{checkedAmount} רשומות</option>
+                {schoolStatuses.map((status) => (
+                  <option key={status.StatusId} value={status.StatusName}>
+                    {status.StatusName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
-        <input
-          className={theme === "dark-theme" ? "text-right bg-gray-900 text-white border-solid w-[200px] h-[35px] p-2 rounded" :
-            "text-right bg-white text-gray-500 border-solid w-[200px] h-[35px] p-2 rounded"}
-          type="text"
-          id="filter-text-box"
-          placeholder="חיפוש"
-          onInput={onFilterTextBoxChanged}
-        />
+          <input
+            className={theme === "dark-theme" ? "text-right bg-gray-900 text-white border-solid w-[200px] h-[35px] p-2 rounded" :
+              "text-right bg-white text-gray-500 border-solid w-[200px] h-[35px] p-2 rounded"}
+            type="text"
+            id="filter-text-box"
+            placeholder="חיפוש"
+            onInput={onFilterTextBoxChanged}
+          />
+        </div>
         {/* --- התחלת תוספת כפתורי הסטטוסים --- */}
         {schoolStatuses.length > 0 && (
-          <div className="d-flex align-items-center flex-grow-1" style={{ minWidth: 0, paddingRight: '15px' }} dir="rtl">
-            <div style={{ width: '1px', height: '40px', backgroundColor: '#cbd5e1', marginLeft: '12px', flexShrink: 0 }}></div>
+          <div className="d-flex align-items-start flex-grow-1" style={{ minWidth: 0, paddingRight: '15px' }} dir="rtl">
+            <div style={{ width: '1px', height: '45px', backgroundColor: '#cbd5e1', marginLeft: '12px', flexShrink: 0, marginTop: '10px' }}></div>
             
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 6px', justifyContent: 'flex-start', flex: 1 }}>
               {schoolStatuses.map((status: any) => (
                 <div key={status.StatusId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff', lineHeight: '1', textShadow: '0px 1px 2px rgba(0,0,0,0.5)' }}>
-                    {statusCounts[status.StatusName] || 0}
-                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffffff', lineHeight: '1', textShadow: '0px 1px 2px rgba(0,0,0,0.5)', minHeight: '13px' }}>
+                        {statusCounts[status.StatusName] || "0"}
+                      </span>
                   <button
                     onClick={() => handleStatusFilter(status.StatusName)}
                     className={`px-3 py-1 text-xs font-bold rounded-md transition-all border shadow-sm ${

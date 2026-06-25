@@ -321,22 +321,22 @@ export default function SchoolsTable() {
     <>
   <nav
   id="SchoolNavBar"
-  className="flex-row-reverse shadow-lg"
+  className="shadow-lg"
   suppressHydrationWarning
 style={{
   background: theme === "dark-theme" 
     ? 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)'
     : 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)',
-  minHeight: '100px', // גובה מינימלי קבוע שימנע חיתוך של 2 שורות
-  height: 'auto',
-  paddingTop: '10px',
-  paddingBottom: '10px',
+  minHeight: 'auto', // מאפשר לסרגל להתכווץ בהתאם לתוכן
+  height: 'fit-content', 
+  paddingTop: '8px', // הוקטן משמעותית כדי למשוך את התוכן למעלה
+  paddingBottom: '12px', // הוקטן מעט כדי לחסוך מקום
   width: '100%',
   display: 'flex',
-  alignItems: 'center',
+  flexDirection: 'column',
   borderBottom: '1px solid rgba(203, 213, 225, 0.3)',
   boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.05)',
-  zIndex: 10 // מבטיח שהסרגל יהיה מעל הטבלה
+  zIndex: 10
 }}
 >
   <LoadingOverlay />
