@@ -322,7 +322,7 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 to: waId,
                 type: "template",
                 template: {
-                    name: "short_message4", // הוחזר לשם הקשיח הקיים במטא כדי לעקוף את השם השגוי
+                    name: requestBody.TemplateName, // נמשך באופן דינמי מהריאקט
                     language: { code: "he" },
                     components: templateComponents
                 }
@@ -431,10 +431,14 @@ app.post("/SendMessage", MemoryWithNoStoring.single("file"), async (req: Request
                 }
             }
 
-            // כעת נתעד את שליחת סדרת התבניות
+           // כעת נתעד את שליחת ההודעה בצ'אטווט באופן דינמי
             if (chatwootConversationId) {
+                const logMessage = requestBody.TemplateName 
+                    ? `מערכת: נשלחה תבנית בהצלחה (${requestBody.TemplateName})`
+                    : `מערכת: נשלחה הודעה חופשית (ללא תבנית)`;
+
                 await axios.post(`${CHATWOOT_API_URL}/api/v1/accounts/${CHATWOOT_ACCOUNT_ID}/conversations/${chatwootConversationId}/messages`, {
-                    content: `מערכת: נשלחה תבנית בהצלחה (short_message4)`,
+                    content: logMessage,
                     message_type: "outgoing",
                     private: true 
                 }, { headers: { 'api_access_token': CHATWOOT_API_TOKEN } });

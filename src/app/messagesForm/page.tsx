@@ -400,11 +400,11 @@ export default function MessagesPage() {
     CityName: contact.City || (school ? school.City : "") || ""
 };
 
-           // מפעיל את המסלול החדש של 3 התבניות במטא
-            const metaTemplateName = selectedOption ? "multi_template_flow" : undefined;
+           // שליחת שם התבנית שנבחרה בממשק (שצריך להיות זהה במדויק לשם התבנית במטא)
+            const metaTemplateName = selectedOption ? selectedOption.label : undefined;
 
             const result = await sendMessageViaWhatsApp(
-                msg1Final, 
+                msg1Final,
                 msg2Final, 
                 addedFile, 
                 contact.Cellphone,
