@@ -46,7 +46,7 @@ import { Modal, Form } from 'react-bootstrap';
 import { getPrograms } from "@/db/programsRequests";
 import { getAllSchools } from "@/db/schoolrequests";
 import { getAllContacts } from "@/db/contactsRequests";
-import { DistanceComponent,fetchGeoapifyDistance,normalizeCityName } from "./components/DistanceComponent";
+import { DistanceComponent, fetchBatchedGeoapifyDistance, normalizeCityName } from "./components/DistanceComponent";
 import { getFromStorage, PlacementFilter, updateStorage } from "./Storage/PlacementDataStorage";
 import { DataType } from "./Storage/PlacementDataStorage";
 import useColumnEffects from "./hooks/ColumnEffects";
@@ -613,7 +613,7 @@ const runAiLogic = async (finalPlan) => {
                 }
                 
                 if (distance === -1 && guideCityName && guideCityName !== "לא צוין") {
-                    const apiDist = await fetchGeoapifyDistance(guideCityName, progCityName);
+                    const apiDist = await fetchBatchedGeoapifyDistance(guideCityName, progCityName);
                     if (apiDist !== null) distance = apiDist;
                 }
                 
@@ -862,7 +862,7 @@ const runConsultationLogic = useCallback(async (finalPlan) => {
           }
           
           if (distance === -1 && guideCityName && guideCityName !== "לא צוין") {
-              const apiDist = await fetchGeoapifyDistance(guideCityName, progCityName);
+              const apiDist = await fetchBatchedGeoapifyDistance(guideCityName, progCityName);
               if (apiDist !== null) distance = apiDist;
           }
 
@@ -1152,7 +1152,7 @@ const updateLeftTable = async () => {
       // Fallback to external API if not in DB
       if (apiCache[gCity] !== undefined) return apiCache[gCity];
 
-      const apiDist = await fetchGeoapifyDistance(gCity, progCityName);
+      const apiDist = await fetchBatchedGeoapifyDistance(gCity, progCityName);
       const finalDist = apiDist !== null ? apiDist : 99999;
       apiCache[gCity] = finalDist;
 
